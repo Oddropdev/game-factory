@@ -21,6 +21,21 @@ function camelCase(name) {
   return name[0].toLowerCase() + name.slice(1);
 }
 
+function namesForId(id) {
+  const baseName = pascalCase(id);
+  const gameClassName = baseName.endsWith('Game')
+    ? baseName
+    : `${baseName}Game`;
+
+  return {
+    baseName,
+    gameClassName,
+    variableName: camelCase(baseName),
+    globalName:
+      `__GAME_FACTORY_${id.replace(/-/gu, '_').toUpperCase()}_TEST__`
+  };
+}
+
 function assertGameId(id) {
   if (!/^[a-z][a-z0-9-]{1,39}$/u.test(id)) {
     throw new Error(
@@ -40,7 +55,7 @@ function insertBefore(text, marker, insertion) {
   return text.replace(marker, `${insertion}\n${marker}`);
 }
 
-function gameTemplate(id, className) {
+function gameTemplate(id, gameClassName) {
   return `import {
   drawRect,
   drawTextScreen,
@@ -54,7 +69,7 @@ import type {
 } from '../../factory/GameModule';
 import type { ViewportRuntime } from '../../runtime/ViewportRuntime';
 
-export type ${className}GameTestState = {
+export type ${gameClassName}TestState = {
   ready: boolean;
   pointerEvents: number;
   restartCount: number;
@@ -62,7 +77,7 @@ export type ${className}GameTestState = {
   targetNormY: number;
 };
 
-export class ${className}Game implements GameModule {
+export class ${gameClassName} implements GameModule {
   private ready = false;
   private pointerEvents = 0;
   private restartCount = 0;
@@ -126,7 +141,7 @@ export class ${className}Game implements GameModule {
     };
   }
 
-  testState(): ${className}GameTestState {
+  testState(): ${gameClassName}TestState {
     return {
       ready: this.ready,
       pointerEvents: this.pointerEvents,
@@ -139,30 +154,30 @@ export class ${className}Game implements GameModule {
 `;
 }
 
-function bridgeTemplate(id, className, globalName) {
-  return `import type { ${className}GameTestState } from './${className}Game';
+function bridgeTemplate(baseName, gameClassName, globalName) {
+  return `import type { ${gameClassName}TestState } from './${gameClassName}';
 
-export type ${className}TestBridge = {
-  getState(): ${className}GameTestState;
+export type ${baseName}TestBridge = {
+  getState(): ${gameClassName}TestState;
 };
 
 declare global {
   interface Window {
-    ${globalName}: ${className}TestBridge;
+    ${globalName}: ${baseName}TestBridge;
   }
 }
 
-export function install${className}TestBridge(
-  bridge: ${className}TestBridge
+export function install${baseName}TestBridge(
+  bridge: ${baseName}TestBridge
 ): void {
   window.${globalName} = bridge;
 }
 `;
 }
 
-function e2eTemplate(id, className, globalName) {
+function e2eTemplate(id, baseName, gameClassName, globalName) {
   return `import { expect, test } from '@playwright/test';
-import type { ${className}TestBridge } from '../../src/games/${id}/${className}TestBridge';
+import type { ${baseName}TestBridge } from '../../src/games/${id}/${baseName}TestBridge';
 import type { FoundationTestBridge } from '../../src/testing/TestBridge';
 
 async function gameState(page: import('@playwright/test').Page) {
@@ -170,7 +185,7 @@ async function gameState(page: import('@playwright/test').Page) {
     () =>
       (
         window as unknown as {
-          ${globalName}: ${className}TestBridge;
+          ${globalName}: ${baseName}TestBridge;
         }
       ).${globalName}.getState()
   );
@@ -233,20 +248,22 @@ export function createGame({
 }) {
   assertGameId(id);
 
-  const className = pascalCase(id);
-  const variableName = camelCase(className);
-  const globalName =
-    `__GAME_FACTORY_${id.replace(/-/gu, '_').toUpperCase()}_TEST__`;
+  const {
+    baseName,
+    gameClassName,
+    variableName,
+    globalName
+  } = namesForId(id);
 
   const registryPath = path.join(
     root,
     'src/factory/GameRegistry.ts'
   );
   const gameDir = path.join(root, 'src/games', id);
-  const gamePath = path.join(gameDir, `${className}Game.ts`);
+  const gamePath = path.join(gameDir, `${gameClassName}.ts`);
   const bridgePath = path.join(
     gameDir,
-    `${className}TestBridge.ts`
+    `${baseName}TestBridge.ts`
   );
   const e2ePath = path.join(root, 'tests/e2e', `${id}.spec.ts`);
 
@@ -279,8 +296,8 @@ export function createGame({
     registry,
     MARKERS.imports,
     [
-      `import { ${className}Game } from '../games/${id}/${className}Game';`,
-      `import { install${className}TestBridge } from '../games/${id}/${className}TestBridge';`
+      `import { ${gameClassName} } from '../games/${id}/${gameClassName}';`,
+      `import { install${baseName}TestBridge } from '../games/${id}/${baseName}TestBridge';`
     ].join('\n')
   );
   registry = insertBefore(
@@ -292,8 +309,8 @@ export function createGame({
     registry,
     MARKERS.constructors,
     [
-      `  const ${variableName} = new ${className}Game(viewport);`,
-      `  install${className}TestBridge({`,
+      `  const ${variableName} = new ${gameClassName}(viewport);`,
+      `  install${baseName}TestBridge({`,
       `    getState: () => ${variableName}.testState()`,
       '  });'
     ].join('\n')
@@ -306,7 +323,8 @@ export function createGame({
 
   const generated = {
     id,
-    className,
+    baseName,
+    gameClassName,
     variableName,
     globalName,
     files: [
@@ -324,14 +342,17 @@ export function createGame({
   fs.mkdirSync(gameDir, { recursive: true });
   fs.mkdirSync(path.dirname(e2ePath), { recursive: true });
 
-  fs.writeFileSync(gamePath, gameTemplate(id, className));
+  fs.writeFileSync(
+    gamePath,
+    gameTemplate(id, gameClassName)
+  );
   fs.writeFileSync(
     bridgePath,
-    bridgeTemplate(id, className, globalName)
+    bridgeTemplate(baseName, gameClassName, globalName)
   );
   fs.writeFileSync(
     e2ePath,
-    e2eTemplate(id, className, globalName)
+    e2eTemplate(id, baseName, gameClassName, globalName)
   );
   fs.writeFileSync(registryPath, registry);
 
@@ -370,7 +391,7 @@ function printHelp() {
   console.log(
     [
       'Usage:',
-      '  npm run create-game -- --id my-game',
+      '  npm run create-game -- --id mass-runner',
       '',
       'Options:',
       '  --id <slug>   lowercase game id, e.g. mass-runner',

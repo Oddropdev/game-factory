@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,11 +19,16 @@ try {
 
   const result = createGame({
     root: tempRoot,
-    id: 'smoke-game'
+    id: 'smoke-prototype'
   });
 
-  assert.equal(result.className, 'SmokeGame');
-  assert.equal(result.files.length, 3);
+  assert.equal(result.baseName, 'SmokePrototype');
+  assert.equal(result.gameClassName, 'SmokePrototypeGame');
+  assert.deepEqual(result.files, [
+    'src/games/smoke-prototype/SmokePrototypeGame.ts',
+    'src/games/smoke-prototype/SmokePrototypeTestBridge.ts',
+    'tests/e2e/smoke-prototype.spec.ts'
+  ]);
 
   for (const relativePath of result.files) {
     assert.equal(
@@ -37,31 +43,42 @@ try {
     'utf8'
   );
 
-  assert.match(registry, /'smoke-game'/u);
-  assert.match(registry, /SmokeGame/u);
-  assert.match(registry, /installSmokeGameTestBridge/u);
+  assert.match(registry, /'smoke-prototype'/u);
+  assert.match(registry, /SmokePrototypeGame/u);
+  assert.match(registry, /installSmokePrototypeTestBridge/u);
 
   assert.throws(
     () =>
       createGame({
         root: tempRoot,
-        id: 'smoke-game'
+        id: 'smoke-prototype'
       }),
     /refusing to overwrite|already registered/u
   );
 
-  const dryRun = createGame({
-    root: tempRoot,
-    id: 'dry-run-game',
-    dryRun: true
-  });
+  const cli = spawnSync(
+    process.execPath,
+    [
+      path.resolve('tools/create-game.mjs'),
+      '--id',
+      'cli-prototype',
+      '--root',
+      tempRoot,
+      '--dry-run'
+    ],
+    {
+      encoding: 'utf8'
+    }
+  );
 
-  assert.equal(dryRun.className, 'DryRunGame');
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.match(cli.stdout, /W5_CREATE_GAME_DRY_RUN_PASS/u);
+  assert.match(cli.stdout, /"gameClassName": "CliPrototypeGame"/u);
   assert.equal(
     fs.existsSync(
       path.join(
         tempRoot,
-        'src/games/dry-run-game/DryRunGameGame.ts'
+        'src/games/cli-prototype/CliPrototypeGame.ts'
       )
     ),
     false
