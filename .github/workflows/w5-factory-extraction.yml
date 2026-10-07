@@ -11,10 +11,13 @@ on:
       - "src/main.ts"
       - "tests/**"
       - "tools/check-w5-extraction.mjs"
+      - "tools/create-game.mjs"
+      - "tools/test-create-game.mjs"
       - "tools/check-artifact.mjs"
       - "package.json"
       - ".github/workflows/w5-factory-extraction.yml"
       - "docs/architecture/W5-FACTORY-EXTRACTION-CONTRACT.md"
+      - "docs/architecture/GAME-SPEC-LEVEL-SPEC-CONVENTIONS.md"
       - "docs/evidence/W5-**"
   workflow_dispatch:
 
