@@ -36,6 +36,27 @@ export class ViewportRuntime {
     return Math.min(1, Math.max(0, worldX / this.worldWidth + 0.5));
   }
 
+  visibleWorldHeight(): number {
+    return (
+      (Math.max(1, this.height) * this.worldWidth) /
+      Math.max(1, this.width)
+    );
+  }
+
+  normalizedYToWorld(normalizedY: number): number {
+    return (0.5 - normalizedY) * this.visibleWorldHeight();
+  }
+
+  worldYToNormalized(worldY: number): number {
+    return Math.min(
+      1,
+      Math.max(
+        0,
+        0.5 - worldY / Math.max(0.001, this.visibleWorldHeight())
+      )
+    );
+  }
+
   snapshot(): ViewportSnapshot {
     return {
       width: this.width,

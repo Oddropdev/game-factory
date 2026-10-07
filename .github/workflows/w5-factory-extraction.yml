@@ -1,11 +1,21 @@
-name: W3 Collector Builder Proof
+name: W5 Factory Extraction
 
 on:
   pull_request:
     paths:
-      - ".github/workflows/w3-collector-builder-proof.yml"
-      - "docs/architecture/W3-COLLECTOR-BUILDER-PROOF-CONTRACT.md"
-      - "docs/evidence/W3-**"
+      - "src/factory/**"
+      - "src/runtime/ViewportRuntime.ts"
+      - "src/games/runner/RunnerGame.ts"
+      - "src/games/collector/CollectorGame.ts"
+      - "src/games/physics/PhysicsGame.ts"
+      - "src/main.ts"
+      - "tests/**"
+      - "tools/check-w5-extraction.mjs"
+      - "tools/check-artifact.mjs"
+      - "package.json"
+      - ".github/workflows/w5-factory-extraction.yml"
+      - "docs/architecture/W5-FACTORY-EXTRACTION-CONTRACT.md"
+      - "docs/evidence/W5-**"
   workflow_dispatch:
 
 permissions:
@@ -15,8 +25,6 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      W3_BASE_SHA: cb43a48e32634e174720b81473f3eb2eec4a37a6
 
     steps:
       - uses: actions/checkout@v4
@@ -34,22 +42,23 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify accepted collector regression
+      - name: Verify all accepted game families after extraction
         run: npm run verify
 
-      - name: Verify historical W3 New Game Core Churn
-        if: github.event_name == 'pull_request' && github.head_ref == 'w3-collector-builder-proof'
-        run: npm run check:w3-core-churn
+      - name: Verify W5 extraction contract
+        run: npm run check:w5-extraction
 
-      - name: Upload W3 evidence
+      - name: Upload W5 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: w3-collector-builder-evidence
+          name: w5-factory-extraction-evidence
           path: |
             evidence/w1/
             evidence/w2/
             evidence/w3/
+            evidence/w4/
+            evidence/w5/
             playwright-report/
             test-results/
             package-lock.json

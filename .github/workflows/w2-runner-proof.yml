@@ -3,10 +3,6 @@ name: W2 Runner Proof
 on:
   pull_request:
     paths:
-      - "src/games/runner/**"
-      - "tests/unit/runnerModel.test.ts"
-      - "tests/e2e/runner.spec.ts"
-      - "tools/check-w2-core-churn.mjs"
       - ".github/workflows/w2-runner-proof.yml"
       - "docs/architecture/W2-RUNNER-PROOF-CONTRACT.md"
       - "docs/evidence/W2-**"
@@ -38,7 +34,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify W1 regression + W2 runner
+      - name: Verify accepted runner regression
         run: npm run verify
 
       - name: Verify historical W2 New Game Core Churn
