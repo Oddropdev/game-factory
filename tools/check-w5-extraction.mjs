@@ -125,8 +125,31 @@ if (!gameModule.includes('export interface GameModule')) {
   failures.push('GameModule contract missing');
 }
 
-if (!registry.includes("export const GAME_IDS = ['runner', 'collector', 'physics'] as const")) {
-  failures.push('GameRegistry does not expose the accepted three-family registry');
+for (const acceptedId of ['runner', 'collector', 'physics']) {
+  if (!registry.includes(`'${acceptedId}'`)) {
+    failures.push(`GameRegistry missing accepted family: ${acceptedId}`);
+  }
+}
+
+for (const marker of [
+  '// @factory:imports',
+  '// @factory:ids',
+  '// @factory:constructors',
+  '// @factory:entries'
+]) {
+  if (!registry.includes(marker)) {
+    failures.push(`GameRegistry automation marker missing: ${marker}`);
+  }
+}
+
+for (const requiredFile of [
+  'tools/create-game.mjs',
+  'tools/test-create-game.mjs',
+  'docs/architecture/GAME-SPEC-LEVEL-SPEC-CONVENTIONS.md'
+]) {
+  if (!fs.existsSync(path.resolve(requiredFile))) {
+    failures.push(`W5 factory artifact missing: ${requiredFile}`);
+  }
 }
 
 const forbidden = [
