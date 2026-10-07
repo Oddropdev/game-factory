@@ -19,6 +19,10 @@ on:
         description: "Maximum deduplicated candidate count"
         required: false
         default: "80"
+      concurrency:
+        description: "Concurrent metadata enrichment workers"
+        required: false
+        default: "8"
   pull_request:
     paths:
       - "tools/skeleton-hunt/**"
@@ -50,6 +54,7 @@ jobs:
           HUNT_PROFILE: ${{ inputs.profile || 'general' }}
           HUNT_PER_QUERY: ${{ inputs.per_query || '12' }}
           HUNT_MAX_CANDIDATES: ${{ inputs.max_candidates || '80' }}
+          HUNT_CONCURRENCY: ${{ inputs.concurrency || '8' }}
         run: npm run hunt
 
       - uses: actions/upload-artifact@v4
