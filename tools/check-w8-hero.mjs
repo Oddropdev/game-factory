@@ -46,7 +46,7 @@ if (protectedChurn.length > 0) {
 for (const required of [
   'src/games/mass-runner/MassRunnerPresentation.ts',
   'tests/unit/massRunnerPresentation.test.ts',
-  'tests/feel/w8-hero-slice.spec.ts',
+  'tests/feel/w8-hero-slice.spec.mjs',
   'docs/research/W8.1-REFERENCE-MINING.md'
 ]) {
   if (!fs.existsSync(path.resolve(required))) {
