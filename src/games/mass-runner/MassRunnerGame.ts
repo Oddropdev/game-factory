@@ -16,7 +16,8 @@ import {
   MASS_RUNNER_LEVELS,
   massRunnerLevelSignature,
   type MassOperation,
-  type MassRunnerEvent
+  type MassRunnerEvent,
+  type MassRunnerGateEvent
 } from './MassRunnerLevels';
 import {
   MassRunnerModel,
@@ -369,11 +370,11 @@ export class MassRunnerGame implements GameModule {
 
   private nextGate(
     snapshot: MassRunnerSnapshot
-  ) {
+  ): MassRunnerGateEvent | undefined {
     return this.model
       .getCurrentLevel()
       .events.find(
-        event =>
+        (event): event is MassRunnerGateEvent =>
           event.kind === 'gate' &&
           event.distance > snapshot.distance
       );
