@@ -53,11 +53,27 @@ async function target(
 
     await page.waitForTimeout(40);
 
-    const state = await gameState(page);
-    if (
-      state.phase !== 'running' ||
-      Math.abs(state.targetNormX - normalizedX) < 0.035
-    ) {
+    const targetObserved = await expect
+      .poll(
+        async () => {
+          const state = await gameState(page);
+
+          if (state.phase !== 'running') {
+            return true;
+          }
+
+          return (
+            Math.abs(state.targetNormX - normalizedX) < 0.035 &&
+            Math.abs(state.playerNormX - normalizedX) < 0.09
+          );
+        },
+        { timeout: 1_200 }
+      )
+      .toBe(true)
+      .then(() => true)
+      .catch(() => false);
+
+    if (targetObserved) {
       return;
     }
   }
