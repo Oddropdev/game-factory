@@ -3,6 +3,14 @@ name: W0 Skeleton Hunt
 on:
   workflow_dispatch:
     inputs:
+      profile:
+        description: "Search profile"
+        required: false
+        default: "general"
+        type: choice
+        options:
+          - general
+          - patterns
       per_query:
         description: "Candidates requested per search query"
         required: false
@@ -39,6 +47,7 @@ jobs:
       - name: Discover and preliminarily score candidates
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          HUNT_PROFILE: ${{ inputs.profile || 'general' }}
           HUNT_PER_QUERY: ${{ inputs.per_query || '12' }}
           HUNT_MAX_CANDIDATES: ${{ inputs.max_candidates || '80' }}
         run: npm run hunt
