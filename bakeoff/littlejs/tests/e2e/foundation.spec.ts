@@ -10,20 +10,16 @@ type BakeoffState = {
   targetNormX: number;
 };
 
-declare global {
-  interface Window {
-    __BAKEOFF__: {
-      engine: string;
-      getState(): BakeoffState;
-      restart(): void;
-      pause(): void;
-      resume(): void;
-    };
-  }
-}
+type BakeoffBridge = {
+  engine: string;
+  getState(): BakeoffState;
+  restart(): void;
+  pause(): void;
+  resume(): void;
+};
 
 async function state(page: import('@playwright/test').Page): Promise<BakeoffState> {
-  return page.evaluate(() => window.__BAKEOFF__.getState());
+  return page.evaluate(() => (window as unknown as { __BAKEOFF__: BakeoffBridge }).__BAKEOFF__.getState());
 }
 
 async function targetPoint(page: import('@playwright/test').Page) {
@@ -81,9 +77,9 @@ test('equivalent mobile-first foundation contract', async ({ page }) => {
   expect((await state(page)).pointerEvents).toBeGreaterThanOrEqual(2);
 
   // Explicit lifecycle control.
-  await page.evaluate(() => window.__BAKEOFF__.pause());
+  await page.evaluate(() => (window as unknown as { __BAKEOFF__: BakeoffBridge }).__BAKEOFF__.pause());
   await expect.poll(async () => (await state(page)).paused).toBe(true);
-  await page.evaluate(() => window.__BAKEOFF__.resume());
+  await page.evaluate(() => (window as unknown as { __BAKEOFF__: BakeoffBridge }).__BAKEOFF__.resume());
   await expect.poll(async () => (await state(page)).paused).toBe(false);
 
   // Landscape resize must preserve state and a usable canvas.
@@ -96,7 +92,7 @@ test('equivalent mobile-first foundation contract', async ({ page }) => {
   expect((await state(page)).score).toBe(2);
 
   // Deterministic restart: target and score return to the same initial state.
-  await page.evaluate(() => window.__BAKEOFF__.restart());
+  await page.evaluate(() => (window as unknown as { __BAKEOFF__: BakeoffBridge }).__BAKEOFF__.restart());
   await expect.poll(async () => (await state(page)).ready).toBe(true);
   const restarted = await state(page);
   expect(restarted.score).toBe(0);
