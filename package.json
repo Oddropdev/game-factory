@@ -1,7 +1,7 @@
 {
   "name": "game-factory",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,7 +21,8 @@
     "hunt": "node tools/skeleton-hunt/index.mjs",
     "hunt:check": "node --check tools/skeleton-hunt/index.mjs",
     "create-game": "node tools/create-game.mjs",
-    "test:create-game": "node tools/test-create-game.mjs"
+    "test:create-game": "node tools/test-create-game.mjs",
+    "check:w7-real-game": "node tools/check-w7-real-game.mjs"
   },
   "dependencies": {
     "littlejsengine": "1.25.0"

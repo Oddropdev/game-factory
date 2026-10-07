@@ -1,5 +1,7 @@
 import { CollectorGame } from '../games/collector/CollectorGame';
 import { installCollectorTestBridge } from '../games/collector/CollectorTestBridge';
+import { MassRunnerGame } from '../games/mass-runner/MassRunnerGame';
+import { installMassRunnerTestBridge } from '../games/mass-runner/MassRunnerTestBridge';
 import { PhysicsGame } from '../games/physics/PhysicsGame';
 import { installPhysicsTestBridge } from '../games/physics/PhysicsTestBridge';
 import { RunnerGame } from '../games/runner/RunnerGame';
@@ -12,6 +14,7 @@ export const GAME_IDS = [
   'runner',
   'collector',
   'physics',
+  'mass-runner',
   // @factory:ids
 ] as const;
 
@@ -41,12 +44,17 @@ export function createGameRegistry(
     getState: () => physics.testState()
   });
 
+  const massRunner = new MassRunnerGame(viewport);
+  installMassRunnerTestBridge({
+    getState: () => massRunner.testState()
+  });
   // @factory:constructors
 
   return {
     runner,
     collector,
     physics,
+    'mass-runner': massRunner,
     // @factory:entries
   };
 }
