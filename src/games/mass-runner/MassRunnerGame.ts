@@ -29,7 +29,6 @@ import {
 import {
   MassRunnerPresentation,
   resolveMassRunnerPresentationMode,
-  type MassRunnerPresentationEffect,
   type MassRunnerPresentationSnapshot
 } from './MassRunnerPresentation';
 
