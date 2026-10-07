@@ -1,0 +1,61 @@
+name: W3 Collector Builder Proof
+
+on:
+  pull_request:
+    paths:
+      - "src/games/collector/**"
+      - "src/main.ts"
+      - "tests/unit/collectorModel.test.ts"
+      - "tests/e2e/collector.spec.ts"
+      - "tools/check-w3-core-churn.mjs"
+      - "package.json"
+      - ".github/workflows/w3-collector-builder-proof.yml"
+      - "docs/architecture/W3-COLLECTOR-BUILDER-PROOF-CONTRACT.md"
+      - "docs/evidence/W3-**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      W3_BASE_SHA: cb43a48e32634e174720b81473f3eb2eec4a37a6
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify W1 + W2 regressions and W3 collector
+        run: npm run verify
+
+      - name: Verify W3 New Game Core Churn
+        run: npm run check:w3-core-churn
+
+      - name: Upload W3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w3-collector-builder-evidence
+          path: |
+            evidence/w1/
+            evidence/w2/
+            evidence/w3/
+            playwright-report/
+            test-results/
+            package-lock.json
+          if-no-files-found: warn
