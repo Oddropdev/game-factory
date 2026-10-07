@@ -22,6 +22,7 @@ import {
   type MassRunnerGateEvent,
   type MassRunnerLevelSpec
 } from './MassRunnerLevels';
+import { massRunnerHeroTarget } from './MassRunnerFeelRoute';
 import {
   MassRunnerModel,
   type MassRunnerSnapshot
@@ -46,6 +47,7 @@ export type MassRunnerGameTestState = MassRunnerSnapshot & {
   presentationCue: string | null;
   presentationEffects: number;
   presentationMassPulse: number;
+  heroAutoplay: boolean;
 };
 
 type Layout = {
@@ -77,6 +79,10 @@ export class MassRunnerGame implements GameModule {
     );
   private readonly presentation =
     new MassRunnerPresentation(this.presentationMode);
+  private readonly heroAutoplay =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('autoplay') ===
+      'hero';
   private targetNormX = 0.5;
   private pointerEvents = 0;
   private restartCount = 0;
@@ -97,17 +103,24 @@ export class MassRunnerGame implements GameModule {
       this.pointerEvents += 1;
     }
 
-    if (input.pointerPressed || input.pointerDown) {
-      this.targetNormX = this.viewport.worldXToNormalized(
-        input.pointerWorldX
-      );
-    }
-
     if (
       input.pointerPressed &&
       this.model.snapshot().phase !== 'running'
     ) {
       this.model.startOrAdvance();
+    }
+
+    const snapshot = this.model.snapshot();
+
+    if (this.heroAutoplay && snapshot.phase === 'running') {
+      this.targetNormX = massRunnerHeroTarget(
+        snapshot,
+        this.model.getCurrentLevel()
+      );
+    } else if (input.pointerPressed || input.pointerDown) {
+      this.targetNormX = this.viewport.worldXToNormalized(
+        input.pointerWorldX
+      );
     }
 
     this.model.step(this.targetNormX);
@@ -184,7 +197,8 @@ export class MassRunnerGame implements GameModule {
       presentationMode: presentation.mode,
       presentationCue: presentation.lastCue,
       presentationEffects: presentation.effects.length,
-      presentationMassPulse: presentation.massPulse
+      presentationMassPulse: presentation.massPulse,
+      heroAutoplay: this.heroAutoplay
     };
   }
 
