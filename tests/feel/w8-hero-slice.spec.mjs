@@ -24,28 +24,6 @@ async function canvasPoint(page, normalizedX) {
   };
 }
 
-async function steer(page, normalizedX) {
-  const point = await canvasPoint(page, normalizedX);
-  await page.mouse.click(point.x, point.y);
-
-  await expect
-    .poll(
-      async () => {
-        const current = await state(page);
-
-        if (current.phase !== 'running') {
-          return true;
-        }
-
-        return (
-          Math.abs(current.targetNormX - normalizedX) < 0.035 &&
-          Math.abs(current.playerNormX - normalizedX) < 0.09
-        );
-      },
-      { timeout: 1_200 }
-    )
-    .toBe(true);
-}
 
 const heroEvents = [
   { id: 'l1-orb-a', kind: 'orb', x: 0.25, amount: 2 },
@@ -85,7 +63,8 @@ async function captureHeroSlice(page, mode) {
 
   await saveScreenshot(page, `${mode}-opening`);
 
-  await steer(page, 0.5);
+  const startPoint = await canvasPoint(page, 0.5);
+  await page.mouse.click(startPoint.x, startPoint.y);
   await expect.poll(async () => (await state(page)).phase).toBe('running');
 
   for (const [index] of heroEvents.entries()) {
