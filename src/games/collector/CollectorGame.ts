@@ -10,10 +10,7 @@ import {
   collectorCourseSignature,
   createCollectorCourse
 } from './CollectorCourse';
-import {
-  CollectorModel,
-  type CollectorSnapshot
-} from './CollectorModel';
+import { CollectorModel } from './CollectorModel';
 
 export type CollectorGameTestState = CollectorSnapshot & {
   ready: boolean;
