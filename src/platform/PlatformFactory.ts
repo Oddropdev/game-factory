@@ -10,14 +10,28 @@ const PLATFORM_IDS: readonly PlatformId[] = [
 ];
 
 export function resolvePlatformId(
-  search = window.location.search,
-  packagedPlatform = window.__GAME_FACTORY_PLATFORM__
+  search?: string,
+  packagedPlatform?: PlatformId
 ): PlatformId {
-  if (packagedPlatform && PLATFORM_IDS.includes(packagedPlatform)) {
-    return packagedPlatform;
+  const effectivePackagedPlatform =
+    packagedPlatform ??
+    (typeof window === 'undefined'
+      ? undefined
+      : window.__GAME_FACTORY_PLATFORM__);
+
+  if (
+    effectivePackagedPlatform &&
+    PLATFORM_IDS.includes(effectivePackagedPlatform)
+  ) {
+    return effectivePackagedPlatform;
   }
 
-  const requested = new URLSearchParams(search).get('platform');
+  const effectiveSearch =
+    search ??
+    (typeof window === 'undefined' ? '' : window.location.search);
+  const requested = new URLSearchParams(effectiveSearch).get(
+    'platform'
+  );
 
   return PLATFORM_IDS.includes(requested as PlatformId)
     ? (requested as PlatformId)
