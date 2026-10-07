@@ -50,11 +50,14 @@ function gameInit(): void {
 }
 
 function gameUpdate(): void {
-  if (mouseWasPressed(0)) {
+  const pointerPressed = mouseWasPressed(0);
+  const pointerDown = mouseIsDown(0);
+
+  if (pointerPressed) {
     pointerEvents += 1;
   }
 
-  if (mouseIsDown(0)) {
+  if (pointerPressed || pointerDown) {
     pointerNormX = viewport.worldXToNormalized(mousePos.x);
   }
 }
