@@ -9,7 +9,6 @@ export class WebPlatform implements PlatformBridge {
 
   private initialized = false;
   private firstFrameSignaled = false;
-  private readySignaled = false;
 
   init(): void {
     this.initialized = true;
@@ -34,7 +33,6 @@ export class WebPlatform implements PlatformBridge {
       );
     }
 
-    this.readySignaled = true;
   }
 
   bindLifecycle(handlers: PlatformLifecycleHandlers): () => void {
