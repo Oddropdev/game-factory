@@ -7,7 +7,7 @@ fs.mkdirSync(evidenceDir, { recursive: true });
 
 async function state(page) {
   return page.evaluate(
-    () => window.__GAME_FACTORY_MASS_RUNNER_TEST__.getState()
+    () => globalThis.__GAME_FACTORY_MASS_RUNNER_TEST__.getState()
   );
 }
 
