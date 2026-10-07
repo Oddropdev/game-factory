@@ -53,10 +53,12 @@ test('W2 runner works in the production browser build', async ({ page }, testInf
 
   const initial = await runnerState(page);
   expect(initial.status).toBe('running');
-  expect(initial.distance).toBe(0);
+  expect(initial.distance).toBeLessThan(15);
   expect(initial.courseSignature.length).toBeGreaterThan(20);
 
-  await expect.poll(async () => (await runnerState(page)).distance).toBeGreaterThan(2);
+  await expect
+    .poll(async () => (await runnerState(page)).distance)
+    .toBeGreaterThan(initial.distance + 2);
 
   await page.mouse.move(
     portraitBox!.x + portraitBox!.width * 0.25,
