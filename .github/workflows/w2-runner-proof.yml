@@ -1,20 +1,17 @@
-name: W1 Factory Foundation
+name: W2 Runner Proof
 
 on:
   pull_request:
     paths:
-      - "src/**"
-      - "tests/**"
-      - "tools/check-artifact.mjs"
-      - "index.html"
+      - "src/games/runner/**"
+      - "src/main.ts"
+      - "tests/unit/runnerModel.test.ts"
+      - "tests/e2e/runner.spec.ts"
+      - "tools/check-w2-core-churn.mjs"
       - "package.json"
-      - "package-lock.json"
-      - "tsconfig.json"
-      - "eslint.config.js"
-      - "playwright.config.ts"
-      - ".github/workflows/w1-foundation.yml"
-      - "docs/architecture/W1-FOUNDATION-CONTRACT.md"
-      - "docs/evidence/W1-*"
+      - ".github/workflows/w2-runner-proof.yml"
+      - "docs/architecture/W2-RUNNER-PROOF-CONTRACT.md"
+      - "docs/evidence/W2-**"
   workflow_dispatch:
 
 permissions:
@@ -24,11 +21,14 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      W2_BASE_SHA: 3da4311757703ba7d34627541e7234819f3c5565
 
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -40,16 +40,21 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify W1 foundation
+      - name: Verify W1 regression + W2 runner
         run: npm run verify
 
-      - name: Upload W1 evidence
+      - name: Verify New Game Core Churn
+        run: npm run check:w2-core-churn
+
+      - name: Upload W2 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: w1-foundation-evidence
+          name: w2-runner-evidence
           path: |
             evidence/w1/
+            evidence/w2/
             playwright-report/
+            test-results/
             package-lock.json
           if-no-files-found: warn
