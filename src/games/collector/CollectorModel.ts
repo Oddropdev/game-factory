@@ -50,9 +50,11 @@ export class CollectorModel {
   private deposited = 0;
   private buildStage = 0;
   private depositTrips = 0;
-  private resources = this.createResourceState();
+  private resources: CollectorResourceState[];
 
-  constructor(private readonly course: CollectorCourse) {}
+  constructor(private readonly course: CollectorCourse) {
+    this.resources = this.createResourceState();
+  }
 
   reset(): void {
     this.status = 'collecting';
