@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { FoundationTestBridge } from '../../src/testing/TestBridge';
 import type { RunnerTestBridge } from '../../src/games/runner/RunnerTestBridge';
@@ -29,7 +27,7 @@ async function foundationCall(
   );
 }
 
-test('W2 runner works in the production browser build', async ({ page }) => {
+test('W2 runner works in the production browser build', async ({ page }, testInfo) => {
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   const failedRequests: string[] = [];
@@ -41,8 +39,6 @@ test('W2 runner works in the production browser build', async ({ page }) => {
     }
   });
   page.on('requestfailed', request => failedRequests.push(request.url()));
-
-  fs.mkdirSync(path.resolve('evidence/w2'), { recursive: true });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
@@ -73,7 +69,9 @@ test('W2 runner works in the production browser build', async ({ page }) => {
   await expect.poll(async () => (await runnerState(page)).targetNormX).toBeCloseTo(0.25, 1);
   await expect.poll(async () => (await runnerState(page)).playerNormX).toBeLessThan(0.45);
 
-  await page.screenshot({ path: 'evidence/w2/runner-portrait.png' });
+  const portraitPath = testInfo.outputPath('runner-portrait.png');
+  await page.screenshot({ path: portraitPath });
+  await testInfo.attach('runner-portrait', { path: portraitPath, contentType: 'image/png' });
 
   await foundationCall(page, 'pause');
   const pausedAt = (await runnerState(page)).distance;
@@ -92,7 +90,9 @@ test('W2 runner works in the production browser build', async ({ page }) => {
   );
   await expect.poll(async () => (await runnerState(page)).targetNormX).toBeCloseTo(0.75, 1);
 
-  await page.screenshot({ path: 'evidence/w2/runner-landscape.png' });
+  const landscapePath = testInfo.outputPath('runner-landscape.png');
+  await page.screenshot({ path: landscapePath });
+  await testInfo.attach('runner-landscape', { path: landscapePath, contentType: 'image/png' });
 
   await expect
     .poll(async () => (await runnerState(page)).status, { timeout: 7_000 })
@@ -104,7 +104,9 @@ test('W2 runner works in the production browser build', async ({ page }) => {
   expect(finished.gatesPassed).toBe(2);
   expect(finished.eventsProcessed).toBe(7);
 
-  await page.screenshot({ path: 'evidence/w2/runner-finish.png' });
+  const finishPath = testInfo.outputPath('runner-finish.png');
+  await page.screenshot({ path: finishPath });
+  await testInfo.attach('runner-finish', { path: finishPath, contentType: 'image/png' });
 
   await foundationCall(page, 'pause');
   await foundationCall(page, 'restart');
