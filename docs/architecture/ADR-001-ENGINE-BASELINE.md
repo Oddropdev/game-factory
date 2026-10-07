@@ -2,25 +2,25 @@
 
 Date: 2026-10-07
 
-Status: **PROVISIONAL — PENDING W0.5 PHASER vs LITTLEJS MICRO-BAKEOFF**
+Status: **ACCEPTED**
 
-This decision becomes accepted project state only after W0.5 selects a winner, this ADR is updated with the final result, and the W0 pull request is merged to `main`.
+## Decision
 
-## Provisional decision
-
-Use **Phaser 4** as the leading primary engine candidate for the first Game Factory line, subject to the final W0.5 micro-bakeoff against LittleJS 1.25.0.
-
-W1 starts from the official Phaser Vite/TypeScript template structure, but pins the current inspected Phaser engine version **4.2.1** rather than blindly copying the template's older `4.0.0` dependency.
+Use **LittleJS 1.25.0** as the primary engine for the first Game Factory line.
 
 Use:
 
-- Phaser 4.2.1
-- TypeScript
-- Vite
-- Vitest for pure TypeScript unit tests
-- Playwright for real-browser production-build smoke tests
+- LittleJS 1.25.0;
+- TypeScript;
+- Vite;
+- Vitest for pure TypeScript unit tests;
+- Playwright for real-browser production-build verification.
 
-Use official Phaser repository skills as the primary AI-agent reference because they are part of the MIT-licensed Phaser repository.
+The official MIT-licensed `LittleJS-AI` repository may be used as an AI-workflow and template reference.
+
+Phaser 4 is retained as the explicit complex-2D escalation path.
+
+PlayCanvas is retained as the explicit true-3D escalation path.
 
 ## Context
 
@@ -30,111 +30,144 @@ The first factory proof targets fast mobile-first web games:
 2. collector/builder;
 3. physics/puzzle.
 
-The project must optimize for:
+The project optimizes for:
 
 - minimum human intervention;
 - fast AI-authored iteration;
 - browser-native delivery;
-- simple touch/pointer input;
+- touch/pointer input;
 - deterministic automated testing;
 - small artifacts;
 - later YouTube/playable-ad adapters without platform SDKs leaking into gameplay.
 
-## Why Phaser
+## Evidence
 
-Phaser already supplies the core primitives that W1 would otherwise have to recreate:
+W0 performed:
 
-- scenes and scene lifecycle;
-- loader;
-- unified mouse/touch pointer input;
-- responsive ScaleManager;
-- global visibility/pause/resume events;
-- tweens;
-- particles;
-- cameras;
-- Arcade and Matter physics;
-- TypeScript definitions;
-- official AI-agent skills.
+- broad starter discovery;
+- pattern-focused discovery;
+- source-level architecture inspection;
+- a counterfactual alternative-engine sweep;
+- a controlled Phaser 4.2.1 vs LittleJS 1.25.0 implementation bakeoff.
 
-This minimizes both implementation surface and agent ambiguity.
+Both engines passed the same browser/mobile/determinism/lifecycle contract.
 
-## Why not PlayCanvas for W1
+LittleJS produced:
 
-PlayCanvas is a strong MIT-licensed engine with a modern TypeScript/Vite scaffold and excellent 3D capabilities.
+- 138 non-blank production LOC vs Phaser's 157;
+- 121,613-byte total artifact vs Phaser's 1,377,600 bytes;
+- 45,809-byte gzip main JS vs Phaser's 356,942 bytes;
+- 403 ms measured rebuild vs Phaser's 628 ms in the same CI class;
+- no engine-specific correction loop in the final implementation path.
 
-It is not selected for W1 because the first proof is 2D/2.5D hypercasual, where Phaser provides a smaller and more direct problem model.
+The decisive point is not raw size alone.
 
-PlayCanvas becomes the preferred escalation candidate when a validated concept materially requires:
+LittleJS matched the required correctness gates while requiring a smaller runtime and a slightly smaller implementation surface.
+
+See `docs/research/W0-ENGINE-BAKEOFF-RESULTS.md`.
+
+## Engine ladder
+
+### Default — LittleJS
+
+Use for:
+
+- hypercasual;
+- small web games;
+- playable-ad style games;
+- fast mechanic prototypes;
+- procedural/simple-art games;
+- the W1–W4 factory proof unless a revisit trigger fires.
+
+### Escalation — Phaser 4
+
+Use when a validated product materially benefits from:
+
+- a larger 2D ecosystem;
+- richer scene/game abstractions;
+- more complex loader/animation/tween/physics workflows;
+- Phaser-specific platform support;
+- complexity that causes repeated LittleJS plumbing.
+
+### 3D escalation — PlayCanvas
+
+Use when the validated product materially requires:
 
 - 3D scene graphs;
 - models/materials/lighting;
 - perspective third-person cameras;
-- WebGPU-specific features;
-- 3D physics as a central mechanic.
+- WebGPU-oriented 3D rendering;
+- 3D physics as a core mechanic.
 
-## Deliberate non-decision
+## No universal engine abstraction
 
-We will **not** abstract Phaser and PlayCanvas behind a universal rendering interface.
+Do **not** create a `RenderEngine` interface spanning LittleJS, Phaser and PlayCanvas.
 
-That would be speculative architecture.
+Shared factory concepts may exist above the renderer later, but only after real W2–W4 evidence.
 
-If a real 3D product appears, it may share platform/test/content conventions with Game Factory without sharing the renderer implementation.
+Premature engine-neutral rendering would increase code and agent ambiguity without serving the current mission.
+
+## W1 rule
+
+W1 starts with the smallest TypeScript/Vite LittleJS foundation that can prove:
+
+- production build;
+- browser runtime;
+- pointer/touch;
+- resize;
+- pause/resume;
+- deterministic restart;
+- test observability;
+- artifact budgets.
+
+Do not import the full LittleJS-AI toolkit into production by default.
+
+Use only the engine plus independently selected patterns/helpers that earn their place.
 
 ## External reference policy
 
-### Allowed source/reference categories
+Permissive source may be reused when useful with required notices.
 
-- MIT/Apache/BSD/ISC source may be reused when useful, with required notices.
-- Official Phaser source/skills are MIT.
-- `feliperyba/playable-ad-phaser` is MIT and may inform implementation.
+Confirmed permissive references include:
 
-### License-hold repositories
+- LittleJS — MIT;
+- LittleJS-AI — MIT;
+- Phaser — MIT;
+- `feliperyba/playable-ad-phaser` — MIT;
+- PlayCanvas — MIT;
+- Excalibur — BSD-2-Clause.
 
-The following inspected repositories do not currently provide a sufficiently clear software license for code reuse:
-
-- `Atifullah/Bus-Jam-Escape-playable`
-- `Yakoub-ai/phaser4-gamedev`
-- `adam0white/GameEval`
-- `Samgeven/phaser-vite-template`
-
-They may inform independently derived architecture or testing ideas, but no source text/code should be copied into Game Factory unless licensing is later resolved.
+Repositories with unclear software licensing remain idea/evidence references only.
 
 ## Consequences
 
 ### Positive
 
-- smallest credible path to the first playable;
-- strong mobile-web fit;
-- one engine for W1–W4;
-- high AI familiarity;
-- official agent guidance;
-- low platform lock-in because distribution SDKs stay outside gameplay.
+- very small runtime/distribution footprint;
+- simple API surface for AI agents;
+- current dedicated AI tooling and game templates;
+- strong fit for self-contained web/playable output;
+- deterministic/headless capabilities already exist in the engine;
+- W0.5 proved the required mobile/browser contract.
 
 ### Negative
 
-- a later true-3D factory may require PlayCanvas or another engine;
-- Phaser template tooling may lag the latest Vite/TypeScript majors;
-- Phaser-specific scene/render code will not be portable to a 3D engine.
+- smaller ecosystem than Phaser;
+- less conventional TypeScript-first structure in some official AI examples;
+- complex 2D games may eventually benefit from Phaser;
+- a true 3D product still needs a different engine.
 
-These costs are acceptable because premature cross-engine portability would slow the current mission.
-
-## W1 dependency rule
-
-W1 changes one variable at a time:
-
-1. scaffold from the official Vite/TypeScript template structure;
-2. update Phaser to 4.2.1;
-3. establish build + browser smoke;
-4. only then consider build-tool major upgrades if they produce measurable value.
+These are accepted risks.
 
 ## Revisit triggers
 
-Revisit ADR-001 only if one of the following becomes true:
+Revisit ADR-001 only if evidence from W2–W4 shows:
 
-- Phaser 4.2.1 cannot satisfy the browser/runtime gates;
-- bundle/runtime constraints fail materially;
-- the first validated commercial concept is fundamentally 3D;
-- a platform requirement is incompatible with Phaser but supported by another engine;
-- W2–W4 show repeated engine-level workarounds rather than gameplay-specific work.
+- repeated engine-level workarounds;
+- material browser/mobile failures;
+- agent productivity degradation from API/project ergonomics;
+- physics/puzzle needs that are materially easier in Phaser;
+- a platform integration that cannot be isolated cleanly;
+- a validated game concept outside LittleJS's efficient complexity envelope.
 
-Do not reopen this ADR merely because another engine has newer tooling or a more attractive demo.
+Do not reopen this ADR because another engine has more features, a newer release, or a more attractive demo.
