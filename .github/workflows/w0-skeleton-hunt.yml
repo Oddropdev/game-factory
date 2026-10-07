@@ -11,6 +11,11 @@ on:
         description: "Maximum deduplicated candidate count"
         required: false
         default: "80"
+  pull_request:
+    paths:
+      - "tools/skeleton-hunt/**"
+      - "package.json"
+      - ".github/workflows/w0-skeleton-hunt.yml"
 
 permissions:
   contents: read
@@ -34,8 +39,8 @@ jobs:
       - name: Discover and preliminarily score candidates
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          HUNT_PER_QUERY: ${{ inputs.per_query }}
-          HUNT_MAX_CANDIDATES: ${{ inputs.max_candidates }}
+          HUNT_PER_QUERY: ${{ inputs.per_query || '12' }}
+          HUNT_MAX_CANDIDATES: ${{ inputs.max_candidates || '80' }}
         run: npm run hunt
 
       - uses: actions/upload-artifact@v4
