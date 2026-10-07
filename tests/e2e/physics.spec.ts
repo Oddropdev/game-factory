@@ -145,6 +145,10 @@ test('W4 physics-puzzle works in the production browser build', async ({ page },
   await page.touchscreen.tap(solution.x, solution.y);
 
   await expect.poll(async () => (await physicsState(page)).shots).toBe(1);
+  await expect
+    .poll(async () => (await physicsState(page)).ticks)
+    .toBeGreaterThan(8);
+  expect((await physicsState(page)).status).toBe('flying');
 
   const landscapePath = testInfo.outputPath('physics-landscape-flight.png');
   await page.screenshot({ path: landscapePath });
