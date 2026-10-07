@@ -4,8 +4,8 @@ import type {
   PlatformLifecycleHandlers
 } from './PlatformBridge';
 
-export class WebPlatform implements PlatformBridge {
-  readonly id = 'web' as const;
+export class PlayableAdPlatform implements PlatformBridge {
+  readonly id = 'playable-ad' as const;
 
   private initialized = false;
   private firstFrameSignaled = false;
@@ -16,11 +16,6 @@ export class WebPlatform implements PlatformBridge {
 
   firstFrameReady(): void {
     this.assertInitialized();
-
-    if (this.firstFrameSignaled) {
-      return;
-    }
-
     this.firstFrameSignaled = true;
   }
 
@@ -29,10 +24,9 @@ export class WebPlatform implements PlatformBridge {
 
     if (!this.firstFrameSignaled) {
       throw new Error(
-        'WebPlatform.ready() called before firstFrameReady()'
+        'PlayableAdPlatform.ready() called before firstFrameReady()'
       );
     }
-
   }
 
   bindLifecycle(handlers: PlatformLifecycleHandlers): () => void {
@@ -66,7 +60,7 @@ export class WebPlatform implements PlatformBridge {
 
   private assertInitialized(): void {
     if (!this.initialized) {
-      throw new Error('WebPlatform used before init()');
+      throw new Error('PlayableAdPlatform used before init()');
     }
   }
 }

@@ -10,7 +10,10 @@ import {
   resolveGameId
 } from './factory/GameRegistry';
 import type { GameInputFrame } from './factory/GameModule';
-import { WebPlatform } from './platform/WebPlatform';
+import {
+  createPlatform,
+  resolvePlatformId
+} from './platform/PlatformFactory';
 import { LifecycleRuntime } from './runtime/LifecycleRuntime';
 import { ViewportRuntime } from './runtime/ViewportRuntime';
 import { installTestBridge } from './testing/TestBridge';
@@ -18,7 +21,9 @@ import { installTestBridge } from './testing/TestBridge';
 const FOUNDATION_SEED = 0x5eed1234;
 const FOUNDATION_SEED_LABEL = '5eed1234';
 
-const platform = new WebPlatform();
+const platform = createPlatform(resolvePlatformId());
+platform.init();
+
 const lifecycle = new LifecycleRuntime(platform);
 const viewport = new ViewportRuntime(10);
 const games = createGameRegistry(viewport);
@@ -28,7 +33,13 @@ const requestedGame = new URLSearchParams(window.location.search).get(
 const activeGame = games[resolveGameId(requestedGame)];
 
 let ready = false;
+let platformReady = false;
+let audioEnabled = platform.isAudioEnabled();
 let foundationProbeNormX = 0.5;
+
+platform.onAudioEnabledChange(enabled => {
+  audioEnabled = enabled;
+});
 
 function resetFoundationProbe(): void {
   const rng = new SeededRng(FOUNDATION_SEED);
@@ -40,7 +51,6 @@ function gameInit(): void {
   resetFoundationProbe();
   activeGame.init();
   lifecycle.attach();
-  platform.ready();
   ready = true;
 }
 
@@ -65,6 +75,12 @@ function gameRender(): void {
 
 function gameRenderPost(): void {
   activeGame.renderHud();
+
+  if (!platformReady) {
+    platform.firstFrameReady();
+    platform.ready();
+    platformReady = true;
+  }
 }
 
 function restartRuntime(): void {
@@ -79,6 +95,9 @@ installTestBridge({
 
     return {
       ready,
+      platformReady,
+      platformId: platform.id,
+      audioEnabled,
       paused: lifecycle.isPaused(),
       seed: FOUNDATION_SEED_LABEL,
       pointerEvents: gameState.pointerEvents,
@@ -95,8 +114,6 @@ installTestBridge({
   pause: () => lifecycle.pause(),
   resume: () => lifecycle.resume()
 });
-
-platform.init();
 
 const root = document.querySelector<HTMLElement>('#app');
 if (!root) {

@@ -1,5 +1,10 @@
+import type { PlatformId } from '../platform/PlatformBridge';
+
 export type FoundationTestState = {
   ready: boolean;
+  platformReady: boolean;
+  platformId: PlatformId;
+  audioEnabled: boolean;
   paused: boolean;
   seed: string;
   pointerEvents: number;
