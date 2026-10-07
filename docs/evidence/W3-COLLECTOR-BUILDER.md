@@ -113,7 +113,7 @@ Compared with W2, adding the complete collector/builder family increased main JS
 
 Automated comparison against accepted W2 main:
 
-- changed files: **12**
+- changed files: **13**
 - collector-specific production files: **4**
 - changed files under `src/core/`: **0**
 - changed files under `src/platform/`: **0**
@@ -154,7 +154,9 @@ CI caught a TypeScript/class-initialization bug before browser execution:
 
 After the correction, the full 13-test + 3-browser-test suite passed.
 
-The correction stayed entirely inside collector-specific code.
+A later duplicate W2 regression workflow also exposed an existing orientation-test race: the runner test tapped landscape coordinates immediately after `setViewportSize()`, before the shared viewport snapshot had necessarily observed the new width. The test now waits for the accepted W1 TestBridge viewport width before sending the touch event.
+
+This hardening changed only `tests/e2e/runner.spec.ts`. No runner production code and no shared foundation code changed.
 
 ## Architecture audit
 
