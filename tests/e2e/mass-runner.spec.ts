@@ -44,11 +44,27 @@ async function target(
 ): Promise<void> {
   const point = await canvasPoint(page, normalizedX);
 
-  if (touch) {
-    await page.touchscreen.tap(point.x, point.y);
-  } else {
-    await page.mouse.click(point.x, point.y);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (touch) {
+      await page.touchscreen.tap(point.x, point.y);
+    } else {
+      await page.mouse.click(point.x, point.y);
+    }
+
+    await page.waitForTimeout(40);
+
+    const state = await gameState(page);
+    if (
+      state.phase !== 'running' ||
+      Math.abs(state.targetNormX - normalizedX) < 0.035
+    ) {
+      return;
+    }
   }
+
+  throw new Error(
+    `input target was not observed: ${normalizedX.toFixed(2)}`
+  );
 }
 
 function eventTarget(
