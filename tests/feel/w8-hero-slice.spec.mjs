@@ -27,7 +27,24 @@ async function canvasPoint(page, normalizedX) {
 async function steer(page, normalizedX) {
   const point = await canvasPoint(page, normalizedX);
   await page.mouse.click(point.x, point.y);
-  await page.waitForTimeout(45);
+
+  await expect
+    .poll(
+      async () => {
+        const current = await state(page);
+
+        if (current.phase !== 'running') {
+          return true;
+        }
+
+        return (
+          Math.abs(current.targetNormX - normalizedX) < 0.035 &&
+          Math.abs(current.playerNormX - normalizedX) < 0.09
+        );
+      },
+      { timeout: 1_200 }
+    )
+    .toBe(true);
 }
 
 function applyOperation(mass, operation) {
