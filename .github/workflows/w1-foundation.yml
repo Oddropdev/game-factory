@@ -14,7 +14,7 @@ on:
       - "playwright.config.ts"
       - ".github/workflows/w1-foundation.yml"
       - "docs/architecture/W1-FOUNDATION-CONTRACT.md"
-      - "docs/evidence/W1-FOUNDATION.md"
+      - "docs/evidence/**"
   workflow_dispatch:
 
 permissions:
