@@ -74,17 +74,19 @@ async function playCurrentLevel(
   touch: boolean
 ): Promise<void> {
   const before = await gameState(page);
-  const level = MASS_RUNNER_LEVELS[before.levelIndex];
-
-  if (!level) {
-    throw new Error('Missing level for browser route');
-  }
 
   if (before.phase !== 'running') {
     await target(page, 0.5, touch);
     await expect
       .poll(async () => (await gameState(page)).phase)
       .toBe('running');
+  }
+
+  const running = await gameState(page);
+  const level = MASS_RUNNER_LEVELS[running.levelIndex];
+
+  if (!level) {
+    throw new Error('Missing level for browser route');
   }
 
   for (const event of level.events) {
