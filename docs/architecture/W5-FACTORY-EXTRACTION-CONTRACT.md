@@ -2,7 +2,7 @@
 
 Date: 2026-10-07
 
-Status: **LOCKED FOR W5**
+Status: **ACCEPTED**
 
 ## Mission
 
@@ -20,18 +20,18 @@ Three materially different families have passed on the same foundation:
 
 All three reached PASS without shared-foundation production rewrites.
 
-## Accepted extraction candidates
+## Accepted extraction surface
 
-W2–W4 demonstrate enough repetition to extract:
+W2–W4 demonstrate enough repetition to extract exactly these shared surfaces:
 
 1. a minimal common game lifecycle/input contract;
 2. one registry-based game-selection boundary;
-3. viewport-wide normalized Y/world Y conversion;
-4. visible-world-height calculation.
+3. viewport-wide normalized Y ↔ world Y conversion;
+4. visible-world-height calculation;
+5. `create-game` automation that wires a new game into the registry and creates its minimum browser contract;
+6. GameSpec / LevelSpec **conventions**, without universal cross-family runtime schemas.
 
 ## Explicit non-extractions
-
-W5 documents GameSpec/LevelSpec **conventions**, but must not create universal cross-family GameSpec/LevelSpec runtime types.
 
 W5 must **not** generalize:
 
@@ -44,21 +44,20 @@ W5 must **not** generalize:
 - puzzles;
 - course schemas;
 - model base classes;
-- test-state payloads;
+- detailed test-state payloads;
 - save/progression;
 - analytics;
 - rendering;
 - ECS;
-- GameSpec;
-- LevelSpec.
+- universal GameSpec / LevelSpec runtime types.
 
-Course → Model → Game remains a documented convention, not an inheritance hierarchy.
+Course → Model → Game remains a convention, not an inheritance hierarchy.
 
 Family-specific TestBridges remain family-specific because their detailed evidence payloads are intentionally different.
 
 ## Minimal factory contract
 
-The shared game contract may contain only:
+The shared game contract contains only:
 
 ```text
 init
@@ -69,7 +68,7 @@ restart
 foundationState
 ```
 
-Input may contain only the already-proven pointer state:
+Input contains only the already-proven pointer state:
 
 ```text
 pointerPressed
@@ -80,9 +79,41 @@ pointerWorldY
 
 ## Registry rule
 
-`src/main.ts` must stop knowing concrete game classes.
+`src/main.ts` must not know concrete game classes.
 
-Adding a family should require registration in one factory registry rather than repeated lifecycle branches in the engine entrypoint.
+Adding a family is performed through the factory registry rather than repeated lifecycle branches in the engine entrypoint.
+
+The registry contains stable automation markers used by `tools/create-game.mjs`.
+
+## create-game rule
+
+The supported entrypoint is:
+
+```text
+npm run create-game -- --id mass-runner
+```
+
+The automation must:
+
+- validate the game id;
+- refuse accidental overwrite;
+- create a `GameModule` implementation;
+- create a game-specific TestBridge;
+- create a Playwright browser contract;
+- update the central registry;
+- support `--dry-run`.
+
+The automation itself must pass an isolated temporary-repository smoke test.
+
+## GameSpec / LevelSpec convention
+
+W5 standardizes data conventions only.
+
+Family-local specs may be introduced when variants or multiple levels justify them. Shared cross-family GameSpec / LevelSpec runtime types remain out of scope until new evidence supports them.
+
+See:
+
+`docs/architecture/GAME-SPEC-LEVEL-SPEC-CONVENTIONS.md`
 
 ## Viewport extraction rule
 
@@ -92,7 +123,7 @@ The following repeated math belongs in `ViewportRuntime`:
 - normalized Y → world Y;
 - world Y → normalized Y.
 
-No camera-policy abstraction is authorized.
+No generic camera-policy abstraction is authorized.
 
 ## Behavior gate
 
@@ -115,7 +146,7 @@ Extraction must not justify a larger budget.
 
 ## Static extraction gate
 
-Expected evidence:
+Required evidence:
 
 - `src/main.ts` non-empty LOC < 120;
 - game-selection branches in `src/main.ts` = 0;
@@ -123,9 +154,8 @@ Expected evidence:
 - GameModule implementations = 3;
 - duplicated game-local normalized-Y helpers = 0;
 - duplicated game-local visible-height formulas = 0;
-- no `src/mechanics/`, ECS, GameSpec or LevelSpec.
-
-The create-game automation must pass an isolated temporary-repository smoke test and refuse accidental overwrite.
+- no generic mechanics/ECS layer;
+- no universal shared GameSpec / LevelSpec runtime files.
 
 Expected markers:
 
@@ -139,9 +169,11 @@ W5 closes only after:
 - typecheck PASS;
 - lint PASS;
 - all unit tests PASS;
+- create-game automation smoke PASS;
 - all four browser contracts PASS;
 - artifact budget PASS;
 - static extraction gate PASS;
+- GameSpec / LevelSpec conventions documented;
 - no gameplay semantic regressions;
 - closeout records what was deliberately **not** abstracted.
 
