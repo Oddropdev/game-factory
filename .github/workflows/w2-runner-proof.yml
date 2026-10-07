@@ -55,5 +55,6 @@ jobs:
             evidence/w1/
             evidence/w2/
             playwright-report/
+            test-results/
             package-lock.json
           if-no-files-found: warn
