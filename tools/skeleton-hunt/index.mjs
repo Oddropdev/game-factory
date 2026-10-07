@@ -5,17 +5,37 @@ const API = "https://api.github.com";
 const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
 const perQuery = Number(process.env.HUNT_PER_QUERY || 12);
 const maxCandidates = Number(process.env.HUNT_MAX_CANDIDATES || 80);
+const profile = process.env.HUNT_PROFILE || "general";
 
-const queries = [
-  "phaser typescript vite game template",
-  "phaser typescript mobile game",
-  "phaser typescript starter game",
-  "phaser playable ad typescript",
-  "phaser infinite runner typescript",
-  "playcanvas typescript vite game",
-  "playcanvas mobile game typescript",
-  "html5 game typescript phaser"
-];
+const queryProfiles = {
+  general: [
+    "phaser typescript vite game template",
+    "phaser typescript mobile game",
+    "phaser typescript starter game",
+    "phaser playable ad typescript",
+    "phaser infinite runner typescript",
+    "playcanvas typescript vite game",
+    "playcanvas mobile game typescript",
+    "html5 game typescript phaser"
+  ],
+  patterns: [
+    "phaser responsive touch pointer typescript",
+    "phaser orientation resize mobile typescript",
+    "phaser level json typescript",
+    "phaser data driven levels typescript",
+    "phaser playwright test typescript",
+    "phaser vitest typescript",
+    "phaser playable ad typescript",
+    "phaser runner typescript",
+    "phaser agent skills",
+    "phaser mcp game"
+  ]
+};
+
+const queries = queryProfiles[profile];
+if (!queries) {
+  throw new Error(`Unknown HUNT_PROFILE "${profile}". Expected one of: ${Object.keys(queryProfiles).join(", ")}`);
+}
 
 const permissive = new Set([
   "MIT",
@@ -240,7 +260,8 @@ async function main() {
     path.join(outDir, `skeleton-hunt-${stamp}.json`),
     JSON.stringify({
       generatedAt: new Date().toISOString(),
-      methodologyVersion: 1,
+      methodologyVersion: 2,
+      profile,
       queries,
       candidateCount: enriched.length,
       candidates: enriched
@@ -248,7 +269,7 @@ async function main() {
   );
 
   const md = [
-    `# Skeleton Hunt — ${stamp}`,
+    `# Skeleton Hunt — ${stamp} (${profile})`,
     "",
     `Candidates: **${enriched.length}**`,
     "",
