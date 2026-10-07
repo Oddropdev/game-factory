@@ -1,0 +1,27 @@
+{
+  "name": "game-factory-bakeoff-phaser",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests/unit",
+    "test:e2e": "playwright test",
+    "verify": "npm run typecheck && npm run test && npm run build && npm run test:e2e"
+  },
+  "dependencies": {
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

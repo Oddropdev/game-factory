@@ -1,0 +1,13 @@
+{
+  "name": "game-factory",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "hunt": "node tools/skeleton-hunt/index.mjs",
+    "hunt:check": "node --check tools/skeleton-hunt/index.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
