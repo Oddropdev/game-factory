@@ -11,7 +11,9 @@ The candidate refactor extracts only four evidence-backed surfaces:
 - `GameModule` + pointer input frame;
 - centralized game registry;
 - visible-world-height calculation;
-- normalized Y/world Y projection.
+- normalized Y/world Y projection;
+- registry-safe `create-game` automation;
+- GameSpec/LevelSpec conventions without universal schemas.
 
 ## Baseline duplication
 
@@ -32,9 +34,18 @@ Before W5:
 - detailed TestBridge state;
 - scoring/progression semantics.
 
+Factory automation target:
+
+```text
+npm run create-game -- --id my-game
+```
+
+The command must create a GameModule stub, game-specific TestBridge and Playwright contract, then register the game without manual edits.
+
 Expected markers:
 
 - `W1_ARTIFACT_BUDGET_PASS`
+- `W5_CREATE_GAME_AUTOMATION_PASS`
 - `W5_FACTORY_EXTRACTION_CONTRACT_PASS`
 - `W5_FACTORY_EXTRACTION_PASS`
 
