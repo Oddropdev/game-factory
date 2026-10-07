@@ -86,6 +86,11 @@ test('W2 runner works in the production browser build', async ({ page }, testInf
   const landscapeBox = await canvas.boundingBox();
   expect(landscapeBox).not.toBeNull();
 
+  const landscapeState = await runnerState(page);
+  expect(Math.abs(landscapeState.playerRenderY)).toBeLessThan(
+    landscapeState.visibleHalfHeight
+  );
+
   await page.touchscreen.tap(
     landscapeBox!.x + landscapeBox!.width * 0.75,
     landscapeBox!.y + landscapeBox!.height * 0.5
