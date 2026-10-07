@@ -93,6 +93,7 @@ test('equivalent mobile-first foundation contract', async ({ page }) => {
 
   // Deterministic restart: target and score return to the same initial state.
   await page.evaluate(() => (window as unknown as { __BAKEOFF__: BakeoffBridge }).__BAKEOFF__.restart());
+  await expect.poll(async () => (await state(page)).restartCount).toBe(1);
   await expect.poll(async () => (await state(page)).ready).toBe(true);
   const restarted = await state(page);
   expect(restarted.score).toBe(0);
