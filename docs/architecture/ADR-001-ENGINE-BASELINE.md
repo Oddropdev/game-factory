@@ -2,13 +2,13 @@
 
 Date: 2026-10-07
 
-Status: **ACCEPTED FOR W1 ON W0 BRANCH**
+Status: **PROVISIONAL — PENDING W0.5 PHASER vs LITTLEJS MICRO-BAKEOFF**
 
-This decision becomes accepted project state only when the W0 pull request is merged to `main`.
+This decision becomes accepted project state only after W0.5 selects a winner, this ADR is updated with the final result, and the W0 pull request is merged to `main`.
 
-## Decision
+## Provisional decision
 
-Use **Phaser 4** as the primary engine for the first Game Factory line.
+Use **Phaser 4** as the leading primary engine candidate for the first Game Factory line, subject to the final W0.5 micro-bakeoff against LittleJS 1.25.0.
 
 W1 starts from the official Phaser Vite/TypeScript template structure, but pins the current inspected Phaser engine version **4.2.1** rather than blindly copying the template's older `4.0.0` dependency.
 
