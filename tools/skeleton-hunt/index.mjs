@@ -197,27 +197,38 @@ async function main() {
     }
   }
 
-  const enriched = [];
-  for (const candidate of discovered.values()) {
-    const [packageText, readme] = await Promise.all([
-      optionalContent(candidate.repo, "package.json"),
-      optionalContent(candidate.repo, "README.md")
-    ]);
-    const packageJson = parsePackage(packageText);
-    const scored = scoreCandidate({ ...candidate, packageJson, readme });
-    enriched.push({
-      ...candidate,
-      ...scored,
-      packageJson: packageJson
-        ? {
-            scripts: packageJson.scripts || {},
-            dependencies: packageJson.dependencies || {},
-            devDependencies: packageJson.devDependencies || {},
-            engines: packageJson.engines || {}
-          }
-        : null
-    });
+  const queue = [...discovered.values()];
+  const enriched = new Array(queue.length);
+  const concurrency = Math.min(12, Math.max(1, Number(process.env.HUNT_CONCURRENCY || 8)));
+  let cursor = 0;
+
+  async function worker() {
+    while (true) {
+      const index = cursor++;
+      if (index >= queue.length) return;
+      const candidate = queue[index];
+      const [packageText, readme] = await Promise.all([
+        optionalContent(candidate.repo, "package.json"),
+        optionalContent(candidate.repo, "README.md")
+      ]);
+      const packageJson = parsePackage(packageText);
+      const scored = scoreCandidate({ ...candidate, packageJson, readme });
+      enriched[index] = {
+        ...candidate,
+        ...scored,
+        packageJson: packageJson
+          ? {
+              scripts: packageJson.scripts || {},
+              dependencies: packageJson.dependencies || {},
+              devDependencies: packageJson.devDependencies || {},
+              engines: packageJson.engines || {}
+            }
+          : null
+      };
+    }
   }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
   enriched.sort((a, b) => b.score - a.score || b.stars - a.stars);
 
