@@ -13,9 +13,7 @@ import {
 } from './RunnerCourse';
 import { RunnerModel, type RunnerSnapshot } from './RunnerModel';
 
-const PLAYER_Y = -3.8;
 const TRACK_WIDTH = 8;
-const EVENT_DISTANCE_SCALE = 0.14;
 
 export type RunnerGameTestState = RunnerSnapshot & {
   ready: boolean;
@@ -23,6 +21,8 @@ export type RunnerGameTestState = RunnerSnapshot & {
   pointerEvents: number;
   restartCount: number;
   courseSignature: string;
+  playerRenderY: number;
+  visibleHalfHeight: number;
 };
 
 export class RunnerGame {
@@ -63,26 +63,60 @@ export class RunnerGame {
 
   render(): void {
     const snapshot = this.model.snapshot();
+    const layout = this.layout();
 
-    drawRect(vec2(0, 0), vec2(TRACK_WIDTH, 12), rgb(0.08, 0.11, 0.16));
-    drawRect(vec2(-4.1, 0), vec2(0.12, 12), rgb(0.28, 0.34, 0.42));
-    drawRect(vec2(4.1, 0), vec2(0.12, 12), rgb(0.28, 0.34, 0.42));
-    drawRect(vec2(-1.33, 0), vec2(0.04, 12), rgb(0.16, 0.2, 0.27));
-    drawRect(vec2(1.33, 0), vec2(0.04, 12), rgb(0.16, 0.2, 0.27));
+    drawRect(
+      vec2(0, 0),
+      vec2(TRACK_WIDTH, layout.trackHeight),
+      rgb(0.08, 0.11, 0.16)
+    );
+    drawRect(
+      vec2(-4.1, 0),
+      vec2(0.12, layout.trackHeight),
+      rgb(0.28, 0.34, 0.42)
+    );
+    drawRect(
+      vec2(4.1, 0),
+      vec2(0.12, layout.trackHeight),
+      rgb(0.28, 0.34, 0.42)
+    );
+    drawRect(
+      vec2(-1.33, 0),
+      vec2(0.04, layout.trackHeight),
+      rgb(0.16, 0.2, 0.27)
+    );
+    drawRect(
+      vec2(1.33, 0),
+      vec2(0.04, layout.trackHeight),
+      rgb(0.16, 0.2, 0.27)
+    );
 
     for (const event of this.course.events) {
-      this.renderEvent(event, snapshot.distance);
+      this.renderEvent(
+        event,
+        snapshot.distance,
+        layout.playerY,
+        layout.eventDistanceScale,
+        layout.visibleHalfHeight
+      );
     }
 
     const finishY =
-      PLAYER_Y +
-      (this.course.finishDistance - snapshot.distance) * EVENT_DISTANCE_SCALE;
-    if (finishY > -6 && finishY < 6) {
+      layout.playerY +
+      (this.course.finishDistance - snapshot.distance) * layout.eventDistanceScale;
+    if (
+      finishY > -layout.visibleHalfHeight - 1 &&
+      finishY < layout.visibleHalfHeight + 1
+    ) {
       drawRect(vec2(0, finishY), vec2(TRACK_WIDTH, 0.18), rgb(0.95, 0.95, 0.95));
     }
 
     const playerX = this.viewport.normalizedXToWorld(snapshot.playerNormX);
-    drawRect(vec2(playerX, PLAYER_Y), vec2(0.72, 0.9), rgb(0.22, 0.74, 0.97));
+    drawRect(
+      vec2(playerX, layout.playerY),
+      vec2(0.72, 0.9),
+      rgb(0.22, 0.74, 0.97)
+    );
   }
 
   renderHud(): void {
@@ -105,14 +139,41 @@ export class RunnerGame {
       targetNormX: this.targetNormX,
       pointerEvents: this.pointerEvents,
       restartCount: this.restartCount,
-      courseSignature: runnerCourseSignature(this.course)
+      courseSignature: runnerCourseSignature(this.course),
+      playerRenderY: this.layout().playerY,
+      visibleHalfHeight: this.layout().visibleHalfHeight
     };
   }
 
-  private renderEvent(event: RunnerCourseEvent, distance: number): void {
-    const y = PLAYER_Y + (event.distance - distance) * EVENT_DISTANCE_SCALE;
+  private layout(): {
+    playerY: number;
+    eventDistanceScale: number;
+    visibleHalfHeight: number;
+    trackHeight: number;
+  } {
+    const viewport = this.viewport.snapshot();
+    const visibleWorldHeight =
+      (viewport.height * viewport.worldWidth) / Math.max(1, viewport.width);
+    const visibleHalfHeight = visibleWorldHeight * 0.5;
 
-    if (y < -6 || y > 6) {
+    return {
+      playerY: Math.max(-4.2, -visibleHalfHeight * 0.7),
+      eventDistanceScale: Math.min(0.14, visibleWorldHeight / 45),
+      visibleHalfHeight,
+      trackHeight: Math.max(12, visibleWorldHeight * 1.05)
+    };
+  }
+
+  private renderEvent(
+    event: RunnerCourseEvent,
+    distance: number,
+    playerY: number,
+    eventDistanceScale: number,
+    visibleHalfHeight: number
+  ): void {
+    const y = playerY + (event.distance - distance) * eventDistanceScale;
+
+    if (y < -visibleHalfHeight - 1 || y > visibleHalfHeight + 1) {
       return;
     }
 
