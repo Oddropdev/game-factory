@@ -25,24 +25,6 @@ async function canvasPoint(page, normalizedX) {
 }
 
 
-const heroEvents = [
-  { id: 'l1-orb-a', kind: 'orb', x: 0.25, amount: 2 },
-  { id: 'l1-hazard', kind: 'hazard', x: 0.5, width: 0.2, penalty: 3 },
-  {
-    id: 'l1-gate-a',
-    kind: 'gate',
-    left: { op: 'add', value: 4 },
-    right: { op: 'add', value: -3 }
-  },
-  { id: 'l1-orb-b', kind: 'orb', x: 0.75, amount: 2 },
-  {
-    id: 'l1-gate-b',
-    kind: 'gate',
-    left: { op: 'add', value: -2 },
-    right: { op: 'add', value: 3 }
-  },
-  { id: 'l1-orb-c', kind: 'orb', x: 0.5, amount: 2 }
-];
 
 async function saveScreenshot(page, name) {
   await page.screenshot({
@@ -67,21 +49,27 @@ async function captureHeroSlice(page, mode) {
   await page.mouse.click(startPoint.x, startPoint.y);
   await expect.poll(async () => (await state(page)).phase).toBe('running');
 
-  for (const [index] of heroEvents.entries()) {
-    await expect
-      .poll(
-        async () => (await state(page)).eventsProcessed,
-        { timeout: 4_000 }
-      )
-      .toBe(index + 1);
-
-    if (index === 2) {
-      await saveScreenshot(
-        page,
-        `${mode}-good-gate-impact`
-      );
+  await page.waitForFunction(
+    () =>
+      globalThis.__GAME_FACTORY_MASS_RUNNER_TEST__.getState()
+        .lastEventId === 'l1-gate-a',
+    undefined,
+    {
+      polling: 'raf',
+      timeout: 4_000
     }
-  }
+  );
+
+  await page.evaluate(() => {
+    globalThis.__GAME_FACTORY_TEST__.pause();
+  });
+  await saveScreenshot(
+    page,
+    `${mode}-good-gate-impact`
+  );
+  await page.evaluate(() => {
+    globalThis.__GAME_FACTORY_TEST__.resume();
+  });
 
   await expect
     .poll(
