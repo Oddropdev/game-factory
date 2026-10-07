@@ -5,36 +5,27 @@ import {
   mouseWasPressed
 } from 'littlejsengine';
 import { SeededRng } from './core/random/SeededRng';
-import { CollectorGame } from './games/collector/CollectorGame';
-import { installCollectorTestBridge } from './games/collector/CollectorTestBridge';
-import { PhysicsGame } from './games/physics/PhysicsGame';
-import { installPhysicsTestBridge } from './games/physics/PhysicsTestBridge';
-import { RunnerGame } from './games/runner/RunnerGame';
-import { installRunnerTestBridge } from './games/runner/RunnerTestBridge';
+import {
+  createGameRegistry,
+  resolveGameId
+} from './factory/GameRegistry';
+import type { GameInputFrame } from './factory/GameModule';
 import { WebPlatform } from './platform/WebPlatform';
 import { LifecycleRuntime } from './runtime/LifecycleRuntime';
 import { ViewportRuntime } from './runtime/ViewportRuntime';
 import { installTestBridge } from './testing/TestBridge';
 
-type GameMode = 'runner' | 'collector' | 'physics';
-
 const FOUNDATION_SEED = 0x5eed1234;
 const FOUNDATION_SEED_LABEL = '5eed1234';
-
-const requestedGame = new URLSearchParams(window.location.search).get('game');
-const gameMode: GameMode =
-  requestedGame === 'collector'
-    ? 'collector'
-    : requestedGame === 'physics'
-      ? 'physics'
-      : 'runner';
 
 const platform = new WebPlatform();
 const lifecycle = new LifecycleRuntime(platform);
 const viewport = new ViewportRuntime(10);
-const runner = new RunnerGame(viewport);
-const collector = new CollectorGame(viewport);
-const physics = new PhysicsGame(viewport);
+const games = createGameRegistry(viewport);
+const requestedGame = new URLSearchParams(window.location.search).get(
+  'game'
+);
+const activeGame = games[resolveGameId(requestedGame)];
 
 let ready = false;
 let foundationProbeNormX = 0.5;
@@ -47,40 +38,21 @@ function resetFoundationProbe(): void {
 function gameInit(): void {
   viewport.sync();
   resetFoundationProbe();
-
-  if (gameMode === 'collector') {
-    collector.init();
-  } else if (gameMode === 'physics') {
-    physics.init();
-  } else {
-    runner.init();
-  }
-
+  activeGame.init();
   lifecycle.attach();
   platform.ready();
   ready = true;
 }
 
 function gameUpdate(): void {
-  const pointerPressed = mouseWasPressed(0);
-  const pointerDown = mouseIsDown(0);
+  const input: GameInputFrame = {
+    pointerPressed: mouseWasPressed(0),
+    pointerDown: mouseIsDown(0),
+    pointerWorldX: mousePos.x,
+    pointerWorldY: mousePos.y
+  };
 
-  if (gameMode === 'collector') {
-    collector.update(
-      pointerPressed,
-      pointerDown,
-      mousePos.x,
-      mousePos.y
-    );
-    return;
-  }
-
-  if (gameMode === 'physics') {
-    physics.update(pointerPressed, mousePos.x, mousePos.y);
-    return;
-  }
-
-  runner.update(pointerPressed, pointerDown, mousePos.x);
+  activeGame.update(input);
 }
 
 function gameUpdatePost(): void {
@@ -88,98 +60,30 @@ function gameUpdatePost(): void {
 }
 
 function gameRender(): void {
-  if (gameMode === 'collector') {
-    collector.render();
-    return;
-  }
-
-  if (gameMode === 'physics') {
-    physics.render();
-    return;
-  }
-
-  runner.render();
+  activeGame.render();
 }
 
 function gameRenderPost(): void {
-  if (gameMode === 'collector') {
-    collector.renderHud();
-    return;
-  }
-
-  if (gameMode === 'physics') {
-    physics.renderHud();
-    return;
-  }
-
-  runner.renderHud();
+  activeGame.renderHud();
 }
 
 function restartRuntime(): void {
   resetFoundationProbe();
-
-  if (gameMode === 'collector') {
-    collector.restart();
-    return;
-  }
-
-  if (gameMode === 'physics') {
-    physics.restart();
-    return;
-  }
-
-  runner.restart();
+  activeGame.restart();
 }
 
 installTestBridge({
   getState: () => {
     const currentViewport = viewport.snapshot();
-
-    if (gameMode === 'collector') {
-      const collectorState = collector.testState();
-
-      return {
-        ready,
-        paused: lifecycle.isPaused(),
-        seed: FOUNDATION_SEED_LABEL,
-        pointerEvents: collectorState.pointerEvents,
-        pointerNormX: collectorState.targetNormX,
-        restartCount: collectorState.restartCount,
-        probeNormX: foundationProbeNormX,
-        viewport: {
-          width: currentViewport.width,
-          height: currentViewport.height
-        }
-      };
-    }
-
-    if (gameMode === 'physics') {
-      const physicsState = physics.testState();
-
-      return {
-        ready,
-        paused: lifecycle.isPaused(),
-        seed: FOUNDATION_SEED_LABEL,
-        pointerEvents: physicsState.pointerEvents,
-        pointerNormX: physicsState.aimX,
-        restartCount: physicsState.restartCount,
-        probeNormX: foundationProbeNormX,
-        viewport: {
-          width: currentViewport.width,
-          height: currentViewport.height
-        }
-      };
-    }
-
-    const runnerState = runner.testState();
+    const gameState = activeGame.foundationState();
 
     return {
       ready,
       paused: lifecycle.isPaused(),
       seed: FOUNDATION_SEED_LABEL,
-      pointerEvents: runnerState.pointerEvents,
-      pointerNormX: runnerState.targetNormX,
-      restartCount: runnerState.restartCount,
+      pointerEvents: gameState.pointerEvents,
+      pointerNormX: gameState.pointerNormX,
+      restartCount: gameState.restartCount,
       probeNormX: foundationProbeNormX,
       viewport: {
         width: currentViewport.width,
@@ -190,18 +94,6 @@ installTestBridge({
   restart: restartRuntime,
   pause: () => lifecycle.pause(),
   resume: () => lifecycle.resume()
-});
-
-installRunnerTestBridge({
-  getState: () => runner.testState()
-});
-
-installCollectorTestBridge({
-  getState: () => collector.testState()
-});
-
-installPhysicsTestBridge({
-  getState: () => physics.testState()
 });
 
 platform.init();

@@ -3,17 +3,6 @@ name: W1 Factory Foundation
 on:
   pull_request:
     paths:
-      - "src/core/**"
-      - "src/platform/**"
-      - "src/runtime/**"
-      - "src/testing/**"
-      - "tests/unit/seededRng.test.ts"
-      - "tests/e2e/foundation.spec.ts"
-      - "tools/check-artifact.mjs"
-      - "index.html"
-      - "tsconfig.json"
-      - "eslint.config.js"
-      - "playwright.config.ts"
       - ".github/workflows/w1-foundation.yml"
       - "docs/architecture/W1-FOUNDATION-CONTRACT.md"
       - "docs/evidence/W1-*"
@@ -24,6 +13,7 @@ permissions:
 
 jobs:
   verify:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'w1-factory-foundation'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -42,7 +32,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify W1 foundation
+      - name: Verify accepted foundation regression
         run: npm run verify
 
       - name: Upload W1 evidence

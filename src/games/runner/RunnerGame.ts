@@ -4,6 +4,11 @@ import {
   rgb,
   vec2
 } from 'littlejsengine';
+import type {
+  FoundationGameState,
+  GameInputFrame,
+  GameModule
+} from '../../factory/GameModule';
 import type { ViewportRuntime } from '../../runtime/ViewportRuntime';
 import {
   createRunnerCourse,
@@ -25,7 +30,7 @@ export type RunnerGameTestState = RunnerSnapshot & {
   visibleHalfHeight: number;
 };
 
-export class RunnerGame {
+export class RunnerGame implements GameModule {
   private readonly course = createRunnerCourse(RUNNER_SEED);
   private readonly model = new RunnerModel(this.course);
   private targetNormX = 0.5;
@@ -42,13 +47,15 @@ export class RunnerGame {
     this.ready = true;
   }
 
-  update(pointerPressed: boolean, pointerDown: boolean, pointerWorldX: number): void {
-    if (pointerPressed) {
+  update(input: GameInputFrame): void {
+    if (input.pointerPressed) {
       this.pointerEvents += 1;
     }
 
-    if (pointerPressed || pointerDown) {
-      this.targetNormX = this.viewport.worldXToNormalized(pointerWorldX);
+    if (input.pointerPressed || input.pointerDown) {
+      this.targetNormX = this.viewport.worldXToNormalized(
+        input.pointerWorldX
+      );
     }
 
     this.model.step(this.targetNormX);
@@ -103,15 +110,23 @@ export class RunnerGame {
 
     const finishY =
       layout.playerY +
-      (this.course.finishDistance - snapshot.distance) * layout.eventDistanceScale;
+      (this.course.finishDistance - snapshot.distance) *
+        layout.eventDistanceScale;
+
     if (
       finishY > -layout.visibleHalfHeight - 1 &&
       finishY < layout.visibleHalfHeight + 1
     ) {
-      drawRect(vec2(0, finishY), vec2(TRACK_WIDTH, 0.18), rgb(0.95, 0.95, 0.95));
+      drawRect(
+        vec2(0, finishY),
+        vec2(TRACK_WIDTH, 0.18),
+        rgb(0.95, 0.95, 0.95)
+      );
     }
 
-    const playerX = this.viewport.normalizedXToWorld(snapshot.playerNormX);
+    const playerX = this.viewport.normalizedXToWorld(
+      snapshot.playerNormX
+    );
     drawRect(
       vec2(playerX, layout.playerY),
       vec2(0.72, 0.9),
@@ -123,16 +138,46 @@ export class RunnerGame {
     const snapshot = this.model.snapshot();
     const percent = Math.round(snapshot.progress * 100);
 
-    drawTextScreen('W2 / RUNNER PROOF', vec2(120, 30), 20, rgb(1, 1, 1));
-    drawTextScreen(`score ${snapshot.score}`, vec2(72, 60), 18, rgb(0.98, 0.83, 0.3));
-    drawTextScreen(`${percent}%`, vec2(48, 88), 16, rgb(0.72, 0.8, 0.9));
+    drawTextScreen(
+      'W2 / RUNNER PROOF',
+      vec2(120, 30),
+      20,
+      rgb(1, 1, 1)
+    );
+    drawTextScreen(
+      `score ${snapshot.score}`,
+      vec2(72, 60),
+      18,
+      rgb(0.98, 0.83, 0.3)
+    );
+    drawTextScreen(
+      `${percent}%`,
+      vec2(48, 88),
+      16,
+      rgb(0.72, 0.8, 0.9)
+    );
 
     if (snapshot.status === 'finished') {
-      drawTextScreen('FINISH', vec2(195, 132), 36, rgb(0.3, 0.95, 0.55));
+      drawTextScreen(
+        'FINISH',
+        vec2(195, 132),
+        36,
+        rgb(0.3, 0.95, 0.55)
+      );
     }
   }
 
+  foundationState(): FoundationGameState {
+    return {
+      pointerEvents: this.pointerEvents,
+      pointerNormX: this.targetNormX,
+      restartCount: this.restartCount
+    };
+  }
+
   testState(): RunnerGameTestState {
+    const layout = this.layout();
+
     return {
       ...this.model.snapshot(),
       ready: this.ready,
@@ -140,8 +185,8 @@ export class RunnerGame {
       pointerEvents: this.pointerEvents,
       restartCount: this.restartCount,
       courseSignature: runnerCourseSignature(this.course),
-      playerRenderY: this.layout().playerY,
-      visibleHalfHeight: this.layout().visibleHalfHeight
+      playerRenderY: layout.playerY,
+      visibleHalfHeight: layout.visibleHalfHeight
     };
   }
 
@@ -151,9 +196,7 @@ export class RunnerGame {
     visibleHalfHeight: number;
     trackHeight: number;
   } {
-    const viewport = this.viewport.snapshot();
-    const visibleWorldHeight =
-      (viewport.height * viewport.worldWidth) / Math.max(1, viewport.width);
+    const visibleWorldHeight = this.viewport.visibleWorldHeight();
     const visibleHalfHeight = visibleWorldHeight * 0.5;
 
     return {
@@ -179,8 +222,12 @@ export class RunnerGame {
 
     if (event.kind === 'gate') {
       const leftPositive = event.leftDelta >= event.rightDelta;
-      const leftColor = leftPositive ? rgb(0.2, 0.82, 0.45) : rgb(0.9, 0.25, 0.28);
-      const rightColor = leftPositive ? rgb(0.9, 0.25, 0.28) : rgb(0.2, 0.82, 0.45);
+      const leftColor = leftPositive
+        ? rgb(0.2, 0.82, 0.45)
+        : rgb(0.9, 0.25, 0.28);
+      const rightColor = leftPositive
+        ? rgb(0.9, 0.25, 0.28)
+        : rgb(0.2, 0.82, 0.45);
       drawRect(vec2(-2.05, y), vec2(3.8, 0.42), leftColor);
       drawRect(vec2(2.05, y), vec2(3.8, 0.42), rightColor);
       return;
@@ -189,7 +236,11 @@ export class RunnerGame {
     const x = this.viewport.normalizedXToWorld(event.x);
 
     if (event.kind === 'pickup') {
-      drawRect(vec2(x, y), vec2(0.52), rgb(0.98, 0.75, 0.14));
+      drawRect(
+        vec2(x, y),
+        vec2(0.52),
+        rgb(0.98, 0.75, 0.14)
+      );
       return;
     }
 

@@ -5,6 +5,11 @@ import {
   rgb,
   vec2
 } from 'littlejsengine';
+import type {
+  FoundationGameState,
+  GameInputFrame,
+  GameModule
+} from '../../factory/GameModule';
 import type { ViewportRuntime } from '../../runtime/ViewportRuntime';
 import {
   createPhysicsCourse,
@@ -28,7 +33,7 @@ export type PhysicsGameTestState = PhysicsSnapshot & {
   visibleWorldHeight: number;
 };
 
-export class PhysicsGame {
+export class PhysicsGame implements GameModule {
   private readonly course = createPhysicsCourse(PHYSICS_SEED);
   private readonly model = new PhysicsModel(this.course);
   private pointerEvents = 0;
@@ -43,16 +48,12 @@ export class PhysicsGame {
     this.ready = true;
   }
 
-  update(
-    pointerPressed: boolean,
-    pointerWorldX: number,
-    pointerWorldY: number
-  ): void {
-    if (pointerPressed) {
+  update(input: GameInputFrame): void {
+    if (input.pointerPressed) {
       this.pointerEvents += 1;
       this.model.launch(
-        this.viewport.worldXToNormalized(pointerWorldX),
-        this.worldYToNormalized(pointerWorldY)
+        this.viewport.worldXToNormalized(input.pointerWorldX),
+        this.viewport.worldYToNormalized(input.pointerWorldY)
       );
     }
 
@@ -67,7 +68,7 @@ export class PhysicsGame {
 
   render(): void {
     const state = this.model.snapshot();
-    const visibleWorldHeight = this.layout().visibleWorldHeight;
+    const visibleWorldHeight = this.viewport.visibleWorldHeight();
 
     drawRect(
       vec2(0, 0),
@@ -75,7 +76,9 @@ export class PhysicsGame {
       rgb(0.055, 0.075, 0.12)
     );
 
-    const floorY = this.normalizedYToWorld(this.course.bounds.floor);
+    const floorY = this.viewport.normalizedYToWorld(
+      this.course.bounds.floor
+    );
     drawRect(
       vec2(0, floorY),
       vec2(9.2, 0.12),
@@ -83,10 +86,12 @@ export class PhysicsGame {
     );
 
     const obstacle = this.course.obstacle;
-    const obstacleCenterX =
-      this.viewport.normalizedXToWorld((obstacle.xMin + obstacle.xMax) * 0.5);
-    const obstacleCenterY =
-      this.normalizedYToWorld((obstacle.yMin + obstacle.yMax) * 0.5);
+    const obstacleCenterX = this.viewport.normalizedXToWorld(
+      (obstacle.xMin + obstacle.xMax) * 0.5
+    );
+    const obstacleCenterY = this.viewport.normalizedYToWorld(
+      (obstacle.yMin + obstacle.yMax) * 0.5
+    );
     const obstacleWidth = (obstacle.xMax - obstacle.xMin) * 10;
     const obstacleHeight =
       (obstacle.yMax - obstacle.yMin) * visibleWorldHeight;
@@ -97,8 +102,12 @@ export class PhysicsGame {
       rgb(0.78, 0.24, 0.28)
     );
 
-    const goalX = this.viewport.normalizedXToWorld(this.course.goal.x);
-    const goalY = this.normalizedYToWorld(this.course.goal.y);
+    const goalX = this.viewport.normalizedXToWorld(
+      this.course.goal.x
+    );
+    const goalY = this.viewport.normalizedYToWorld(
+      this.course.goal.y
+    );
     drawCircle(
       vec2(goalX, goalY),
       Math.max(0.75, this.course.goal.radius * 20),
@@ -111,20 +120,33 @@ export class PhysicsGame {
     );
 
     const ballX = this.viewport.normalizedXToWorld(state.ballX);
-    const ballY = this.normalizedYToWorld(state.ballY);
-    drawCircle(vec2(ballX, ballY), 0.58, rgb(0.22, 0.74, 0.97));
+    const ballY = this.viewport.normalizedYToWorld(state.ballY);
+    drawCircle(
+      vec2(ballX, ballY),
+      0.58,
+      rgb(0.22, 0.74, 0.97)
+    );
 
     if (state.status === 'ready') {
       const aimX = this.viewport.normalizedXToWorld(state.aimX);
-      const aimY = this.normalizedYToWorld(state.aimY);
-      drawCircle(vec2(aimX, aimY), 0.22, rgb(0.98, 0.75, 0.14));
+      const aimY = this.viewport.normalizedYToWorld(state.aimY);
+      drawCircle(
+        vec2(aimX, aimY),
+        0.22,
+        rgb(0.98, 0.75, 0.14)
+      );
     }
   }
 
   renderHud(): void {
     const state = this.model.snapshot();
 
-    drawTextScreen('W4 / PHYSICS PUZZLE', vec2(138, 30), 20, rgb(1, 1, 1));
+    drawTextScreen(
+      'W4 / PHYSICS PUZZLE',
+      vec2(138, 30),
+      20,
+      rgb(1, 1, 1)
+    );
     drawTextScreen(
       `shots ${state.shots}  hits ${state.collisions}`,
       vec2(92, 60),
@@ -133,10 +155,30 @@ export class PhysicsGame {
     );
 
     if (state.status === 'ready') {
-      drawTextScreen('TAP THE ARC', vec2(195, 100), 22, rgb(0.98, 0.82, 0.3));
+      drawTextScreen(
+        'TAP THE ARC',
+        vec2(195, 100),
+        22,
+        rgb(0.98, 0.82, 0.3)
+      );
     } else if (state.status === 'solved') {
-      drawTextScreen('SOLVED', vec2(195, 112), 36, rgb(0.3, 0.95, 0.55));
+      drawTextScreen(
+        'SOLVED',
+        vec2(195, 112),
+        36,
+        rgb(0.3, 0.95, 0.55)
+      );
     }
+  }
+
+  foundationState(): FoundationGameState {
+    const snapshot = this.model.snapshot();
+
+    return {
+      pointerEvents: this.pointerEvents,
+      pointerNormX: snapshot.aimX,
+      restartCount: this.restartCount
+    };
   }
 
   testState(): PhysicsGameTestState {
@@ -150,29 +192,7 @@ export class PhysicsGame {
         x: this.course.solutionAim.x,
         y: this.course.solutionAim.y
       },
-      visibleWorldHeight: this.layout().visibleWorldHeight
+      visibleWorldHeight: this.viewport.visibleWorldHeight()
     };
-  }
-
-  private layout(): { visibleWorldHeight: number } {
-    const viewport = this.viewport.snapshot();
-
-    return {
-      visibleWorldHeight:
-        (viewport.height * viewport.worldWidth) / Math.max(1, viewport.width)
-    };
-  }
-
-  private normalizedYToWorld(normalizedY: number): number {
-    const visibleWorldHeight = this.layout().visibleWorldHeight;
-    return (0.5 - normalizedY) * visibleWorldHeight;
-  }
-
-  private worldYToNormalized(worldY: number): number {
-    const visibleWorldHeight = this.layout().visibleWorldHeight;
-    return Math.min(
-      1,
-      Math.max(0, 0.5 - worldY / Math.max(0.001, visibleWorldHeight))
-    );
   }
 }

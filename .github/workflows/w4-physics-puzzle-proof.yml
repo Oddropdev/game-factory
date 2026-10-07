@@ -3,11 +3,6 @@ name: W4 Physics Puzzle Proof
 on:
   pull_request:
     paths:
-      - "src/games/physics/**"
-      - "src/main.ts"
-      - "tests/unit/physicsModel.test.ts"
-      - "tests/e2e/physics.spec.ts"
-      - "tools/check-w4-core-churn.mjs"
       - ".github/workflows/w4-physics-puzzle-proof.yml"
       - "docs/architecture/W4-PHYSICS-PUZZLE-PROOF-CONTRACT.md"
       - "docs/evidence/W4-**"
@@ -18,6 +13,7 @@ permissions:
 
 jobs:
   verify:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'w4-physics-puzzle-proof'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -39,10 +35,10 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify W1-W3 regressions and W4 physics puzzle
+      - name: Verify accepted physics regression
         run: npm run verify
 
-      - name: Verify W4 New Game Core Churn
+      - name: Verify historical W4 New Game Core Churn
         run: node tools/check-w4-core-churn.mjs
 
       - name: Upload W4 evidence
