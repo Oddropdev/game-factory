@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   verify:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'w2-runner-proof'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -38,7 +39,6 @@ jobs:
         run: npm run verify
 
       - name: Verify historical W2 New Game Core Churn
-        if: github.event_name == 'pull_request' && github.head_ref == 'w2-runner-proof'
         run: npm run check:w2-core-churn
 
       - name: Upload W2 evidence
