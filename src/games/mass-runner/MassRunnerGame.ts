@@ -109,30 +109,32 @@ export class MassRunnerGame implements GameModule {
       );
     }
 
-    for (const event of level.events) {
-      this.renderEvent(
-        event,
-        snapshot,
-        layout.playerY,
-        layout.eventDistanceScale,
-        layout.visibleHalfHeight
-      );
-    }
+    if (snapshot.phase !== 'ready') {
+      for (const event of level.events) {
+        this.renderEvent(
+          event,
+          snapshot,
+          layout.playerY,
+          layout.eventDistanceScale,
+          layout.visibleHalfHeight
+        );
+      }
 
-    const finishY =
-      layout.playerY +
-      (level.finishDistance - snapshot.distance) *
-        layout.eventDistanceScale;
+      const finishY =
+        layout.playerY +
+        (level.finishDistance - snapshot.distance) *
+          layout.eventDistanceScale;
 
-    if (
-      finishY > -layout.visibleHalfHeight - 1 &&
-      finishY < layout.visibleHalfHeight + 1
-    ) {
-      drawRect(
-        vec2(0, finishY),
-        vec2(TRACK_WIDTH, 0.2),
-        rgb(0.92, 0.96, 1)
-      );
+      if (
+        finishY > -layout.visibleHalfHeight - 1 &&
+        finishY < layout.visibleHalfHeight + 1
+      ) {
+        drawRect(
+          vec2(0, finishY),
+          vec2(TRACK_WIDTH, 0.2),
+          rgb(0.92, 0.96, 1)
+        );
+      }
     }
 
     const playerX = this.viewport.normalizedXToWorld(
