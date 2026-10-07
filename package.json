@@ -1,7 +1,7 @@
 {
   "name": "game-factory",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "test": "vitest run tests/unit",
     "test:e2e": "playwright test",
     "check:artifact": "node tools/check-artifact.mjs",
+    "check:w2-core-churn": "node tools/check-w2-core-churn.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run check:artifact && npm run test:e2e",
     "hunt": "node tools/skeleton-hunt/index.mjs",
     "hunt:check": "node --check tools/skeleton-hunt/index.mjs"
