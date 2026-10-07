@@ -3,12 +3,14 @@ name: W1 Factory Foundation
 on:
   pull_request:
     paths:
-      - "src/**"
-      - "tests/**"
+      - "src/core/**"
+      - "src/platform/**"
+      - "src/runtime/**"
+      - "src/testing/**"
+      - "tests/unit/seededRng.test.ts"
+      - "tests/e2e/foundation.spec.ts"
       - "tools/check-artifact.mjs"
       - "index.html"
-      - "package.json"
-      - "package-lock.json"
       - "tsconfig.json"
       - "eslint.config.js"
       - "playwright.config.ts"

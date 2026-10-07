@@ -113,7 +113,7 @@ Compared with W2, adding the complete collector/builder family increased main JS
 
 Automated comparison against accepted W2 main:
 
-- changed files: **13**
+- changed files: **17**
 - collector-specific production files: **4**
 - changed files under `src/core/`: **0**
 - changed files under `src/platform/`: **0**
@@ -157,6 +157,10 @@ After the correction, the full 13-test + 3-browser-test suite passed.
 A later duplicate W2 regression workflow also exposed an existing orientation-test race: the runner test tapped landscape coordinates immediately after `setViewportSize()`, before the shared viewport snapshot had necessarily observed the new width. The test now waits for the accepted W1 TestBridge viewport width before sending the touch event.
 
 This hardening changed only `tests/e2e/runner.spec.ts`. No runner production code and no shared foundation code changed.
+
+W3 also exposed CI duplication from closed phases: generic `package.json`, `src/**`, `tests/**` and `src/main.ts` path filters caused W0/W1/W2 workflows to repeat work already performed by the active W3 full-regression gate. The closed-phase workflows are now scoped to the surfaces they own. Historical W2 core-churn evidence is only recomputed on the original W2 branch.
+
+This is a workflow-efficiency change only; it does not alter game or foundation runtime code.
 
 ## Architecture audit
 

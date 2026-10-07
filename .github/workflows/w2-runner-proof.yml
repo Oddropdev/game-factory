@@ -4,11 +4,9 @@ on:
   pull_request:
     paths:
       - "src/games/runner/**"
-      - "src/main.ts"
       - "tests/unit/runnerModel.test.ts"
       - "tests/e2e/runner.spec.ts"
       - "tools/check-w2-core-churn.mjs"
-      - "package.json"
       - ".github/workflows/w2-runner-proof.yml"
       - "docs/architecture/W2-RUNNER-PROOF-CONTRACT.md"
       - "docs/evidence/W2-**"
@@ -43,7 +41,8 @@ jobs:
       - name: Verify W1 regression + W2 runner
         run: npm run verify
 
-      - name: Verify New Game Core Churn
+      - name: Verify historical W2 New Game Core Churn
+        if: github.event_name == 'pull_request' && github.head_ref == 'w2-runner-proof'
         run: npm run check:w2-core-churn
 
       - name: Upload W2 evidence
