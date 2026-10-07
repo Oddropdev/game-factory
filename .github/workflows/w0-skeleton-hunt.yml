@@ -1,0 +1,45 @@
+name: W0 Skeleton Hunt
+
+on:
+  workflow_dispatch:
+    inputs:
+      per_query:
+        description: "Candidates requested per search query"
+        required: false
+        default: "12"
+      max_candidates:
+        description: "Maximum deduplicated candidate count"
+        required: false
+        default: "80"
+
+permissions:
+  contents: read
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Syntax check
+        run: npm run hunt:check
+
+      - name: Discover and preliminarily score candidates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HUNT_PER_QUERY: ${{ inputs.per_query }}
+          HUNT_MAX_CANDIDATES: ${{ inputs.max_candidates }}
+        run: npm run hunt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w0-skeleton-hunt
+          path: research/generated/
+          if-no-files-found: error
