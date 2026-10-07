@@ -26,7 +26,6 @@ on:
   pull_request:
     paths:
       - "tools/skeleton-hunt/**"
-      - "package.json"
       - ".github/workflows/w0-skeleton-hunt.yml"
 
 permissions:

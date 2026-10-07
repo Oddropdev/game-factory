@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
-import type { FoundationTestBridge } from '../../src/testing/TestBridge';
+import type {
+  FoundationTestBridge,
+  FoundationTestState
+} from '../../src/testing/TestBridge';
 import type { RunnerTestBridge } from '../../src/games/runner/RunnerTestBridge';
 import type { RunnerGameTestState } from '../../src/games/runner/RunnerGame';
 
@@ -10,6 +13,16 @@ async function runnerState(
     () =>
       (window as unknown as { __GAME_FACTORY_RUNNER_TEST__: RunnerTestBridge })
         .__GAME_FACTORY_RUNNER_TEST__.getState()
+  );
+}
+
+async function foundationState(
+  page: import('@playwright/test').Page
+): Promise<FoundationTestState> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __GAME_FACTORY_TEST__: FoundationTestBridge })
+        .__GAME_FACTORY_TEST__.getState()
   );
 }
 
@@ -83,6 +96,10 @@ test('W2 runner works in the production browser build', async ({ page }, testInf
   await foundationCall(page, 'resume');
 
   await page.setViewportSize({ width: 844, height: 390 });
+  await expect
+    .poll(async () => (await foundationState(page)).viewport.width)
+    .toBeGreaterThan(700);
+
   const landscapeBox = await canvas.boundingBox();
   expect(landscapeBox).not.toBeNull();
 
