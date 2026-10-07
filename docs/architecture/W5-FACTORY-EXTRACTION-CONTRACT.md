@@ -31,6 +31,8 @@ W2–W4 demonstrate enough repetition to extract:
 
 ## Explicit non-extractions
 
+W5 documents GameSpec/LevelSpec **conventions**, but must not create universal cross-family GameSpec/LevelSpec runtime types.
+
 W5 must **not** generalize:
 
 - movement;
@@ -123,9 +125,12 @@ Expected evidence:
 - duplicated game-local visible-height formulas = 0;
 - no `src/mechanics/`, ECS, GameSpec or LevelSpec.
 
-Expected marker:
+The create-game automation must pass an isolated temporary-repository smoke test and refuse accidental overwrite.
 
-`W5_FACTORY_EXTRACTION_CONTRACT_PASS`
+Expected markers:
+
+- `W5_CREATE_GAME_AUTOMATION_PASS`
+- `W5_FACTORY_EXTRACTION_CONTRACT_PASS`
 
 ## Exit criteria
 
