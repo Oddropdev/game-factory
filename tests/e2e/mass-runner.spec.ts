@@ -67,6 +67,48 @@ async function target(
   );
 }
 
+async function driveUntilEvent(
+  page: import('@playwright/test').Page,
+  normalizedX: number,
+  touch: boolean,
+  processedBefore: number
+): Promise<void> {
+  const point = await canvasPoint(page, normalizedX);
+  const deadline = Date.now() + 4_000;
+
+  if (!touch) {
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+  }
+
+  try {
+    while (Date.now() < deadline) {
+      if (touch) {
+        await page.touchscreen.tap(point.x, point.y);
+      }
+
+      await page.waitForTimeout(90);
+
+      const current = await gameState(page);
+
+      if (
+        current.eventsProcessed > processedBefore ||
+        current.phase !== 'running'
+      ) {
+        return;
+      }
+    }
+  } finally {
+    if (!touch) {
+      await page.mouse.up();
+    }
+  }
+
+  throw new Error(
+    `event was not processed for target ${normalizedX.toFixed(2)}`
+  );
+}
+
 function eventTarget(
   event: MassRunnerEvent,
   mass: number
@@ -109,18 +151,16 @@ async function playCurrentLevel(
     const state = await gameState(page);
     const processedBefore = state.eventsProcessed;
 
-    await target(
+    await driveUntilEvent(
       page,
       eventTarget(event, state.mass),
-      touch
+      touch,
+      processedBefore
     );
 
-    await expect
-      .poll(
-        async () => (await gameState(page)).eventsProcessed,
-        { timeout: 4_000 }
-      )
-      .toBeGreaterThan(processedBefore);
+    expect(
+      (await gameState(page)).eventsProcessed
+    ).toBeGreaterThan(processedBefore);
   }
 
   await expect
@@ -149,7 +189,7 @@ test('W7 Mass Runner completes a five-level real-game session', async ({ page },
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/?game=mass-runner&platform=web');
+  await page.goto('/?game=mass-runner&platform=web&presentation=baseline');
 
   await expect.poll(async () => (await gameState(page)).ready).toBe(true);
 

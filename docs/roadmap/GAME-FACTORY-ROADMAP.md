@@ -54,6 +54,16 @@ Standalone Web first, then YouTube Playables when access permits, plus playable-
 
 Use the proven factory to produce and measure the first release candidate.
 
+### W8 — Presentation Vertical
+
+Turn the first functional release candidate into a sensory/product-quality vertical without reopening factory architecture.
+
+- W8.1 — Reference Mining + Hero Slice: baseline-vs-polished deterministic visual/game-feel A/B.
+- W8.2 — Sound + Impact Tuning: route semantic sound/impact feedback through the accepted platform audio boundary.
+- W8.3 — Full Five-Level Presentation Spread / Release Polish: apply accepted presentation language to the complete session and prepare a user/publishing test candidate.
+
+W8 presentation work remains game-local unless a later real game independently proves an abstraction reusable.
+
 ## North-star engineering metric
 
 **New Game Core Churn:** a new game should add game-specific files/configuration and require minimal changes to shared `core/`.

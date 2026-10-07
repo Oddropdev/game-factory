@@ -1,11 +1,20 @@
-name: W7 First Real Game
+name: W8.1 Reference Mining Hero Slice
 
 on:
   pull_request:
     paths:
+      - "src/games/mass-runner/**"
+      - "tests/unit/massRunnerPresentation.test.ts"
+      - "tests/feel/**"
+      - "playwright.w8.config.ts"
+      - "tools/check-w8-hero.mjs"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/w8-1-hero-slice.yml"
       - ".github/workflows/w7-first-real-game.yml"
-      - "docs/architecture/W7-FIRST-REAL-GAME-CONTRACT.md"
-      - "docs/evidence/W7-**"
+      - "docs/research/W8.1-REFERENCE-MINING.md"
+      - "docs/architecture/W8.1-HERO-SLICE-CONTRACT.md"
+      - "docs/evidence/W8.1-**"
   workflow_dispatch:
 
 permissions:
@@ -13,11 +22,10 @@ permissions:
 
 jobs:
   verify:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'w7-first-real-game-mass-runner'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      W7_BASE_SHA: 8c8f4a7df201780ad50479454be8c3aed7cb5124
+      W8_BASE_SHA: ef80ff82ddaae5a36921e7fc16236e52908a8711
 
     steps:
       - uses: actions/checkout@v4
@@ -35,23 +43,26 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify accepted W7 real game
+      - name: Verify accepted factory and Mass Runner
         run: npm run verify
 
-      - name: Verify historical W7 real-game contract
-        run: npm run check:w7-real-game
+      - name: Verify W8.1 hero-slice contract
+        run: npm run check:w8-hero
 
-      - name: Upload W7 evidence
+      - name: Capture baseline vs polished hero videos
+        run: npm run test:w8-feel
+
+      - name: Upload W8.1 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: w7-first-real-game-evidence
+          name: w8-1-hero-slice-evidence
           path: |
             evidence/w1/
             evidence/w6/
             evidence/w7/
-            dist-platforms/
-            playwright-report/
+            evidence/w8/
             test-results/
+            playwright-report/
             package-lock.json
           if-no-files-found: warn
