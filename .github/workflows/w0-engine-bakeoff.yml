@@ -1,0 +1,56 @@
+name: W0.5 Engine Bakeoff
+
+on:
+  pull_request:
+    paths:
+      - "bakeoff/**"
+      - ".github/workflows/w0-engine-bakeoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: ${{ matrix.candidate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: [phaser, littlejs]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install candidate dependencies
+        working-directory: bakeoff/${{ matrix.candidate }}
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        working-directory: bakeoff/${{ matrix.candidate }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify candidate
+        working-directory: bakeoff/${{ matrix.candidate }}
+        run: npm run verify
+
+      - name: Measure production artifact
+        run: node bakeoff/tools/measure.mjs ${{ matrix.candidate }}
+
+      - name: Show metrics
+        run: cat bakeoff/results/${{ matrix.candidate }}.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w0-5-${{ matrix.candidate }}-evidence
+          path: |
+            bakeoff/results/${{ matrix.candidate }}.json
+            bakeoff/${{ matrix.candidate }}/playwright-report/
+          if-no-files-found: error
