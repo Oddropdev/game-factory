@@ -1,7 +1,7 @@
 {
   "name": "game-factory",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,9 @@
     "check:w2-core-churn": "node tools/check-w2-core-churn.mjs",
     "check:w3-core-churn": "node tools/check-w3-core-churn.mjs",
     "check:w5-extraction": "node tools/check-w5-extraction.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run test:create-game && npm run build && npm run check:artifact && npm run test:e2e",
+    "check:w6-distribution": "node tools/check-w6-distribution.mjs",
+    "package:distributions": "node tools/build-distributions.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run test:create-game && npm run build && npm run check:artifact && npm run package:distributions && npm run check:w6-distribution && npm run test:e2e",
     "hunt": "node tools/skeleton-hunt/index.mjs",
     "hunt:check": "node --check tools/skeleton-hunt/index.mjs",
     "create-game": "node tools/create-game.mjs",

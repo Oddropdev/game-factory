@@ -1,9 +1,13 @@
 import { setPaused } from 'littlejsengine';
-import type { PlatformBridge } from '../platform/PlatformBridge';
+import type {
+  PlatformBridge,
+  PlatformLifecycleHandlers
+} from '../platform/PlatformBridge';
 
 export class LifecycleRuntime {
   private paused = false;
   private attached = false;
+  private detachLifecycle: (() => void) | null = null;
 
   constructor(private readonly platform: PlatformBridge) {}
 
@@ -12,7 +16,12 @@ export class LifecycleRuntime {
       return;
     }
 
-    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    const handlers: PlatformLifecycleHandlers = {
+      pause: () => this.pause(),
+      resume: () => this.resume()
+    };
+
+    this.detachLifecycle = this.platform.bindLifecycle(handlers);
     this.attached = true;
   }
 
@@ -21,7 +30,8 @@ export class LifecycleRuntime {
       return;
     }
 
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    this.detachLifecycle?.();
+    this.detachLifecycle = null;
     this.attached = false;
   }
 
@@ -32,7 +42,6 @@ export class LifecycleRuntime {
 
     setPaused(true);
     this.paused = true;
-    this.platform.pause();
   }
 
   resume(): void {
@@ -42,18 +51,9 @@ export class LifecycleRuntime {
 
     setPaused(false);
     this.paused = false;
-    this.platform.resume();
   }
 
   isPaused(): boolean {
     return this.paused;
   }
-
-  private readonly handleVisibilityChange = (): void => {
-    if (document.hidden) {
-      this.pause();
-    } else {
-      this.resume();
-    }
-  };
 }
