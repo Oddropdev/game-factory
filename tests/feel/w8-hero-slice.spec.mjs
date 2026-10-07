@@ -47,15 +47,6 @@ async function steer(page, normalizedX) {
     .toBe(true);
 }
 
-function applyOperation(mass, operation) {
-  const next =
-    operation.op === 'multiply'
-      ? Math.round(mass * operation.value)
-      : mass + operation.value;
-
-  return Math.min(99, Math.max(1, next));
-}
-
 const heroEvents = [
   { id: 'l1-orb-a', kind: 'orb', x: 0.25, amount: 2 },
   { id: 'l1-hazard', kind: 'hazard', x: 0.5, width: 0.2, penalty: 3 },
@@ -75,21 +66,6 @@ const heroEvents = [
   { id: 'l1-orb-c', kind: 'orb', x: 0.5, amount: 2 }
 ];
 
-function optimalTarget(event, mass) {
-  if (event.kind === 'orb') {
-    return event.x;
-  }
-
-  if (event.kind === 'hazard') {
-    return event.x < 0.5 ? 0.86 : 0.14;
-  }
-
-  const left = applyOperation(mass, event.left);
-  const right = applyOperation(mass, event.right);
-
-  return left >= right ? 0.25 : 0.75;
-}
-
 async function saveScreenshot(page, name) {
   await page.screenshot({
     path: path.join(evidenceDir, `${name}.png`)
@@ -99,29 +75,26 @@ async function saveScreenshot(page, name) {
 async function captureHeroSlice(page, mode) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(
-    `/?game=mass-runner&platform=web&presentation=${mode}`
+    `/?game=mass-runner&platform=web&presentation=${mode}&autoplay=hero`
   );
 
   await expect.poll(async () => (await state(page)).ready).toBe(true);
-  expect((await state(page)).presentationMode).toBe(mode);
+  const openingState = await state(page);
+  expect(openingState.presentationMode).toBe(mode);
+  expect(openingState.heroAutoplay).toBe(true);
 
   await saveScreenshot(page, `${mode}-opening`);
 
   await steer(page, 0.5);
   await expect.poll(async () => (await state(page)).phase).toBe('running');
 
-  for (const [index, event] of heroEvents.entries()) {
-    const before = await state(page);
-    const target = optimalTarget(event, before.mass);
-
-    await steer(page, target);
-
+  for (const [index] of heroEvents.entries()) {
     await expect
       .poll(
         async () => (await state(page)).eventsProcessed,
         { timeout: 4_000 }
       )
-      .toBeGreaterThan(before.eventsProcessed);
+      .toBe(index + 1);
 
     if (index === 2) {
       await saveScreenshot(
@@ -142,6 +115,11 @@ async function captureHeroSlice(page, mode) {
   await saveScreenshot(page, `${mode}-level-clear`);
 
   const finalState = await state(page);
+
+  expect(finalState.mass).toBe(17);
+  expect(finalState.totalScore).toBe(185);
+  expect(finalState.pickups).toBe(3);
+  expect(finalState.hits).toBe(0);
 
   if (mode === 'polished') {
     expect(finalState.presentationCue).toBe('level-clear');
