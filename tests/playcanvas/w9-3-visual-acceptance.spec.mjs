@@ -134,16 +134,18 @@ test('W9.3-4 beneficial first-left / second-right path reaches level-clear', asy
   await page.setViewportSize({width:390,height:844});
   await page.goto('/3d/');
   await expect.poll(async () => (await snapshot(page))?.loadedCC0Models).toBe(5);
-  await page.locator('#start').click();
-  // Left of the center hazard, collect the left orb and take +4 at gate one.
-  await page.mouse.move(96,475);
+  // Touch starts AND steers on the first frame (not after the button click);
+  // otherwise the 15-unit first coin can pass during the click/drag handoff.
+  await page.mouse.move(96,700);
   await page.mouse.down();
+  await expect.poll(async () => (await snapshot(page))?.phase).toBe('running');
   await expect.poll(async () => (await snapshot(page))?.distance).toBeGreaterThan(54);
   const midpoint = await snapshot(page);
   expect(midpoint.gatesPassed).toBe(1);
-  expect(midpoint.mass).toBeGreaterThanOrEqual(8);
+  expect(midpoint.pickups).toBeGreaterThanOrEqual(1);
+  expect(midpoint.mass).toBeGreaterThanOrEqual(10);
   // Route right in time for the second orb and the +3 branch at gate two.
-  await page.mouse.move(296,475);
+  await page.mouse.move(296,700);
   await expect.poll(async () => (await snapshot(page))?.phase, {timeout:16000}).not.toBe('running');
   await page.mouse.up();
   const final = await snapshot(page);
