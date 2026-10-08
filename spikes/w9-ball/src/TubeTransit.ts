@@ -10,7 +10,7 @@ export const TUBE_FINISH_PROGRESS=620;
 export const TUBE_RADIUS=1.12;
 export const TUBE_BALL_RADIUS=.62;
 export const TUBE_OFFSET=TUBE_RADIUS+TUBE_BALL_RADIUS;
-export const TUBE_CRUISE_METRES_PER_SECOND=40;
+export const TUBE_CRUISE_METRES_PER_SECOND=44;
 export type V3=[number,number,number];
 export type TubeFrame={center:V3;tangent:V3;normal:V3;binormal:V3;u:number;distance:number};
 const add=(a:V3,b:V3):V3=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]];
