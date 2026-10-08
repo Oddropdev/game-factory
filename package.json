@@ -26,7 +26,10 @@
     "check:w8-hero": "node tools/check-w8-hero.mjs",
     "test:w8-feel": "playwright test --config=playwright.w8.config.ts",
     "check:w8-sound": "node tools/check-w8-sound.mjs",
-    "check:w8-3-polish": "node tools/check-w8-3-polish.mjs"
+    "check:w8-3-polish": "node tools/check-w8-3-polish.mjs",
+    "package:playtest": "node tools/build-w9-playtest.mjs",
+    "check:w9-release": "node tools/check-w9-release.mjs",
+    "test:w9-playtest": "playwright test --config=playwright.w9.config.mjs"
   },
   "dependencies": {
     "littlejsengine": "1.25.0"
