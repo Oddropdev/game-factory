@@ -1,0 +1,55 @@
+name: W9.4-5 Long Magnetic Speed Rails
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/src/main.ts"
+      - "spikes/w9-ball/src/MagneticRails.ts"
+      - "tests/ball/w9-4-magnetic-rails.spec.mjs"
+      - "tools/check-w9-4-5.mjs"
+      - "docs/evidence/W9.4-5*"
+      - ".github/workflows/w9-4-magnetic-rails.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  magnetic-physics:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref,'w9-4-5-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      W9_4_5_BASE_SHA: 8b99a5f8dfda2a4eb6b41065cda6e517043475a8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install accepted dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Factory typecheck lint and 44 accepted unit tests
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Build isolated game with local Ammo and no licensed GLBs
+        run: npm run build:w9-4:ball
+      - name: Previous physics sky-speed jump and privacy regression
+        run: npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-private-art.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Real rail collisions contact-only boost glow sparks and 440m run
+        run: npx playwright test tests/ball/w9-4-magnetic-rails.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Strict source scope and seven real screenshot gate
+        run: node tools/check-w9-4-5.mjs
+      - name: Archive isolated build and browser evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-5-magnetic-rail-evidence
+          path: |
+            playtest-dist/ball/
+            evidence/w9-4-5/
+            test-results/
+          if-no-files-found: warn
