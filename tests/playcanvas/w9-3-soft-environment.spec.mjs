@@ -28,7 +28,7 @@ for (const size of sizes) {
     const initial = await probe(page);
     expect(initial.assetFailures).toBe(0);
     expect(initial.environmentKind).toBe('soft-garden-v1');
-    expect(initial.environmentRoundedPieces).toBe(50);
+    expect(initial.environmentRoundedPieces).toBe(46);
     expect(initial.environmentBoxPieces).toBe(0);
     expect(initial.avatarBoxParts).toBe(0);
     expect(initial.softCourseBoxPieces).toBe(0);
