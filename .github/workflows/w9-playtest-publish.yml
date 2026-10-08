@@ -36,12 +36,15 @@ jobs:
           npm run package:distributions
           npm run check:w6-distribution
           npm run package:playtest
+          npm run build:w9-2d
 
       - name: Install browser
         run: npx playwright install --with-deps chromium
 
       - name: Smoke actual export before publishing
-        run: npm run test:w9-playtest
+        run: |
+          npm run test:w9-playtest
+          npm run test:w9-2d
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
