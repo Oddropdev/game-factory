@@ -5,3 +5,8 @@ test-results/
 evidence/
 research/generated/
 *.log
+
+# W9 generated static playtest build and download package
+playtest-dist/
+playtest-manifest.json
+mass-runner-w9-html5.zip
