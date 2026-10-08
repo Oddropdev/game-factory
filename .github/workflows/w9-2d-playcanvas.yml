@@ -1,0 +1,65 @@
+name: W9.2D PlayCanvas CC0 Hero Slice
+
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-playcanvas/**"
+      - "tools/fetch-w9-2d-assets.mjs"
+      - "tests/playcanvas/**"
+      - "playwright.w9-2d.config.mjs"
+      - "package.json"
+      - "docs/playtest/W9.2D*"
+      - ".github/workflows/w9-2d-playcanvas.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-2d-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Ensure accepted Game Factory baseline still works
+        run: npm run verify
+      - name: Verify W8 fully tested release
+        run: npm run test:w8-feel
+      - name: Preserve W9.1 current game and feedback
+        run: |
+          npm run package:playtest
+          npm run test:w9-playtest
+      - name: Fetch pinned CC0 Kenney GLB models and build official PlayCanvas Engine-based slice
+        run: npm run build:w9-2d
+      - name: Browser capture actual 3D + check Android viewport, loaded asset provenance and input
+        run: npm run test:w9-2d
+      - name: Verify new app's bundle and CC0 asset sizes
+        run: |
+          test -f playtest-dist/3d/index.html
+          test -f playtest-dist/3d/models/character.glb
+          test -f playtest-dist/3d/models/tree.glb
+          test -f playtest-dist/3d/models/coin.glb
+          test -f playtest-dist/3d/models/platform.glb
+          test -f playtest-dist/3d/models/flag.glb
+          du -sh playtest-dist/3d
+      - name: Preserve AI visual review evidence and playable isolated build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-2d-playcanvas-cc0-hero
+          path: |
+            playtest-dist/3d/
+            evidence/w9-2d/
+            test-results/
+          if-no-files-found: warn
