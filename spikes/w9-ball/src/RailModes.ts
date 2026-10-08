@@ -17,6 +17,28 @@ export const GRIND_START=190;
 export const GRIND_END=227;
 export const GRIND_HALF_WIDTH=.86;
 export const GRIND_ENTRY_START=183;
+export const GRIND_VOID_FROM=198;
+export const GRIND_VOID_TO=217;
+export const SECRET_START=344;
+export const SECRET_END=402;
+export type GrindRoute='bridge'|'secret';
+const smooth=(a:number,b:number,v:number)=>{
+  const t=Math.max(0,Math.min(1,(v-a)/(b-a)));
+  return t*t*(3-2*t);
+};
+// Optional upper secret rail: rises 2.5m and bends outside the broad
+// track, then descends. Geometry is independent from the side-boost guard.
+export function grindPath(progress:number,centerlineX:number,route:GrindRoute){
+  if(route==='bridge')return {x:centerlineX,y:GRIND_TOP_Y};
+  const lateral=3.1*(smooth(345,364,progress)-smooth(386,401,progress));
+  const elevation=2.5*(smooth(348,371,progress)-smooth(382,401,progress));
+  return {x:centerlineX+lateral,y:GRIND_TOP_Y+elevation};
+}
+export function activeGrindRoute(progress:number):GrindRoute|null{
+  if(progress>=GRIND_START-1&&progress<=GRIND_END+1)return 'bridge';
+  if(progress>=SECRET_START-1&&progress<=SECRET_END+1)return 'secret';
+  return null;
+}
 
 export function guardSurface(ballY:number):'side'|'top'{
   return ballY>=GUARD_TOP_Y+PLAYER_RADIUS-.20?'top':'side';
@@ -33,12 +55,13 @@ export function allowGuardLock(
     (surface==='side'||surface==='top');
 }
 export function grindTopQualifies(
-  ballY:number,ballX:number,centerX:number,hasTopColliderContact:boolean
+  ballY:number,ballX:number,railX:number,railTopY:number,hasTopColliderContact:boolean
 ):boolean{
-  // A named top slab collision is mandatory; height alone is NOT evidence.
+  // True top CONTACT plus the ball's center ABOVE the running surface.
+  // Wide x allowance would misclassify the narrow track's side wall.
   return hasTopColliderContact&&
-    ballY>=GRIND_TOP_Y+PLAYER_RADIUS-.25 &&
-    Math.abs(ballX-centerX)<=GRIND_HALF_WIDTH+PLAYER_RADIUS+.16;
+    ballY>=railTopY+PLAYER_RADIUS-.24 &&
+    Math.abs(ballX-railX)<=GRIND_HALF_WIDTH-.06;
 }
 export function relativeRailSpring(
   position:number,velocity:number,target:number,gain:number,damping:number,max:number
