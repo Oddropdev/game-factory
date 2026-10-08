@@ -1,0 +1,45 @@
+name: W9.4-6.2 Smooth Rail + Recovery
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/src/**"
+      - "tests/ball/w9-4-6-2-*.spec.mjs"
+      - "tests/unit/w9-4-6-2-*.test.ts"
+      - ".github/workflows/w9-4-6-2-smooth-rail.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smooth-rail:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref,'w9-4-6-2-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Typecheck, lint, unit tests, isolated public-assets build
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+          npm run build:w9-4:ball
+      - name: Continuous rail and all accepted guard/bridge/secret-route regressions
+        run: |
+          npx playwright test tests/ball/w9-4-6-2-smooth-rail.spec.mjs tests/ball/w9-4-6-guard-grind.spec.mjs tests/ball/w9-4-6-1-secret-route.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Old physics, art isolation, speed, jump, rail tests
+        run: |
+          npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-private-art.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs tests/ball/w9-4-magnetic-rails.spec.mjs tests/ball/w9-4-rail-priority.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Screenshot and test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-6-2-smooth-rail
+          path: |
+            playtest-dist/ball/
+            evidence/w9-4-6-1/
+            evidence/w9-4-6/
+            test-results/
+          if-no-files-found: warn
