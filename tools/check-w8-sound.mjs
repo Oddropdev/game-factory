@@ -52,7 +52,7 @@ if (!source.includes('this.lastEffectId = effect.id;')) {
 if (!capture.includes('&audio=off')) {
   failures.push('visual capture must explicitly opt out of audio');
 }
-if (/\.mp3|\.wav|\.ogg|fetch\(/iu.test(source)) {
+if (/\.(?:mp3|wav|ogg)\b|fetch\(/iu.test(source)) {
   failures.push('external or copied audio files not allowed');
 }
 
