@@ -150,7 +150,7 @@ export function createSoftWorld(root: Entity): SoftWorld {
       duration = type === 'gate' ? 0.84 : type === 'hazard' ? 0.44 : 0.60;
       lifetime = duration;
       pulseStrength = type === 'gate' ? 1 : type === 'orb' ? .50 : .25;
-      particleRoot.setLocalPosition(originX, 1.15, 1.7);
+      particleRoot.setLocalPosition(originX, 1.18, 3.08);
       for (const [i, item] of glows.entries()) {
         item.node.enabled = true;
         item.node.setLocalPosition(0, 0, 0);
@@ -176,8 +176,8 @@ export function createSoftWorld(root: Entity): SoftWorld {
       } else if (active) {
         for (const item of glows) {
           const [vx, vy, vz] = item.velocity;
-          item.node.setLocalPosition(vx * t * 1.9,
-            vy * (t * 1.5 - .65 * t * t), vz * t);
+          item.node.setLocalPosition(vx * (.30 + t * 1.9),
+            vy * (.24 + t * 1.5 - .65 * t * t), vz * (.25 + t));
           const sz = .27 * Math.max(0.025, 1 - t) * (currentType === 'gate' ? 1.2 : .8);
           item.node.setLocalScale(sz, sz, sz);
         }
