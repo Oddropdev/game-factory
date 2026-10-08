@@ -1,0 +1,63 @@
+name: W9.4-8 Two Level Rollercoaster
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/**"
+      - "tests/unit/w9-4-8-*.test.ts"
+      - "tests/ball/w9-4-8-*.spec.mjs"
+      - "tools/run-transit-preview.mjs"
+      - "Start_Two_Levels.cmd"
+      - ".github/workflows/w9-4-8-two-level.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  two-worlds:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref,'w9-4-8-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Strict lint, 3D/level unit tests, TypeScript and isolated build
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+          npm run build:w9-4:ball
+      - name: Offline Windows preview and second-world HTTP contract
+        run: |
+          node --check tools/run-transit-preview.mjs
+          node tools/run-transit-preview.mjs --twolevel &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          sleep 2
+          curl -fsS 'http://127.0.0.1:4177/ball/?mode=twolevel' --output /dev/null
+          curl -fsS 'http://127.0.0.1:4177/ball/levels/second-sky.json' | grep 'sunset-ribbon-2'
+          curl -fsSI 'http://127.0.0.1:4177/ball/ammo/ammo.wasm.wasm'
+          kill $pid
+          trap - EXIT
+      - name: Full real Level 1 -> coaster -> Level 2 completion in 3 viewports
+        run: npx playwright test tests/ball/w9-4-8-two-level.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Preserve accepted W9.4-7 and frozen historical game modes
+        run: |
+          npx playwright test tests/ball/w9-4-7-transit-tube.spec.mjs --config=playwright.w9-4.config.mjs
+          npx playwright test tests/ball/w9-4-6-2-smooth-rail.spec.mjs tests/ball/w9-4-6-1-secret-route.spec.mjs tests/ball/w9-4-6-guard-grind.spec.mjs --config=playwright.w9-4.config.mjs
+          npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs tests/ball/w9-4-magnetic-rails.spec.mjs tests/ball/w9-4-rail-priority.spec.mjs tests/ball/w9-4-private-art.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Owner-only one-click Windows preview and Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-8-two-level-rollercoaster-owner-preview
+          path: |
+            Start_Two_Levels.cmd
+            Start_Transit_Preview.cmd
+            tools/run-transit-preview.mjs
+            playtest-dist/ball/
+            test-results/
+            evidence/w9-4-6/
+            evidence/w9-4-6-1/
+          if-no-files-found: warn
