@@ -70,7 +70,11 @@ The W8 automated PASS did not prove first-time player comprehension or subjectiv
 
 - W9.1 — Playtest Release Gate: stand-alone mass-runner browser package, safe manual publishing path, zero backend or telemetry, actual browser tests.
 - W9.2 — Human Feel Test: owner hands-on phone+desktop trial and 5–8 unaided first-time players; collect direct copyable feedback, not automated metrics.
-- W9.3 — Go / Iterate / Stop: decide from observed start comprehension, control feel, audiovisual reward and willingness to replay; patch only top recurring issues.
+- W9.2B — Fluid 2D / handcrafted WebGL3D A-B-C spike; technical proof only, custom C rejected as visual production base after Android observations.
+- W9.2C — licensed external 3D starter and art source evaluation; choose PlayCanvas browser-first direction.
+- W9.2D — isolated PlayCanvas + five pinned Kenney CC0 assets one-level hero slice; technical PASS and owner feedback: remaining blocky/voxel-ish visual language.
+- **W9.3 — Soft-Forms Art Direction Pass**: round avatar/gates/track/hazards, unify materials/lighting/background and polish mobile HUD in isolated PlayCanvas `/3d/`; freeze model/factory; compare matched-state screenshots and collect Android acceptance. Implementation contract: [W9.3 Soft-Forms Spec](../playtest/W9.3-SOFT-FORMS-ART-DIRECTION-SPEC.md).
+- **W9 final GO / ITERATE / STOP gate** (previously provisionally labelled W9.3): after W9.3 human Android feel and visual acceptance, decide whether to expand 3D levels, fix only the biggest issues, or keep 2D/2.5D. No claims of market readiness from CI alone.
 
 Human action is intentionally required for platform publishing authorization and for subjective feel. Do not widen exposure before physical-device QA.
 
