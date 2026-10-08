@@ -49,7 +49,7 @@ export function makeLongJumpCourse(shape:Shape,surfaces:Surfaces,
   suppressLegacyEdge:(progress:number,side:number)=>boolean=()=>false) {
   const road:Entity[]=[];
   const pads:Entity[]=[];
-  let segmentCount=0,safetyMarkers=0;
+  let segmentCount=0,safetyMarkers=0,hiddenLegacyEdges=0;
   // The old W9.4-3 174m route stays intact; append instead of replacing it.
   for(let d=182;d<=LONG_FINISH_DISTANCE+6;d+=SPEED_SEGMENT_STEP){
     if(d>=234&&d<330)continue; // genuine void except the ramp/landing.
@@ -59,7 +59,7 @@ export function makeLongJumpCourse(shape:Shape,surfaces:Surfaces,
       segmentCount%2===0?surfaces.track:surfaces.side,'static',t.yaw));
     segmentCount++;
     for(const side of [-1,1] as const){
-      if(suppressLegacyEdge(d,side))continue;
+      if(suppressLegacyEdge(d,side)){hiddenLegacyEdges++;continue;}
       shape('long-sky-rail-'+d+'-'+side,'box',
         [center+side*4.35*(-t.z),.07,z+side*4.35*t.x],
         [.16,.14,SPEED_SEGMENT_STEP+.32],surfaces.cream,false,t.yaw);
@@ -104,7 +104,7 @@ export function makeLongJumpCourse(shape:Shape,surfaces:Surfaces,
       safetyMarkers++;
     }
   }
-  return {road,pads,ramp,landing,segmentCount,
+  return {road,pads,ramp,landing,segmentCount,hiddenLegacyEdges,
     safetyMarkers,extraBoosts:LONG_EXTRA_BOOSTS.length,
     length:LONG_FINISH_DISTANCE,gapMeters:JUMP_GAP_TO-JUMP_GAP_FROM,
     landingWidth:14};
