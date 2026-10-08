@@ -13,12 +13,15 @@ import { makeSpeedCourse, trackCenter, trackTangent, inSafetyArc, boostCrossed,
 import { makeLongJumpCourse, longCenter, longTangent, inLongSafetyArc,
   nextLongBoost, LONG_SPEED_CAP, LONG_FINISH_DISTANCE,
   JUMP_LAUNCH_PROGRESS, JUMP_TARGET_Y_VELOCITY } from './LongJumpCourse';
+import { buildCurveRails, railFieldAt, RAIL_CONTACT_FORCE, RAIL_PULL_MAX,
+  RAIL_ADHESION_MAX } from './MagneticRails';
 import './style.css';
 
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
 const gameMode=new URL(window.location.href).searchParams.get('mode');
-const longJumpMode=gameMode==='jump';
+const railMode=gameMode==='rail';
+const longJumpMode=gameMode==='jump'||railMode;
 const speedMode=gameMode==='speed'||longJumpMode;
 const activeSpeedCap=longJumpMode?LONG_SPEED_CAP:SPEED_CAP;
 const finishDistance=longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE;
@@ -60,6 +63,11 @@ let pointerLastY:number|null=null;
 let launched=false,landed=false,jumpCount=0,landingCount=0;
 let jumpAirtime=0,maxJumpHeight=0,launchSpeed=0,landingSpeed=0;
 let landingContactEvents=0,airborneFrames=0;
+let railContactEvents=0,railBoostFrames=0,railAssistSeconds=0;
+let railApproachFrames=0,railMaxSpeed=0,railContactSpeedStart=0;
+let railBoostSpeedGain=0,railPeakContactGain=0,railDownForceEvents=0;
+let railLastContactAt=-100,railRecentSection:number|null=null;
+const touchingRails=new Set<string>();
 
 function message(text:string) {
   ui.message.textContent=text;
@@ -198,6 +206,7 @@ for(let i=0;i<(speedMode?9:5);i++){
 }
 const speedWorld=speedMode?makeSpeedCourse(shape,surfaces):null;
 const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces):null;
+const magneticRails=railMode?buildCurveRails(shape):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -207,6 +216,28 @@ band.setLocalPosition(0,.44,0);
 band.setLocalScale(.85,.17,.85);
 ball.addChild(band);
 const body=ball.rigidbody!;
+if(railMode){
+  const readContact=(other:Entity|null|undefined)=>{
+    if(!other)return null;
+    const match=/^real-magnetic-rail-(\d+)-/.exec(other.name);
+    return match?Number(match[1]):null;
+  };
+  ball.collision!.on('collisionstart',(event:{other:Entity})=>{
+    if(phase!=='running')return;
+    const id=readContact(event.other);
+    if(id===null)return;
+    touchingRails.add(event.other.name);
+    railContactEvents++;
+    railRecentSection=id;railLastContactAt=elapsed;
+    railContactSpeedStart=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
+    message('RAIL BOOST!');
+  });
+  // Unlike collisionstart's ContactResult.other, PlayCanvas collisionend
+  // emits the OTHER ENTITY directly. Never dereference `event.other` here.
+  ball.collision!.on('collisionend',(other:Entity)=>{
+    if(readContact(other)!==null)touchingRails.delete(other.name);
+  });
+}
 if(longJumpMode){
   ball.collision!.on('collisionstart',(event:{other:Entity})=>{
     if(event.other.name==='long-landing-deck'&&launched&&!landed&&phase==='running'){
@@ -251,6 +282,8 @@ const checkpoint=()=>{ // a fall respawns without changing the authoritative phy
   targetX=0;
   swipeStacks=0;boostSurge=0;previousProgress=0;triggeredBoosts.clear();
   launched=false;landed=false;jumpAirtime=0;maxJumpHeight=0;
+  touchingRails.clear();magneticRails?.activeSection(null);
+  railLastContactAt=-100;railRecentSection=null;
   gems.forEach(g=>{g.collected=false;g.node.enabled=true;});
   pickups=0;
   if(phase==='running')message('TRY AGAIN!');
@@ -272,6 +305,11 @@ function restart(){
   launched=false;landed=false;jumpCount=0;landingCount=0;
   jumpAirtime=0;maxJumpHeight=0;launchSpeed=0;landingSpeed=0;
   airborneFrames=0;landingContactEvents=0;
+  railContactEvents=0;railBoostFrames=0;railAssistSeconds=0;
+  railApproachFrames=0;railMaxSpeed=0;railContactSpeedStart=0;
+  railBoostSpeedGain=0;railPeakContactGain=0;railDownForceEvents=0;
+  railLastContactAt=-100;railRecentSection=null;touchingRails.clear();
+  magneticRails?.activeSection(null);
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
   body.angularVelocity=new Vec3(0,0,0);
@@ -284,11 +322,14 @@ if(!speedMode)ui.start.textContent='START ROLL →';
 ui.status.textContent='AMMO PHYSICS READY';
 if(speedMode){
   ui.title.innerHTML='SKY <em>SPEED.</em>';
-  ui.description.textContent=longJumpMode?
+  ui.description.textContent=railMode?
+    'Ride the long green curve rails. Lean into them to stick, spark and accelerate, then launch over the sky gap. Flick UP for extra speed.':
+    longJumpMode?
     'Flick UP to build speed. Hit the ramp, fly across the open sky and catch the wide magnetic landing platform.':
     'Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
   document.querySelector('.hint')!.textContent='↑ FLICK TO ACCELERATE · ↔ STEER';
-  ui.start.textContent=longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
+  ui.start.textContent=railMode?'START RAIL RUN →':
+    longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
 }
 ui.start.addEventListener('click',e=>{e.preventDefault();restart();});
 const steer=(clientX:number)=>{targetX=clamp(((clientX/window.innerWidth)-.5)*7,-3.3,3.3);};
@@ -358,12 +399,43 @@ app.on('update',(dt:number)=>{
         t.z*drive+t.x*sideForce));
       body.applyTorque(new Vec3(-7*t.z,0,7*t.x));
       const edgeOffset=p.x-centerAt(progress);
-      if((inSafetyArc(progress)||longJumpMode&&inLongSafetyArc(progress))&&Math.abs(edgeOffset)>2.8){
+      const railField=railMode?railFieldAt(progress,p.x,p.y):null;
+      // The original inward safety arc would oppose the new attraction
+      // towards the physical rail. Preserve it everywhere else.
+      if(!railField&&(inSafetyArc(progress)||longJumpMode&&inLongSafetyArc(progress))&&
+        Math.abs(edgeOffset)>2.8){
         // Limited physical spring assist (not forced teleport or autopilot).
         const inward=-Math.sign(edgeOffset)*Math.min(260,
           (Math.abs(edgeOffset)-2.8)*150+Math.max(0,Math.sign(edgeOffset)*lateral)*18);
         body.applyForce(new Vec3(inward,0,0));
         magnetActivations++;
+      }
+      if(railField&&magneticRails){
+        railApproachFrames++;
+        // A finite spring towards the solid rail and a small downforce make
+        // high-speed leaning safer. Input forces can still overcome these.
+        const pull=Math.min(RAIL_PULL_MAX,
+          (18+RAIL_PULL_MAX*railField.strength)*railField.strength);
+        const down=RAIL_ADHESION_MAX*railField.strength;
+        body.applyForce(new Vec3(railField.normalX*pull,-down,0));
+        if(down>0)railDownForceEvents++;
+        // Sustained extra forward power needs a real Bullet collision event:
+        // geometric proximity by itself NEVER grants a rail-speed bonus.
+        const touching=[...touchingRails].some(n=>
+          n.startsWith('real-magnetic-rail-'+railField.section.id+'-'));
+        if(touching){
+          const capRoom=Math.max(0,activeSpeedCap-forward);
+          const force=RAIL_CONTACT_FORCE*Math.min(1,capRoom/4);
+          if(force>0){
+            body.applyForce(new Vec3(t.x*force,0,t.z*force));
+            railBoostFrames++;railAssistSeconds+=tick;
+            railBoostSpeedGain+=force*tick/1.4;
+          }
+          railLastContactAt=elapsed;railRecentSection=railField.section.id;
+          railMaxSpeed=Math.max(railMaxSpeed,Math.hypot(v.x,v.z));
+          railPeakContactGain=Math.max(railPeakContactGain,
+            Math.hypot(v.x,v.z)-railContactSpeedStart);
+        }
       }
       const crossed=boostCrossed(previousProgress,progress,triggeredBoosts);
       const extra=longJumpMode?nextLongBoost(previousProgress,progress,triggeredBoosts):null;
@@ -434,6 +506,29 @@ app.on('update',(dt:number)=>{
     }
   }
   const pos=ball.getPosition();
+  if(magneticRails){
+    const contactGlow=phase==='running'&&
+      elapsed-railLastContactAt<.38?railRecentSection:null;
+    magneticRails.activeSection(contactGlow);
+    const contactVisible=contactGlow!==null;
+    const pSpeed=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
+    // Small pooled emissive spark spheres: no per-frame allocation, and
+    // NEVER lit merely because the ball is near a rail.
+    for(const [i,spark] of magneticRails.sparklings.entries()){
+      spark.enabled=contactVisible&&(i<12);
+      if(spark.enabled){
+        const t=elapsed*33+i*2.4;
+        const railNormal=contactGlow===null?1:
+          magneticRails.sections[contactGlow]!.side;
+        // Visibly radiate short golden-green streaks backwards from the
+        // TRUE rail-ball contact. Pooling keeps draw calls predictable.
+        spark.setPosition(pos.x+railNormal*(.53+.24*Math.sin(t*1.3)),
+          pos.y-.06+.42*Math.abs(Math.sin(t)),
+          pos.z-(i%4)*.32+.22*Math.cos(t*1.15)-Math.min(.45,pSpeed*.007));
+        spark.setEulerAngles(Math.sin(t)*28,Math.cos(t*.8)*32,t*7);
+      }
+    }
+  }
   // Camera composition follows physical position, never controls it.
   if(speedMode){
     const forward=tangentAt(SPEED_START_Z-pos.z);
@@ -469,7 +564,15 @@ Object.assign(window,{__W9_BALL_TEST__:{
       attempts,elapsed,finishZ:FINISH_Z,lastFallReason,
       coursePlanks:speedMode?(speedWorld!.segmentCount+(jumpWorld?.segmentCount??0)):tracks.length,
       physicalBumpers:hazardNodes.length,
-      speedMode,longJumpMode,skyKind:speedWorld?.skyKind??'classic',
+      speedMode,longJumpMode,railMode,skyKind:speedWorld?.skyKind??'classic',
+      magneticRailSections:magneticRails?.sections.length??0,
+      magneticRailSegments:magneticRails?.segments??0,
+      railContactEvents,railBoostFrames,railAssistSeconds,
+      railApproachFrames,railDownForceEvents,
+      railMaxSpeed,railBoostSpeedGain,railPeakContactGain,
+      railContactNames:[...touchingRails],
+      railGlowSections:magneticRails?.glowingSections()??[],
+      railSparkCount:magneticRails?.sparklings.filter(e=>e.enabled).length??0,
       curveDegrees:speedWorld?.curveDegrees??0,
       magneticSafetyArcs:speedMode?2:0,
       boostPads:(speedWorld?.boostCount??0)+(jumpWorld?.extraBoosts??0),
