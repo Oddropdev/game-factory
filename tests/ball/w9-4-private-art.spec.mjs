@@ -27,7 +27,7 @@ test('W9.4-2 owner-installed GLBs load without changing Bullet physics',async({p
   test.setTimeout(40_000);
   const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/ball/');
+  await page.goto('/ball/?art=licensed');
   await expect.poll(async()=>(await snap(page))?.physicsLoaded,{timeout:20_000}).toBe(true);
   const initial=await snap(page);
   expect(initial.artMode).toBe('licensed');
