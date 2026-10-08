@@ -23,7 +23,9 @@ if(bad.length)errors.push('Frozen model/Factory/public-game churn: '+bad.join(',
 if(publicAssets.length)errors.push('Licensed binary or private setting in public repo: '+publicAssets.join(', '));
 if(!ball.includes('loadPrivateArt(app,')||!ball.includes('new AmmoPhysicsWorld()'))
   errors.push('Original Bullet backend or opt-in overlay missing');
-if(!art.includes("VITE_ITHAPPY_ASSETS==='1'")||!art.includes('dynamicBallStillPhysics'))
+if(!art.includes("VITE_ITHAPPY_ASSETS==='1'") ||
+    !art.includes("searchParams.get('art')==='licensed'") ||
+    !art.includes('dynamicBallStillPhysics'))
   errors.push('Licensed assets must remain optional and presentation-only');
 if(!ps.includes('Get-FileHash')||!ps.includes('W9_4_2_LICENSED_ART_INSTALLED_PASS'))
   errors.push('SHA256 verified private ZIP installer absent');
