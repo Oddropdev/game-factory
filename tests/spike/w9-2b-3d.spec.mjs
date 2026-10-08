@@ -89,8 +89,8 @@ test('C resizes from mobile portrait to landscape without breaking touch gamepla
 
 test('C capability-falls-back to B if WebGL2 is unavailable', async ({ page }) => {
   await page.addInitScript(() => {
-    const getContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+    const getContext = globalThis.HTMLCanvasElement.prototype.getContext;
+    globalThis.HTMLCanvasElement.prototype.getContext = function(type, ...args) {
       if (type === 'webgl2') return null;
       return getContext.call(this, type, ...args);
     };
