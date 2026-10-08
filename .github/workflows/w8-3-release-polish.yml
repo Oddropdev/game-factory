@@ -1,0 +1,64 @@
+name: W8.3 Full-Session Release Polish
+
+on:
+  pull_request:
+    paths:
+      - "src/games/mass-runner/**"
+      - "tests/feel/**"
+      - "tests/unit/massRunnerLevelVisuals.test.ts"
+      - "tools/check-w8-3-polish.mjs"
+      - "package.json"
+      - ".github/workflows/w8-3-release-polish.yml"
+      - "docs/architecture/W8.3-RELEASE-POLISH-CONTRACT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w8-3-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      W8_BASE_SHA: 65b427e3aa721f3cea282089a2ccf0a53c9dfd0d
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify whole accepted factory and gameplay
+        run: npm run verify
+
+      - name: Verify W8.3 frozen semantics and no protected churn
+        run: npm run check:w8-3-polish
+
+      - name: Capture complete five-level experience and regress W8.1/W8.2
+        run: npm run test:w8-feel
+
+      - name: Upload W8.3 full-session evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w8-3-full-session-evidence
+          path: |
+            evidence/w1/
+            evidence/w6/
+            evidence/w7/
+            evidence/w8/
+            evidence/w8-3/
+            test-results/
+            playwright-report/
+          if-no-files-found: warn

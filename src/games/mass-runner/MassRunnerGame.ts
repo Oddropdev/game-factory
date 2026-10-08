@@ -23,6 +23,7 @@ import {
   type MassRunnerLevelSpec
 } from './MassRunnerLevels';
 import { MassRunnerAudio } from './MassRunnerAudio';
+import { massRunnerLevelAccent } from './MassRunnerLevelVisuals';
 import { massRunnerHeroTarget } from './MassRunnerFeelRoute';
 import {
   MassRunnerModel,
@@ -307,6 +308,9 @@ export class MassRunnerGame implements GameModule {
   ): void {
     const shakeX = presentation.shakeX;
     const shakeY = presentation.shakeY;
+    const [accentR, accentG, accentB] = massRunnerLevelAccent(
+      snapshot.levelIndex
+    );
 
     drawRect(
       vec2(0, 0),
@@ -332,8 +336,8 @@ export class MassRunnerGame implements GameModule {
           layout.trackHeight
         ),
         x === -4.08 || x === 4.08
-          ? rgb(0.36, 0.48, 0.68, 0.9)
-          : rgb(0.2, 0.28, 0.42, 0.65)
+          ? rgb(accentR, accentG, accentB, 0.9)
+          : rgb(accentR * 0.46, accentG * 0.46, accentB * 0.46, 0.65)
       );
     }
 
@@ -352,7 +356,7 @@ export class MassRunnerGame implements GameModule {
         drawRect(
           vec2(x + shakeX, y + shakeY),
           vec2(0.045, 0.65 + unitHash(447, index) * 0.85),
-          rgb(0.4, 0.72, 1, 0.16 + presentation.trailStrength * 0.12)
+          rgb(accentR, accentG, accentB, 0.16 + presentation.trailStrength * 0.12)
         );
       }
     }
@@ -816,11 +820,21 @@ export class MassRunnerGame implements GameModule {
       24,
       rgb(0.96, 0.98, 1)
     );
+    const [accentR, accentG, accentB] = massRunnerLevelAccent(
+      snapshot.levelIndex
+    );
+    const accent = rgb(accentR, accentG, accentB);
     drawTextScreen(
       `LEVEL ${snapshot.levelNumber}/${snapshot.totalLevels} · ${snapshot.levelName}`,
       vec2(155, 56),
       15,
-      rgb(0.62, 0.75, 0.96)
+      accent
+    );
+    drawTextScreen(
+      `${Math.round(snapshot.progress * 100)}%`,
+      vec2(this.viewport.snapshot().width - 45, 28),
+      16,
+      accent
     );
 
     const massColor =
@@ -859,10 +873,13 @@ export class MassRunnerGame implements GameModule {
     tick: number,
     polished: boolean
   ): void {
+    const centerX = polished
+      ? this.viewport.snapshot().width * 0.5
+      : 195;
     if (snapshot.phase === 'ready') {
       drawTextScreen(
         'TAP TO RUN',
-        vec2(195, 166),
+        vec2(centerX, 166),
         polished
           ? 34 + Math.sin(tick * 0.12) * 2
           : 32,
@@ -871,7 +888,7 @@ export class MassRunnerGame implements GameModule {
       if (polished) {
         drawTextScreen(
           'GET BIG · PICK THE BETTER GATE',
-          vec2(195, 198),
+          vec2(centerX, 198),
           14,
           rgb(0.74, 0.82, 0.94)
         );
@@ -882,13 +899,13 @@ export class MassRunnerGame implements GameModule {
     if (snapshot.phase === 'level-clear') {
       drawTextScreen(
         'LEVEL CLEAR',
-        vec2(195, 160),
+        vec2(centerX, 160),
         polished ? 36 : 32,
         rgb(0.35, 0.95, 0.58)
       );
       drawTextScreen(
         'TAP FOR NEXT',
-        vec2(195, 192),
+        vec2(centerX, 192),
         18,
         rgb(0.9, 0.95, 1)
       );
@@ -898,13 +915,13 @@ export class MassRunnerGame implements GameModule {
     if (snapshot.phase === 'level-fail') {
       drawTextScreen(
         'NOT ENOUGH MASS',
-        vec2(195, 160),
+        vec2(centerX, 160),
         polished ? 30 : 28,
         rgb(0.98, 0.36, 0.35)
       );
       drawTextScreen(
         'TAP TO RETRY',
-        vec2(195, 192),
+        vec2(centerX, 192),
         18,
         rgb(0.9, 0.95, 1)
       );
@@ -914,19 +931,19 @@ export class MassRunnerGame implements GameModule {
     if (snapshot.phase === 'complete') {
       drawTextScreen(
         'MASSIVE!',
-        vec2(195, 160),
+        vec2(centerX, 160),
         polished ? 44 : 38,
         rgb(0.35, 0.95, 0.58)
       );
       drawTextScreen(
         `FINAL SCORE ${snapshot.totalScore}`,
-        vec2(195, 198),
+        vec2(centerX, 198),
         20,
         rgb(1, 0.88, 0.32)
       );
       drawTextScreen(
         'TAP TO RUN AGAIN',
-        vec2(195, 226),
+        vec2(centerX, 226),
         16,
         rgb(0.9, 0.95, 1)
       );
@@ -947,7 +964,7 @@ export class MassRunnerGame implements GameModule {
 
       drawTextScreen(
         `NEXT  ${left}  |  ${right}`,
-        vec2(195, 154),
+        vec2(centerX, 154),
         polished ? 19 : 18,
         rgb(0.88, 0.92, 1)
       );
