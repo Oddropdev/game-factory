@@ -111,6 +111,8 @@ export function createSoftWorld(root: Entity): SoftWorld {
       [-0.69, 2.2, .14], [1.55, 1.46, 1.5]);
     part('rounded-fruit-' + i, tree, i % 3 ? paint.berry : paint.lilac,
       [.51, 2.27, .89], [.38, .42, .36]);
+    part('rounded-blossom-' + i, tree, paint.cream,
+      [-.51, 2.76, .72], [.27, .28, .26]);
     plantCount++;
   }
 
