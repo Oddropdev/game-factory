@@ -26,8 +26,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Install dependencies (do not update lockfile)
-        run: npm ci --no-audit --no-fund
+      - name: Install dependencies (same workflow as accepted W9)
+        run: npm install --no-audit --no-fund
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Accepted model and Factory unit tests
