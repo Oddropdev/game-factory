@@ -23,7 +23,7 @@ if (!src.includes("hud.feedback.classList.remove('show');") ||
   error.push('Expected stable W9.3 scene/gameplay and result message cleanup');
 const expected = ['portrait-390x844','small-android-360x800','landscape-844x390']
   .flatMap(device=>['ready','gate-decision','result'].map(phase=>device+'-'+phase+'.png'))
-  .concat('portrait-390x844-dpr2-gate.png');
+  .concat('portrait-390x844-dpr2-gate.png', 'portrait-390x844-clear.png');
 const out='evidence/w9-3-4';
 const missing=[];
 function validPng(file) {
