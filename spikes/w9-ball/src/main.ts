@@ -113,19 +113,23 @@ function shape(name:string,type:'box'|'sphere'|'cylinder',pos:Point,scale:Point,
   surface:StandardMaterial,solid:'static'|'dynamic'|false=false):Entity {
   const e=new Entity(name);
   e.setPosition(...pos);
-  e.setLocalScale(...scale);
-  e.addComponent('render',{type,material:surface,castShadows:solid!==false});
+  // World-space collision proxies stay at unit entity scale. Only the render
+  // child is scaled. Never rely on a scaled rigidbody parent to resize Bullet.
+  const visual=new Entity(name+'-visual');
+  visual.setLocalScale(...scale);
+  visual.addComponent('render',{type,material:surface,castShadows:solid!==false});
+  e.addChild(visual);
   if(solid){
-    const sz=new Vec3(...scale);
-    if(type==='box')e.addComponent('collision',{type:'box',halfExtents:new Vec3(.5,.5,.5)});
-    else if(type==='sphere')e.addComponent('collision',{type:'sphere',radius:.5});
-    else e.addComponent('collision',{type:'cylinder',radius:.5,height:1});
+    if(type==='box')e.addComponent('collision',{type:'box',
+      halfExtents:new Vec3(scale[0]/2,scale[1]/2,scale[2]/2)});
+    else if(type==='sphere')e.addComponent('collision',{type:'sphere',
+      radius:Math.max(...scale)/2});
+    else e.addComponent('collision',{type:'cylinder',
+      radius:Math.max(scale[0],scale[2])/2,height:scale[1]});
     e.addComponent('rigidbody',{type:solid,mass:solid==='dynamic'?1.4:0,
       friction:solid==='dynamic'?1.05:.94,restitution:.11,
       linearDamping:solid==='dynamic'?.25:0,
       angularDamping:solid==='dynamic'?.19:0});
-    // The entity's render scale also scales its simple collider; no mesh triangles.
-    void sz;
   }
   app.root.addChild(e);
   return e;
