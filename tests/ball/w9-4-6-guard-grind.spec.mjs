@@ -83,6 +83,10 @@ test('W9.4-6 BRIDGE: physical top-only grind travels across missing ground',
     {timeout:10_000}).toBeGreaterThan(0);
   const riding=await read(page);
   expect(riding.grindEntries).toBeGreaterThan(0);
+  // The ball must have an authoritative TOP contact at both ends of the
+  // actual missing-ground interval, rather than flying over it.
+  expect(riding.grindVoidEarlyFrames).toBeGreaterThan(0);
+  expect(riding.grindVoidLateFrames).toBeGreaterThan(0);
   expect(riding.grindFalseSideRewards).toBe(0);
   expect(riding.grindBoostFrames).toBeGreaterThan(0);
   expect(riding.grindTrackBridgeSegments).toBeGreaterThan(8);
