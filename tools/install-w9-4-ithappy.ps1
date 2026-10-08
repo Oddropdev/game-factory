@@ -16,7 +16,7 @@ $want = @(
   @{ Pack='obstacles'; Name='obstacle_18_001.glb'; Sha='a4685ba62048c32908c42ecc5c9bd4fd16cb91182a522b03f0d7adeb1f9ea8e2' },
   @{ Pack='obstacles'; Name='checkpoint_001.glb'; Sha='d5bb02dd4c67ec96b5cb17577317eef76c8eb44f289bbf09e86684f5fea41d68' },
   @{ Pack='obstacles'; Name='ball_001.glb'; Sha='a3b2caf1f845bfac64713121651d9ca1663d9451dfd730be37d42abe581cb3bb' },
-  @{ Pack='deathrun'; Name='tree_002.glb'; Sha='a1c8510fe9c00c68d4dae2212928aca51e71428a8f9cdfaca8' }
+  @{ Pack='deathrun'; Name='tree_002.glb'; Sha='a1c8510fe9c00c68d4dae2212928aca51e71428a8c773bd0e8fc4a8f9cdfaca8' }
 )
 $zips = @{ obstacles=$ObstaclesZip; deathrun=$DeathrunZip }
 foreach($p in @('obstacles','deathrun')){
