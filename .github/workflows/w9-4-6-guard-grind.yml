@@ -36,10 +36,10 @@ jobs:
           npm run test
       - name: Isolated ball build without private files
         run: npm run build:w9-4:ball
-      - name: Existing ball sky jump magnetic and rail-priority regressions
-        run: npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-private-art.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs tests/ball/w9-4-magnetic-rails.spec.mjs tests/ball/w9-4-rail-priority.spec.mjs --config=playwright.w9-4.config.mjs
       - name: Distinct guard and grind physics / authentic browser screenshots
         run: npx playwright test tests/ball/w9-4-6-guard-grind.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Existing ball sky jump magnetic and rail-priority regressions
+        run: npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-private-art.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs tests/ball/w9-4-magnetic-rails.spec.mjs tests/ball/w9-4-rail-priority.spec.mjs --config=playwright.w9-4.config.mjs
       - name: Save private-preview-ready source-free evidence
         if: always()
         uses: actions/upload-artifact@v4
