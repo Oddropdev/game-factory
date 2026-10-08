@@ -1,7 +1,7 @@
 // W9.4-8: Level 2 is an independently loaded, visually distinct playable level.
 // The prior 440m road and tube remain unchanged. Stage Bullet surfaces first,
 // then activate an intentionally different art palette only at tube exit.
-import {Entity,type StandardMaterial} from 'playcanvas';
+import {Entity,Mesh,MeshInstance,type GraphicsDevice,type StandardMaterial} from 'playcanvas';
 import {longCenter} from './LongJumpCourse';
 import {SPEED_START_Z} from './SpeedCourse';
 type Vec=[number,number,number];
@@ -45,6 +45,7 @@ export function parseSecondLevelManifest(input:unknown):SecondLevelManifest{
 }
 export type SecondGem={node:Entity;collected:boolean;progress:number};
 export function stageSecondLevel(m:SecondLevelManifest,shape:Shape,
+  device:GraphicsDevice,root:Entity,
   mats:{road:StandardMaterial;alternate:StandardMaterial;
     arch:StandardMaterial;trim:StandardMaterial;gem:StandardMaterial;
     island:StandardMaterial}){
@@ -55,7 +56,9 @@ export function stageSecondLevel(m:SecondLevelManifest,shape:Shape,
     const e=shape('level2-real-road-'+planks,'box',
       [x,-.29,z],[m.width,.58,m.plankStep+.38],
       planks%3===0?mats.alternate:mats.road,'static',t.yaw);
-    e.children[0]!.enabled=false;visualSurfaces.push(e.children[0]! as Entity);
+    // Only the continuous mesh below is drawn; invisible static Bullet
+    // segments remain authoritative for actual rolling and support.
+    e.children[0]!.enabled=false;
     if(planks%4===0){
       const left=shape('level2-ribbon-left-'+planks,'box',
         [x-m.width/2+.17,.05,z],[.2,.15,m.plankStep*4],
@@ -74,6 +77,38 @@ export function stageSecondLevel(m:SecondLevelManifest,shape:Shape,
     }
     planks++;
   }
+  // A continuous soft ribbon follows the S bend without visible beam seams.
+  // The mesh is visual-only; no falsely invisible floor or physics shortcuts.
+  const addRibbon=(name:string,material:StandardMaterial,
+    offsetStart:number,offsetEnd:number,topY:number)=>{
+    const positions:number[]=[],normals:number[]=[],indices:number[]=[];
+    let samples=0;
+    for(let d=m.startProgress-2;d<=m.endProgress+3.0001;d+=.5){
+      const t=secondTangent(d),cx=secondCenter(d),z=SPEED_START_Z-d;
+      const leftX=cx+(-t.z)*offsetStart,rightX=cx+(-t.z)*offsetEnd;
+      const leftZ=z+t.x*offsetStart,rightZ=z+t.x*offsetEnd;
+      positions.push(leftX,topY,leftZ,rightX,topY,rightZ);
+      normals.push(0,1,0,0,1,0);
+      if(samples>0){
+        const a=(samples-1)*2,b=a+1,c=samples*2,e=c+1;
+        indices.push(a,b,c,b,e,c);
+      }
+      samples++;
+    }
+    const mesh=new Mesh(device);
+    mesh.setPositions(positions);mesh.setNormals(normals);mesh.setIndices(indices);
+    mesh.update();
+    const node=new Entity(name);
+    node.addComponent('render',{meshInstances:[new MeshInstance(mesh,material)],
+      castShadows:false});
+    node.enabled=false;root.addChild(node);visualSurfaces.push(node);
+    return samples;
+  };
+  const ribbonSamples=addRibbon('level2-continuous-road',mats.road,
+    -m.width/2,m.width/2,.012);
+  addRibbon('level2-continuous-left-trim',mats.trim,-m.width/2,-m.width/2+.25,.026);
+  addRibbon('level2-continuous-right-trim',mats.trim,
+    m.width/2-.25,m.width/2,.026);
   for(const p of m.gatePositions){
     const x=secondCenter(p),z=SPEED_START_Z-p,t=secondTangent(p);
     for(const side of [-1,1]){
@@ -101,6 +136,7 @@ export function stageSecondLevel(m:SecondLevelManifest,shape:Shape,
   let active=false;
   return {
     id:m.id,title:m.title,theme:m.theme,roadPlanks:planks,gateCount:gates,
+    ribbonMeshCount:visualSurfaces.length,ribbonSamples,
     gems, get active(){return active;},
     activate(){
       if(active)return;
