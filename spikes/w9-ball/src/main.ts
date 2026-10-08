@@ -87,6 +87,8 @@ let grindLock:GrindLock='off',grindEntries=0,grindExits=0;
 let grindSeconds=0,grindBoostFrames=0,grindTopContactEvents=0;
 let grindSideContactEvents=0,grindFalseSideRewards=0,grindPeakSpeed=0;
 let grindLastTopTouch=-100,grindBridgeFrames=0,grindSecretFrames=0;
+let grindLastTopImpact:[number,number,number,number]|null=null;
+let grindTopDeniedHeight=0,grindTopDeniedLateral=0;
 const touchingGrindTop=new Set<string>();
 
 function message(text:string) {
@@ -288,6 +290,10 @@ if(grindMode){
     // A side impact, including on a top slab's edge, cannot start a grind.
     touchingGrindTop.add(other.name);
     grindTopContactEvents++;
+    const contactP=ball.getPosition();
+    const contactProgress=SPEED_START_Z-contactP.z;
+    grindLastTopImpact=[contactProgress,contactP.x,contactP.y,
+      body.linearVelocity.y];
   });
   ball.collision!.on('collisionend',(other:Entity)=>{
     if(other.name.startsWith('grind-top-'))touchingGrindTop.delete(other.name);
@@ -378,6 +384,7 @@ function restart(){
   grindBoostFrames=0;grindTopContactEvents=0;
   grindSideContactEvents=0;grindFalseSideRewards=0;grindPeakSpeed=0;
   grindLastTopTouch=-100;grindBridgeFrames=0;grindSecretFrames=0;
+  grindLastTopImpact=null;grindTopDeniedHeight=0;grindTopDeniedLateral=0;
   touchingGrindTop.clear();
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
@@ -577,6 +584,10 @@ app.on('update',(dt:number)=>{
         const routePoint=route?grindPath(progress,centerAt(progress),route):null;
         const rightCollider=[...touchingGrindTop].some(n=>
           n.startsWith('grind-top-'+(route??'none')+'-'));
+        if(rightCollider&&routePoint){
+          if(p.y<routePoint.y+PLAYER_RADIUS-.24)grindTopDeniedHeight++;
+          if(Math.abs(p.x-routePoint.x)>.80)grindTopDeniedLateral++;
+        }
         const onTop=rightCollider&&routePoint!==null&&
           grindTopQualifies(p.y,p.x,routePoint.x,routePoint.y,true);
         if(onTop){
@@ -744,6 +755,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
       guardLockSeconds,guardLockPeakSpeed,guardHoldFrames,guardCoolUntil,
       grindLock,grindEntries,grindExits,grindSeconds,
       grindBridgeFrames,grindSecretFrames,
+      grindLastTopImpact,grindTopDeniedHeight,grindTopDeniedLateral,
       grindBoostFrames,grindTopContactEvents,grindSideContactEvents,
       grindFalseSideRewards,grindPeakSpeed,
       grindTrackTopSegments:grindTrack?.topCount??0,
