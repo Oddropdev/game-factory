@@ -3,10 +3,11 @@
 // Real rigidbody contacts govern movement and hazards; visuals never drive physics.
 import {
   AmmoPhysicsWorld, AppBase, AppOptions, CameraComponentSystem, CollisionComponentSystem,
-  Color, Entity, FILLMODE_FILL_WINDOW, LightComponentSystem,
+  Color, ContainerHandler, Entity, FILLMODE_FILL_WINDOW, LightComponentSystem,
   RenderComponentSystem, RESOLUTION_AUTO, RigidBodyComponentSystem,
-  StandardMaterial, Vec3, WasmModule, createGraphicsDevice
+  StandardMaterial, TextureHandler, Vec3, WasmModule, createGraphicsDevice
 } from 'playcanvas';
+import { loadPrivateArt } from './LicensedArt';
 import './style.css';
 
 type Phase = 'ready'|'running'|'complete'|'error';
@@ -87,6 +88,7 @@ options.graphicsDevice=device;
 // AppBase does not automatically guarantee a live backend from a WasmModule.
 // Explicitly install Bullet before entities/bodies are created.
 options.physicsWorld=new AmmoPhysicsWorld();
+options.resourceHandlers=[ContainerHandler,TextureHandler];
 options.componentSystems=[
   RenderComponentSystem,CameraComponentSystem,LightComponentSystem,
   CollisionComponentSystem,RigidBodyComponentSystem
@@ -137,10 +139,11 @@ function shape(name:string,type:'box'|'sphere'|'cylinder',pos:Point,scale:Point,
 }
 // The independent physics course: genuine separated planks, not a moving background.
 const tracks=[8,-12,-32,-52,-72,-92];
+const trackNodes:Entity[]=[];
 for(let i=0;i<tracks.length;i++){
   const z=tracks[i]!;
-  shape('platform-'+i,'box',[0,-.28,z],[8,.55,19.4],
-    i%2===0?surfaces.track:surfaces.side,'static');
+  trackNodes.push(shape('platform-'+i,'box',[0,-.28,z],[8,.55,19.4],
+    i%2===0?surfaces.track:surfaces.side,'static'));
   for(const side of [-1,1]) {
     // Visual edge markers only; falling off remains a genuine physics failure.
     shape('edge-' +i+'-'+side,'box',[side*4.02,.035,z],[.12,.1,18.9],surfaces.cream);
@@ -150,19 +153,22 @@ for(let i=0;i<tracks.length;i++){
 const hazards:[number,number,'sphere'|'cylinder'][]=[
   [-17,0,'cylinder'],[-37,-1.45,'sphere'],[-57,1.45,'cylinder'],[-77,0,'sphere']
 ];
+const hazardNodes:Entity[]=[];
 for(let i=0;i<hazards.length;i++) {
   const [z,x,type]=hazards[i]!;
-  shape('hazard-'+i,type,[x,.69,z],
+  hazardNodes.push(shape('hazard-'+i,type,[x,.69,z],
     type==='sphere'?[1.35,1.35,1.35]:[1.25,1.35,1.25],
-    i%2===0?surfaces.coral:surfaces.blue,'static');
+    i%2===0?surfaces.coral:surfaces.blue,'static'));
 }
+const treeCrowns:Entity[]=[];
+const treeTrunks:Entity[]=[];
 for(let i=0;i<9;i++){
   const z=7-i*13;
   const side=i%2===0?-1:1;
-  shape('off-track-round-tree-'+i,'sphere',[side*8.5,1.3,z],
-    [2.6,2.6,2.6],i%3?surfaces.mint:surfaces.teal);
-  shape('off-track-trunk-'+i,'cylinder',[side*8.5,.35,z],
-    [.5,1.7,.5],surfaces.cream);
+  treeCrowns.push(shape('off-track-round-tree-'+i,'sphere',[side*8.5,1.3,z],
+    [2.6,2.6,2.6],i%3?surfaces.mint:surfaces.teal));
+  treeTrunks.push(shape('off-track-trunk-'+i,'cylinder',[side*8.5,.35,z],
+    [.5,1.7,.5],surfaces.cream));
 }
 for(let i=0;i<5;i++){
   shape('cloud-'+i,'sphere',[(i%2?1:-1)*8,10+i*.4,-10-i*21],
@@ -194,7 +200,13 @@ for(let i=0;i<6;i++){
   // remains responsible for the ball's actual position and velocity.
   gems.push({node:e,collected:false});
 }
-shape('finish-line','box',[0,.045,-98],[8,.1,.65],surfaces.teal);
+const finish=shape('finish-line','box',[0,.045,-98],[8,.1,.65],surfaces.teal);
+// Licensed GLB art overlays are opt-in and never alter the unit-scale
+// Bullet rigidbodies or authored course. CI without private packs is unchanged.
+const licensedArt=await loadPrivateArt(app,{
+  tracks:trackNodes,hazards:hazardNodes,treeCrowns,treeTrunks,
+  ball,ballBand:band,finish
+});
 const checkpoint=()=>{ // a fall respawns without changing the authoritative physics body type
   falls++;
   lastFallReason='fell-off-track';
@@ -310,6 +322,10 @@ Object.assign(window,{__W9_BALL_TEST__:{
       targetX,fallCount:falls,bumpCount:bumpers,gemCount:pickups,
       attempts,elapsed,finishZ:FINISH_Z,lastFallReason,
       coursePlanks:tracks.length,physicalBumpers:hazards.length,
+      artMode:licensedArt.mode,licensedModels:licensedArt.loaded,
+      licensedMeshes:licensedArt.activeMeshes,
+      licensedMissing:licensedArt.requiredMissing,
+      dynamicBallStillPhysics:licensedArt.dynamicBallStillPhysics,
       localWasm:new URL('ammo.wasm.wasm',physicsBase).pathname,
       fullViewport:canvas.clientWidth>=window.innerWidth-2&&canvas.clientHeight>=window.innerHeight-2
     };
