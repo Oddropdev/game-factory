@@ -7,6 +7,9 @@ on:
       - "tools/run-transit-preview.mjs"
       - "Start_Transit_Preview.cmd"
       - "tests/ball/w9-4-7-*.spec.mjs"
+      - "tests/ball/w9-4-6-guard-grind.spec.mjs"
+      - "tests/ball/w9-4-6-1-secret-route.spec.mjs"
+      - "tests/ball/w9-4-6-2-smooth-rail.spec.mjs"
       - "tests/unit/w9-4-7-*.test.ts"
       - ".github/workflows/w9-4-7-transit-tube.yml"
   workflow_dispatch:
