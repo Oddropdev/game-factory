@@ -56,16 +56,17 @@ test('W9.4-6 GUARD: side lock is strong but opposite swipe releases immediately'
   expect(['locked-side','locked-top']).toContain(locked.guardLock);
   expect(locked.railContactEvents).toBeGreaterThan(0);
   expect(locked.guardLockPeakSpeed).toBeGreaterThan(5);
-  await page.screenshot({path:path.join(evidence,'guard-locked.png')});
-  // Opposite swipe, not simply moving close to the opposite lane.
-  await page.mouse.move(4,620,{steps:3});
+  // Release immediately while physical contact is still active.
+  // Screenshot capture cost ~0.4s at speed, enough to leave the curve.
+  await page.mouse.move(4,620,{steps:2});
   await expect.poll(async()=>(await read(page))?.guardReleaseByOppositeSwipe,
     {timeout:2_000}).toBe(1);
   const released=await read(page);
+  await page.screenshot({path:path.join(evidence,'guard-released.png')});
+  expect(released.guardReleaseEvents).toBeGreaterThan(0);
   expect(released.guardLock).toBe('release-cooldown');
   expect(released.guardCoolUntil).toBeGreaterThan(0);
   expect(released.targetX).toBeLessThan(-3.8);
-  await page.screenshot({path:path.join(evidence,'guard-released.png')});
   await page.mouse.up();
   expect(errors).toEqual([]);
 });
@@ -78,6 +79,8 @@ test('W9.4-6 BRIDGE: physical top-only grind travels across missing ground',
   await page.locator('#start').click();
   await expect.poll(async()=>(await read(page))?.grindTopContactEvents,
     {timeout:24_000}).toBeGreaterThan(0);
+  globalThis.console.log('W946_FIRST_GRIND_TOP_CONTACT '+JSON.stringify(
+    await read(page)));
   await expect.poll(async()=>(await read(page))?.grindBridgeFrames,
     {timeout:10_000}).toBeGreaterThan(0);
   const riding=await read(page);
