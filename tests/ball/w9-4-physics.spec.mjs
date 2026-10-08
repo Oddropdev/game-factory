@@ -36,7 +36,7 @@ for(const size of sizes) {
     await page.locator('#start').click();
     await page.waitForTimeout(1200);
     const physicsAfterStart=await snap(page);
-    console.log('W9_4_PHYSICS_INITIAL_DRIVE '+JSON.stringify({
+    globalThis.console.log('W9_4_PHYSICS_INITIAL_DRIVE '+JSON.stringify({
       position:physicsAfterStart.position,
       velocity:physicsAfterStart.linearVelocity,
       spin:physicsAfterStart.angularVelocity,
