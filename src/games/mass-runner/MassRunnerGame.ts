@@ -22,7 +22,9 @@ import {
   type MassRunnerGateEvent,
   type MassRunnerLevelSpec
 } from './MassRunnerLevels';
-import { MassRunnerAudio } from './MassRunnerAudio';
+import { MassRunnerAudio, MassRunnerWebAudioOutput } from './MassRunnerAudio';
+import { MassRunner3DRenderer } from './MassRunner3DRenderer';
+import { resolveMassRunnerExperiment, type MassRunnerExperiment } from './MassRunnerExperiment';
 import { massRunnerLevelAccent } from './MassRunnerLevelVisuals';
 import { massRunnerHeroTarget } from './MassRunnerFeelRoute';
 import {
@@ -53,6 +55,8 @@ export type MassRunnerGameTestState = MassRunnerSnapshot & {
   soundEnabled: boolean;
   soundUnlocked: boolean;
   soundCuesDispatched: number;
+  experiment: MassRunnerExperiment;
+  webgl3d: boolean;
 };
 
 type Layout = {
@@ -84,7 +88,13 @@ export class MassRunnerGame implements GameModule {
     );
   private readonly presentation =
     new MassRunnerPresentation(this.presentationMode);
-  private readonly audio = new MassRunnerAudio();
+  private readonly experiment = resolveMassRunnerExperiment(
+    typeof window === 'undefined' ? '' : window.location.search
+  );
+  private readonly audio = new MassRunnerAudio(
+    new MassRunnerWebAudioOutput(this.experiment === 'a' ? 0.5 : 0.9)
+  );
+  private renderer3d: MassRunner3DRenderer | null = null;
   private readonly audioOff =
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('audio') === 'off';
@@ -111,6 +121,9 @@ export class MassRunnerGame implements GameModule {
     this.pointerEvents = 0;
     this.presentation.reset(this.model.snapshot());
     this.audio.reset();
+    if (this.experiment === 'c' && this.presentationMode === 'polished' && !this.renderer3d) {
+      this.renderer3d = new MassRunner3DRenderer();
+    }
     this.ready = true;
   }
 
@@ -140,7 +153,10 @@ export class MassRunnerGame implements GameModule {
       );
     }
 
-    this.model.step(this.targetNormX);
+    this.model.step(
+      this.targetNormX,
+      this.experiment === 'a' ? 'original' : 'fluid'
+    );
     const updated = this.model.snapshot();
     this.presentation.update(
       updated,
@@ -175,6 +191,7 @@ export class MassRunnerGame implements GameModule {
       layout,
       this.presentation.snapshot(snapshot)
     );
+    this.renderer3d?.render(snapshot, level);
   }
 
   renderHud(): void {
@@ -189,6 +206,7 @@ export class MassRunnerGame implements GameModule {
       snapshot,
       this.presentation.snapshot(snapshot)
     );
+    this.renderer3d?.renderHud(snapshot, this.model.getCurrentLevel());
   }
 
   foundationState(): FoundationGameState {
@@ -221,7 +239,9 @@ export class MassRunnerGame implements GameModule {
       heroAutoplay: this.heroAutoplay,
       soundEnabled: this.audio.snapshot().enabled,
       soundUnlocked: this.audio.snapshot().unlocked,
-      soundCuesDispatched: this.audio.snapshot().dispatched
+      soundCuesDispatched: this.audio.snapshot().dispatched,
+      experiment: this.experiment,
+      webgl3d: this.renderer3d?.supported === true
     };
   }
 
