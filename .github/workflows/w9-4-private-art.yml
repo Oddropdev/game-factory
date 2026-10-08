@@ -1,0 +1,58 @@
+name: W9.4-2 ITHappy Private Art Contract
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/src/main.ts"
+      - "spikes/w9-ball/src/LicensedArt.ts"
+      - "tools/install-w9-4-ithappy.ps1"
+      - "tests/ball/w9-4-private-art.spec.mjs"
+      - "tools/check-w9-4-2.mjs"
+      - "docs/evidence/W9.4-2*"
+      - ".gitignore"
+      - ".github/workflows/w9-4-private-art.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-4-2-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      W9_4_2_BASE_SHA: 34d12b6fd202255c36868abd675a38894aa4bd47
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install unchanged dependencies
+        run: npm install --no-audit --no-fund
+      - name: Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Protect Factory lint, model and original unit tests
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Build isolated original-physics ball WITHOUT licensed art
+        run: npm run build:w9-4:ball
+      - name: Existing physics regression
+        run: npm run test:w9-4:ball
+      - name: License-free fallback is usable without network/private ZIP
+        run: npx playwright test tests/ball/w9-4-private-art.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Check immutable source scope and ensure no licensed binary is committed
+        run: node tools/check-w9-4-2.mjs
+      - name: Save audited browser screenshots and build (no Pages deployment)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-2-private-art-contract
+          path: |
+            evidence/w9-4-2/
+            test-results/
+            playtest-dist/ball/
+          if-no-files-found: warn
