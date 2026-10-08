@@ -55,7 +55,7 @@ export function stageSecondLevel(m:SecondLevelManifest,shape:Shape,
     const e=shape('level2-real-road-'+planks,'box',
       [x,-.29,z],[m.width,.58,m.plankStep+.38],
       planks%3===0?mats.alternate:mats.road,'static',t.yaw);
-    e.children[0]!.enabled=false;visualSurfaces.push(e.children[0]!);
+    e.children[0]!.enabled=false;visualSurfaces.push(e.children[0]! as Entity);
     if(planks%4===0){
       const left=shape('level2-ribbon-left-'+planks,'box',
         [x-m.width/2+.17,.05,z],[.2,.15,m.plankStep*4],
