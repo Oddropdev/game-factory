@@ -45,7 +45,8 @@ export function nextLongBoost(from:number,to:number,used:Set<number>):
   }
   return null;
 }
-export function makeLongJumpCourse(shape:Shape,surfaces:Surfaces) {
+export function makeLongJumpCourse(shape:Shape,surfaces:Surfaces,
+  suppressLegacyEdge:(progress:number,side:number)=>boolean=()=>false) {
   const road:Entity[]=[];
   const pads:Entity[]=[];
   let segmentCount=0,safetyMarkers=0;
@@ -58,6 +59,7 @@ export function makeLongJumpCourse(shape:Shape,surfaces:Surfaces) {
       segmentCount%2===0?surfaces.track:surfaces.side,'static',t.yaw));
     segmentCount++;
     for(const side of [-1,1] as const){
+      if(suppressLegacyEdge(d,side))continue;
       shape('long-sky-rail-'+d+'-'+side,'box',
         [center+side*4.35*(-t.z),.07,z+side*4.35*t.x],
         [.16,.14,SPEED_SEGMENT_STEP+.32],surfaces.cream,false,t.yaw);
