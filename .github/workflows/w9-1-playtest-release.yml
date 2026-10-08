@@ -1,0 +1,83 @@
+name: W9.1 Playtest Release Candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/w9-1-playtest-release.yml"
+      - ".github/workflows/w9-playtest-publish.yml"
+      - "tools/build-w9-playtest.mjs"
+      - "tools/templates/w9-feedback.html"
+      - "tools/check-w9-release.mjs"
+      - "tests/release/**"
+      - "playwright.w9.config.mjs"
+      - "package.json"
+      - ".gitignore"
+      - "README.md"
+      - "docs/playtest/**"
+      - "docs/roadmap/GAME-FACTORY-ROADMAP.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-1-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      W9_BASE_SHA: 0c62d9d2cf7f1ae50650b96f76d20467b01e7c40
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install pinned dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify accepted gameplay and distribution baseline
+        run: npm run verify
+
+      - name: Check W8 presentation and sound regressions
+        run: npm run test:w8-feel
+
+      - name: Package playable standalone W9 build
+        run: npm run package:playtest
+
+      - name: Check static release and protected production churn
+        run: npm run check:w9-release
+
+      - name: Browser smoke the actual distributed package and feedback
+        run: npm run test:w9-playtest
+
+      - name: Produce standalone HTML5 zip for itch.io upload
+        run: |
+          cd playtest-dist
+          zip -q -r ../mass-runner-w9-html5.zip .
+
+      - name: Attach testable build and QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-1-playtest-release-candidate
+          path: |
+            mass-runner-w9-html5.zip
+            playtest-dist/
+            playtest-manifest.json
+            evidence/w1/
+            evidence/w6/
+            evidence/w7/
+            evidence/w8/
+            evidence/w8-3/
+            evidence/w9/
+            test-results/
+          if-no-files-found: warn
