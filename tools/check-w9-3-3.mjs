@@ -36,8 +36,12 @@ if(world.includes("type: 'box'") || !world.includes("'sphere'") || !world.includ
   errors.push('SoftWorld must contain actual rounded meshes only');
 if(!world.includes('particleCapacity: glows.length'))
   errors.push('Event visuals need bounded preallocated pool');
-if(!main.includes('softWorld.trigger(e.kind')||!main.includes('softWorld.update(dt'))
-  errors.push('Missing model-event-driven presentation');
+if(!main.includes('softWorld.trigger(visualKind') ||
+   !main.includes('s.pickups > previousPickups') ||
+   !main.includes('s.hits > previousHits') ||
+   !main.includes('s.gatesPassed > previousGates') ||
+   !main.includes('softWorld.update(dt'))
+  errors.push('Missing confirmed model-counter-driven presentation');
 if(!main.includes('applyMassOperation') || !main.includes('createSoftPortal'))
   errors.push('Existing authoritative gate presentation lost');
 const root=path.join('playtest-dist','3d');
