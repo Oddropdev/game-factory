@@ -212,8 +212,12 @@ const present=()=>{
       const message = e.kind === 'hazard' ? 'OUCH!' :
         delta > 0 ? '+' + delta + ' MASS!' :
         delta < 0 ? String(delta) + ' MASS' : 'NO GAIN';
-      showFeedback(message, e.kind);
-      softWorld.trigger(e.kind, (s.playerNormX-.5)*6.6);
+      // Only actual growth gets celebratory gate juice. A clamped-to-1
+      // loss is a legitimate processed gate, but NOT a reward.
+      const visualKind = e.kind === 'gate' && delta <= 0 ? 'hazard' : e.kind;
+      showFeedback(message, visualKind);
+      if (e.kind !== 'gate' || delta !== 0)
+        softWorld.trigger(visualKind, (s.playerNormX-.5)*6.6);
     }
     lastEventId=s.lastEventId;
   }
