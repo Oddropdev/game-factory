@@ -13,7 +13,6 @@ import {
   createSoftTrack, createSoftPortal, createSoftHazard,
   createSoftStripe, createSoftDecoration, createSoftShadow,
   type SoftPortal
-
 } from './SoftCourse';
 import './style.css';
 
@@ -62,14 +61,6 @@ const mats = {
   blue: material('#62b7ff'), white: material('#eefcff'),
   purple: material('#e99cf9',.25), gold: material('#ffdc4c',.45)
 };
-function block(name:string, position:[number,number,number], size:[number,number,number], m:StandardMaterial, parent:Entity=app.root):Entity{
-  const e=new Entity(name);
-  e.addComponent('render',{type:'box',material:m});
-  e.setPosition(...position);
-  e.setLocalScale(...size);
-  parent.addChild(e);
-  return e;
-}
 const camera = new Entity('hero-camera');
 camera.addComponent('camera',{
   clearColor:new Color(.51,.77,.98),fov:63,nearClip:.1,farClip:160
