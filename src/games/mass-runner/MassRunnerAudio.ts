@@ -92,11 +92,23 @@ export class MassRunnerWebAudioOutput implements MassRunnerSoundOutput {
   private enabled = false;
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
+  private readonly voices = new Set<OscillatorNode>();
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
 
     if (this.master && this.context) {
+      if (!enabled) {
+        // Stop scheduled voices too: unmuting never resumes an old stinger.
+        for (const voice of this.voices) {
+          try {
+            voice.stop(this.context.currentTime);
+          } catch {
+            // A completed oscillator may already have stopped.
+          }
+        }
+        this.voices.clear();
+      }
       // Kill output immediately on platform mute, including already scheduled tails.
       this.master.gain.setValueAtTime(
         enabled ? 0.5 : 0,
@@ -166,7 +178,9 @@ export class MassRunnerWebAudioOutput implements MassRunnerSoundOutput {
       envelope.gain.exponentialRampToValueAtTime(0.0001, end);
       oscillator.connect(envelope);
       envelope.connect(this.master);
+      this.voices.add(oscillator);
       oscillator.onended = () => {
+        this.voices.delete(oscillator);
         oscillator.disconnect();
         envelope.disconnect();
       };
