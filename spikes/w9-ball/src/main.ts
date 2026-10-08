@@ -508,7 +508,7 @@ app.on('update',(dt:number)=>{
   const pos=ball.getPosition();
   if(magneticRails){
     const contactGlow=phase==='running'&&
-      elapsed-railLastContactAt<.20?railRecentSection:null;
+      elapsed-railLastContactAt<.38?railRecentSection:null;
     magneticRails.activeSection(contactGlow);
     const contactVisible=contactGlow!==null;
     const pSpeed=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
