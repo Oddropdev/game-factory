@@ -45,7 +45,7 @@ jobs:
         run: npm run build:w9-2d
       - name: All prior PlayCanvas W9.2D and W9.3 regression gates
         run: npm run test:w9-2d
-      - name: Final ready, gate, result, replay, high DPR and UI audit
+      - name: Final ready, gates, clear/fail, replay, high DPR and UI audit
         run: npx playwright test tests/playcanvas/w9-3-visual-acceptance.spec.mjs --config=playwright.w9-2d.config.mjs
       - name: Frozen diff, screenshot authenticity and release budget
         run: node tools/check-w9-3-4.mjs
