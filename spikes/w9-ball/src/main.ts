@@ -18,6 +18,8 @@ import { buildCurveRails, railFieldAt, railSectionAt, RAIL_CONTACT_FORCE, RAIL_P
 import {buildGrindTrack} from './GrindTrack';
 import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
   GRIND_CENTER_FORCE,GRIND_SPEED_FORCE,GRIND_START,GRIND_END,GRIND_TOP_Y,
+  GRIND_VOID_FROM,GRIND_VOID_TO,SECRET_START,SECRET_END,
+  grindPath,activeGrindRoute,
   PLAYER_RADIUS,RELEASE_COOLDOWN,guardSurface,allowGuardLock,
   oppositeToGuard,grindTopQualifies,relativeRailSpring,
   type GuardLock,type GrindLock} from './RailModes';
@@ -225,7 +227,8 @@ for(let i=0;i<(speedMode?9:5);i++){
 const suppressOldEdge=(progress:number,side:number)=>
   railMode&&railSectionAt(progress)?.side===side;
 const speedWorld=speedMode?makeSpeedCourse(shape,surfaces,suppressOldEdge):null;
-const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces,suppressOldEdge):null;
+const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces,suppressOldEdge,
+  d=>grindMode&&d>=GRIND_VOID_FROM&&d<=GRIND_VOID_TO):null;
 const magneticRails=railMode?buildCurveRails(shape):null;
 const grindTrack=grindMode?buildGrindTrack(shape):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
@@ -280,18 +283,11 @@ if(grindMode){
       grindSideContactEvents++;return;
     }
     if(!other.name.startsWith('grind-top-'))return;
-    const p=ball.getPosition();
-    const progress=SPEED_START_Z-p.z;
-    const center=centerAt(progress);
-    if(!grindTopQualifies(p.y,p.x,center,true))return;
+    // Physical top-collider contact alone is recorded; the locked grind
+    // state is granted only when height and centerline ALSO prove TOP riding.
+    // A side impact, including on a top slab's edge, cannot start a grind.
     touchingGrindTop.add(other.name);
     grindTopContactEvents++;
-    grindLastTopTouch=elapsed;
-    if(grindLock!=='top-grind'){
-      grindLock='top-grind';
-      grindEntries++;
-      message('TOP GRIND!');
-    }
   });
   ball.collision!.on('collisionend',(other:Entity)=>{
     if(other.name.startsWith('grind-top-'))touchingGrindTop.delete(other.name);
@@ -515,6 +511,8 @@ app.on('update',(dt:number)=>{
         magnetActivations++;
       }
       if(railSection&&Math.abs(targetX)>3.3)railEntrySteeringFrames++;
+      if(grindMode&&touchingRails.size>0&&guardLock.startsWith('locked'))
+        guardLastTouch=elapsed;
       if(grindMode&&guardLock==='release-cooldown'&&elapsed>=guardCoolUntil){
         guardLock='free';guardSide=null;
       }
@@ -574,18 +572,22 @@ app.on('update',(dt:number)=>{
       if(grindMode){
         // Strict top-only: a side wall has its own collider and NEVER grants
         // grind mode. A real top collision + position validates the surface.
-        const onTop=touchingGrindTop.size>0&&
-          grindTopQualifies(p.y,p.x,centerAt(progress),true)&&
-          progress>=GRIND_START-1&&progress<=GRIND_END+1;
+        const route=activeGrindRoute(progress);
+        const routePoint=route?grindPath(progress,centerAt(progress),route):null;
+        const rightCollider=[...touchingGrindTop].some(n=>
+          n.startsWith('grind-top-'+(route??'none')+'-'));
+        const onTop=rightCollider&&routePoint!==null&&
+          grindTopQualifies(p.y,p.x,routePoint.x,routePoint.y,true);
         if(onTop){
           grindLastTopTouch=elapsed;
           if(grindLock!=='top-grind'){
             grindLock='top-grind';grindEntries++;
+            message(route==='secret'?'SECRET TOP GRIND!':'BRIDGE GRIND!');
           }
-          const guide=relativeRailSpring(p.x,v.x,centerAt(progress),
+          const guide=relativeRailSpring(p.x,v.x,routePoint!.x,
             300,20,GRIND_CENTER_FORCE);
-          const down=relativeRailSpring(p.y,v.y,GRIND_TOP_Y+PLAYER_RADIUS,
-            180,20,130);
+          const down=relativeRailSpring(p.y,v.y,routePoint!.y+PLAYER_RADIUS,
+            200,22,140);
           body.applyForce(new Vec3(guide,down,0));
           const room=Math.max(0,activeSpeedCap-forward);
           if(room>.1){
@@ -741,6 +743,12 @@ Object.assign(window,{__W9_BALL_TEST__:{
       grindBoostFrames,grindTopContactEvents,grindSideContactEvents,
       grindFalseSideRewards,grindPeakSpeed,
       grindTrackTopSegments:grindTrack?.topCount??0,
+      grindTrackBridgeSegments:grindTrack?.bridgeTops??0,
+      grindTrackSecretSegments:grindTrack?.secretTops??0,
+      grindVoidFloorPlanksRemoved:jumpWorld?.removedFloorPlanks??0,
+      grindVoidMeters:grindMode?GRIND_VOID_TO-GRIND_VOID_FROM:0,
+      grindSecretElevationMeters:grindMode?grindTrack!.secretTopPeakY-GRIND_TOP_Y:0,
+      grindActiveRoute:grindMode?activeGrindRoute(SPEED_START_Z-p.z):null,
       grindTrackSideColliders:grindTrack?.sideCount??0,
       legacySafetyForceInRailSection,railEntrySteeringFrames,
       railPrioritySectionId:railMode?railSectionAt(SPEED_START_Z-p.z)?.id??null:null,
