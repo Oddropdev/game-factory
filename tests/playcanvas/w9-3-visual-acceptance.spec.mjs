@@ -82,6 +82,8 @@ for (const size of sizes) {
         quality: el.dataset.gateQuality,
         font: parseFloat(globalThis.getComputedStyle(el).fontSize),
         pointer: globalThis.getComputedStyle(el).pointerEvents,
+        projectedX: Number(el.dataset.projectedX),
+        projectedY: Number(el.dataset.projectedY),
         left: b.left, right: b.right, top: b.top, bottom: b.bottom
       };
     }));
@@ -94,6 +96,8 @@ for (const size of sizes) {
       expect(item.right).toBeLessThanOrEqual(size.width);
       expect(item.top).toBeGreaterThan(84);
       expect(item.bottom).toBeLessThanOrEqual(size.height);
+      expect(Math.abs((item.left + item.right)/2 - item.projectedX)).toBeLessThan(2);
+      expect(Math.abs((item.top + item.bottom)/2 - item.projectedY)).toBeLessThan(2);
     }
     await capture(page, size.name + '-gate-decision');
     await expect.poll(async () => (await snapshot(page))?.phase, { timeout:20000 }).not.toBe('running');
@@ -169,13 +173,16 @@ test.describe('W9.3-4 high-DPI mobile touch acceptance', () => {
     await expect.poll(async () => page.locator('.world-gate-label:visible').count()).toBe(2);
     const bounds = await page.locator('.world-gate-label:visible').evaluateAll(els => els.map(el => {
       const b=el.getBoundingClientRect();
-      return {left:b.left,right:b.right,top:b.top,bottom:b.bottom};
+      return {left:b.left,right:b.right,top:b.top,bottom:b.bottom,
+        projectedX:Number(el.dataset.projectedX),projectedY:Number(el.dataset.projectedY)};
     }));
     for(const b of bounds) {
       expect(b.left).toBeGreaterThanOrEqual(0);
       expect(b.right).toBeLessThanOrEqual(390);
       expect(b.top).toBeGreaterThanOrEqual(84);
       expect(b.bottom).toBeLessThanOrEqual(844);
+      expect(Math.abs((b.left + b.right)/2 - b.projectedX)).toBeLessThan(2);
+      expect(Math.abs((b.top + b.bottom)/2 - b.projectedY)).toBeLessThan(2);
     }
     await page.mouse.move(350,465);
     await page.mouse.down();
