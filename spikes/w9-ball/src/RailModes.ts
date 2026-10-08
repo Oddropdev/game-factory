@@ -67,6 +67,17 @@ export function grindTopQualifies(
     ballY>=railTopY+PLAYER_RADIUS-.24 &&
     Math.abs(ballX-railX)<=GRIND_HALF_WIDTH-.06;
 }
+// Recovery eligibility is deliberately NOT a new contact/boost permission.
+// A nearly stationary ball trapped BELOW a rail is redirected to a safe deck;
+// the regular top-only Bullet contact gate remains authoritative.
+export function trappedBelowGrind(
+  ballY:number,ballX:number,railX:number,railTopY:number,
+  planarSpeed:number,hasTopContact:boolean
+):boolean{
+  return !hasTopContact&&ballY<railTopY-.05&&
+    Math.abs(ballX-railX)<GRIND_HALF_WIDTH+1.4&&planarSpeed<4;
+}
+
 export function relativeRailSpring(
   position:number,velocity:number,target:number,gain:number,damping:number,max:number
 ):number{
