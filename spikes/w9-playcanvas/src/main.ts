@@ -11,9 +11,11 @@ import { MASS_RUNNER_LEVELS, applyMassOperation, type MassRunnerEvent } from '..
 import { createSoftAvatar } from './SoftAvatar';
 import {
   createSoftTrack, createSoftPortal, createSoftHazard,
-  createSoftStripe, createSoftDecoration, createSoftShadow,
+  createSoftStripe, createSoftShadow,
   type SoftPortal
 } from './SoftCourse';
+import { createSoftEnvironment } from './SoftEnvironment';
+import { createSoftJuice } from './SoftJuice';
 import './style.css';
 
 const level = MASS_RUNNER_LEVELS[0]!;
@@ -49,41 +51,38 @@ const material = (hex: string, emissive = 0): StandardMaterial => {
   const blue = parseInt(hex.slice(5,7), 16)/255;
   m.diffuse = new Color(red, green, blue);
   m.emissive = new Color(red*emissive, green*emissive, blue*emissive);
-  m.metalness = 0.07;
-  m.gloss = 0.38;
+  m.metalness = 0.015;
+  m.gloss = 0.49;
   m.update();
   return m;
 };
 const mats = {
-  road: material('#6979d8'), edge: material('#f6c75f',.22),
-  stripe: material('#dcf9fc',.25), cyan: material('#22e6e8',.35),
-  red: material('#ff517a',.2), grass: material('#57c487'),
-  blue: material('#62b7ff'), white: material('#eefcff'),
-  purple: material('#e99cf9',.25), gold: material('#ffdc4c',.45)
+  road: material('#8E9CE4'), edge: material('#FFF0C9',.08),
+  stripe: material('#F6FDFF',.12), cyan: material('#46DDBD',.12),
+  red: material('#FF7994',.08), grass: material('#83E3BA'),
+  blue: material('#A7DDFF'), white: material('#F7FDFF'),
+  purple: material('#B9A8FF',.08), gold: material('#FFE177',.16)
 };
 const camera = new Entity('hero-camera');
 camera.addComponent('camera',{
-  clearColor:new Color(.51,.77,.98),fov:63,nearClip:.1,farClip:160
+  clearColor:new Color(.655,.867,1),fov:63,nearClip:.1,farClip:160
 });
-camera.setPosition(0,7.4,12.8);
+camera.setPosition(0,7.35,12.8);
 camera.lookAt(0,.8,-12);
 app.root.addChild(camera);
 const sun = new Entity('sun');
-sun.addComponent('light',{type:'directional',intensity:2.1,castShadows:true,
-  shadowResolution:1024,shadowBias:.12,normalOffsetBias:.07});
+sun.addComponent('light',{type:'directional',intensity:1.75,castShadows:true,
+  shadowResolution:768,shadowBias:.12,normalOffsetBias:.07});
 sun.setEulerAngles(48, -25, 0);
 app.root.addChild(sun);
-app.scene.ambientLight = new Color(.53,.61,.72);
+app.scene.ambientLight = new Color(.62,.72,.81);
 
 const courseMetrics = createSoftTrack(app.root, mats);
+const environment = createSoftEnvironment(app.root);
+const juice = createSoftJuice(app.root, mats.gold, mats.red);
 const stripes: Entity[] = [];
 for (let i = 0; i < 17; i++) for (const x of [-1.25, 1.25]) {
   stripes.push(createSoftStripe('lane-glow', app.root, mats, x, 4 - i * 4));
-}
-const decorations: Entity[] = [];
-for (let i = 0; i < 13; i++) for (const side of [-1, 1]) {
-  decorations.push(createSoftDecoration('soft-road-bumper', app.root, mats,
-    side * 4.55, 3 - i * 6, i % 2 === 0));
 }
 const player = new Entity('character-anchor');
 player.setPosition(0,0,2.5);
@@ -137,16 +136,12 @@ const clone=(id:typeof assets[number],parent:Entity,pos:[number,number,number],s
   parent.addChild(e);
   return e;
 };
-// Do not replace the new soft hero with the old blocky character GLB.
-for(const [i,dec] of decorations.entries()){
-  if(i%2===0)clone('tree',app.root,[(i%2===0?-1:1)*8.4,0,-(i/2)*8],1.9);
-  dec.enabled=true;
-}
+// Five pinned CC0 assets stay loaded for provenance; only the coin is instanced.
+// Blocky trees/flag have been removed in favour of original soft forms.
 for(const item of data){
   if(item.event.kind==='orb')clone('coin',item.node,[0,.98,0],1.0);
   // No blocky Kenney platform overlays on rounded soft hazard rollers.
 }
-clone('flag',app.root,[4,0,-53],1.2);
 
 const gateLabels=[document.createElement('div'),document.createElement('div')];
 for(const el of gateLabels){
@@ -155,6 +150,7 @@ for(const el of gateLabels){
   root.append(el);
 }
 let target=0.5, accumulator=0, elapsed=0, lastEventId:string|null=null, showUntil=0;
+let previousMass = model.snapshot().mass;
 let visualFrames=0;
 const showFeedback=(value:string)=>{
   hud.feedback.textContent=value;hud.feedback.classList.add('show');showUntil=elapsed+1.0;
@@ -179,7 +175,10 @@ window.addEventListener('keydown',e=>{
 const onResize=()=>{
   app.resizeCanvas();
   // Camera and HUD composition are portrait-first, not a stretched 2D canvas.
+  const landscape = window.innerWidth > window.innerHeight;
   camera.camera!.fov=window.innerWidth/window.innerHeight<.75?67:58;
+  camera.setPosition(0,landscape?7.8:7.35,landscape?14.6:12.8);
+  camera.lookAt(0,.8,-12);
 };
 window.addEventListener('resize',onResize);
 onResize();
@@ -199,13 +198,24 @@ const present=()=>{
     if(e?.kind==='gate')showFeedback('MASS × / +');
     else if(e?.kind==='orb')showFeedback('+ COINS');
     else if(e?.kind==='hazard')showFeedback('OUCH!');
+    if(e)juice.trigger(e.kind==='hazard'||s.mass<previousMass?'impact':'reward',
+      elapsed,(s.playerNormX-.5)*6.6);
     lastEventId=s.lastEventId;
   }
+  previousMass=s.mass;
   if(showUntil<elapsed)hud.feedback.classList.remove('show');
   player.setPosition((s.playerNormX-.5)*6.6,0,2.5);
   // W9.3: exclusively visual toy motion. Mass, steering and timing remain
   // owned by the unchanged deterministic model.
   avatar.update(elapsed, s.phase === 'running', s.playerNormX, s.mass);
+  // Juice never changes the authoritative mass scale, colliders or steering.
+  const impulse = juice.impulse(elapsed);
+  if(impulse>0){
+    const scale=avatar.root.getLocalScale();
+    avatar.root.setLocalScale(scale.x*(1+impulse*.12),scale.y*(1-impulse*.10),
+      scale.z*(1+impulse*.12));
+  }
+  juice.update(elapsed,(s.playerNormX-.5)*6.6);
   baseShadow.setPosition((s.playerNormX-.5)*6.6,.025,2.5);
   const growth=Math.min(1.32,.68+s.mass*.017);
   player.setLocalScale(growth,growth,growth);
@@ -291,6 +301,13 @@ Object.assign(window,{
       portalCount,
       hazardCount,
       softCourseBoxPieces:courseMetrics.boxParts,
+       environmentKind:environment.identity,
+       environmentRoundedPieces:environment.pieces,
+       environmentBoxPieces:environment.boxPieces,
+       juicePieces:juice.pieces,
+       juiceBursts:juice.bursts,
+       juiceActive:juice.active,
+       juiceLastKind:juice.lastKind,
       fullViewport:canvas.clientWidth>=window.innerWidth-2&&canvas.clientHeight>=window.innerHeight-2
     })
   }
