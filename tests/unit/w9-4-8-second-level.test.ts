@@ -30,7 +30,7 @@ describe('W9.4-8 independent Level 2',()=>{
     expect(p.frames.at(-1)?.center[2]).toBeCloseTo(7-550,4);
   });
   it('has a deliberate lateral S bend rather than reusing the old flat road',()=>{
-    const v=[550,610,655,700].map(secondCenter);
+    const v=Array.from({length:151},(_,i)=>secondCenter(550+i));
     expect(Math.max(...v)-Math.min(...v)).toBeGreaterThan(5);
     for(let d=550;d<=699;d+=.5){
       expect(Math.abs(secondCenter(d+.5)-secondCenter(d))).toBeLessThan(.16);
