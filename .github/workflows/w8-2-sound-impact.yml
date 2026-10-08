@@ -1,20 +1,17 @@
-name: W8.1 Reference Mining Hero Slice
+name: W8.2 Sound and Impact Tuning
 
 on:
   pull_request:
     paths:
       - "src/games/mass-runner/**"
-      - "tests/unit/massRunnerPresentation.test.ts"
+      - "src/main.ts"
+      - "src/factory/GameModule.ts"
+      - "tests/unit/massRunnerAudio.test.ts"
       - "tests/feel/**"
-      - "playwright.w8.config.ts"
-      - "tools/check-w8-hero.mjs"
+      - "tools/check-w8-sound.mjs"
       - "package.json"
-      - "tsconfig.json"
-      - ".github/workflows/w8-1-hero-slice.yml"
-      - ".github/workflows/w7-first-real-game.yml"
-      - "docs/research/W8.1-REFERENCE-MINING.md"
-      - "docs/architecture/W8.1-HERO-SLICE-CONTRACT.md"
-      - "docs/evidence/W8.1-**"
+      - ".github/workflows/w8-2-sound-impact.yml"
+      - "docs/architecture/W8.2-SOUND-CONTRACT.md"
   workflow_dispatch:
 
 permissions:
@@ -22,11 +19,11 @@ permissions:
 
 jobs:
   verify:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w8-1-')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w8-2-')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      W8_BASE_SHA: ef80ff82ddaae5a36921e7fc16236e52908a8711
+      W8_BASE_SHA: 4b19ec9d83f7fe4ce72fec84101066d7573a70e2
 
     steps:
       - uses: actions/checkout@v4
@@ -38,26 +35,26 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install dependencies
+      - name: Install pinned dependencies (lockfile not tracked)
         run: npm install --no-audit --no-fund
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Verify accepted factory and Mass Runner
+      - name: Run accepted factory and game verification
         run: npm run verify
 
-      - name: Verify W8.1 hero-slice contract
-        run: npm run check:w8-hero
+      - name: Check W8.2 sound boundary and protected churn
+        run: npm run check:w8-sound
 
-      - name: Capture baseline vs polished hero videos
+      - name: Run muted A/B captures and live sound platform tests
         run: npm run test:w8-feel
 
-      - name: Upload W8.1 evidence
+      - name: Upload W8.2 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: w8-1-hero-slice-evidence
+          name: w8-2-sound-impact-evidence
           path: |
             evidence/w1/
             evidence/w6/
@@ -65,5 +62,4 @@ jobs:
             evidence/w8/
             test-results/
             playwright-report/
-            package-lock.json
           if-no-files-found: warn

@@ -22,6 +22,7 @@ import {
   type MassRunnerGateEvent,
   type MassRunnerLevelSpec
 } from './MassRunnerLevels';
+import { MassRunnerAudio } from './MassRunnerAudio';
 import { massRunnerHeroTarget } from './MassRunnerFeelRoute';
 import {
   MassRunnerModel,
@@ -48,6 +49,9 @@ export type MassRunnerGameTestState = MassRunnerSnapshot & {
   presentationEffects: number;
   presentationMassPulse: number;
   heroAutoplay: boolean;
+  soundEnabled: boolean;
+  soundUnlocked: boolean;
+  soundCuesDispatched: number;
 };
 
 type Layout = {
@@ -79,6 +83,10 @@ export class MassRunnerGame implements GameModule {
     );
   private readonly presentation =
     new MassRunnerPresentation(this.presentationMode);
+  private readonly audio = new MassRunnerAudio();
+  private readonly audioOff =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('audio') === 'off';
   private readonly heroAutoplay =
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('autoplay') ===
@@ -90,17 +98,25 @@ export class MassRunnerGame implements GameModule {
 
   constructor(private readonly viewport: ViewportRuntime) {}
 
+  setAudioEnabled(enabled: boolean): void {
+    this.audio.setEnabled(
+      enabled && !this.audioOff && this.presentationMode === 'polished'
+    );
+  }
+
   init(): void {
     this.model.resetSession();
     this.targetNormX = 0.5;
     this.pointerEvents = 0;
     this.presentation.reset(this.model.snapshot());
+    this.audio.reset();
     this.ready = true;
   }
 
   update(input: GameInputFrame): void {
     if (input.pointerPressed) {
       this.pointerEvents += 1;
+      this.audio.unlockFromGesture();
     }
 
     if (
@@ -124,11 +140,13 @@ export class MassRunnerGame implements GameModule {
     }
 
     this.model.step(this.targetNormX);
+    const updated = this.model.snapshot();
     this.presentation.update(
-      this.model.snapshot(),
+      updated,
       this.model.getCurrentLevel(),
       this.targetNormX
     );
+    this.audio.consume(this.presentation.snapshot(updated).effects, updated.mass);
   }
 
   restart(): void {
@@ -137,6 +155,7 @@ export class MassRunnerGame implements GameModule {
     this.targetNormX = 0.5;
     this.model.resetSession();
     this.presentation.reset(this.model.snapshot());
+    this.audio.reset();
   }
 
   render(): void {
@@ -198,7 +217,10 @@ export class MassRunnerGame implements GameModule {
       presentationCue: presentation.lastCue,
       presentationEffects: presentation.effects.length,
       presentationMassPulse: presentation.massPulse,
-      heroAutoplay: this.heroAutoplay
+      heroAutoplay: this.heroAutoplay,
+      soundEnabled: this.audio.snapshot().enabled,
+      soundUnlocked: this.audio.snapshot().unlocked,
+      soundCuesDispatched: this.audio.snapshot().dispatched
     };
   }
 

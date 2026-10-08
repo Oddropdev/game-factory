@@ -37,8 +37,11 @@ let platformReady = false;
 let audioEnabled = platform.isAudioEnabled();
 let foundationProbeNormX = 0.5;
 
+// The PlatformBridge owns mute authority; games never query an SDK directly.
+activeGame.setAudioEnabled?.(audioEnabled);
 platform.onAudioEnabledChange(enabled => {
   audioEnabled = enabled;
+  activeGame.setAudioEnabled?.(enabled);
 });
 
 function resetFoundationProbe(): void {
