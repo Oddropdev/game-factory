@@ -16,6 +16,9 @@ import { makeLongJumpCourse, longCenter, longTangent, inLongSafetyArc,
 import { buildCurveRails, railFieldAt, railSectionAt, RAIL_CONTACT_FORCE, RAIL_PULL_MAX,
   RAIL_ADHESION_MAX } from './MagneticRails';
 import {buildGrindTrack} from './GrindTrack';
+import {TransitTubePath,buildTubeMesh,TUBE_START_PROGRESS,TUBE_FINISH_PROGRESS,
+  TUBE_OFFSET,TUBE_CRUISE_METRES_PER_SECOND} from './TubeTransit';
+import {parseTransitManifest,stageTransitLevel} from './TransitNextSector';
 import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
   GRIND_CENTER_FORCE,GRIND_SPEED_FORCE,GRIND_TOP_Y,
   GRIND_ENTRY_START,GRIND_END,
@@ -29,12 +32,14 @@ import './style.css';
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
 const gameMode=new URL(window.location.href).searchParams.get('mode');
-const grindMode=gameMode==='grind';
+const transitMode=gameMode==='transit';
+const grindMode=gameMode==='grind'||transitMode;
 const railMode=gameMode==='rail'||grindMode;
 const longJumpMode=gameMode==='jump'||railMode;
 const speedMode=gameMode==='speed'||longJumpMode;
 const activeSpeedCap=longJumpMode?LONG_SPEED_CAP:SPEED_CAP;
-const finishDistance=longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE;
+const finishDistance=transitMode?TUBE_FINISH_PROGRESS:
+  longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE;
 const centerAt=(progress:number)=>longJumpMode?longCenter(progress):trackCenter(progress);
 const tangentAt=(progress:number)=>longJumpMode?longTangent(progress):trackTangent(progress);
 const FINISH_Z = speedMode?SPEED_START_Z-finishDistance:-97;
@@ -97,6 +102,17 @@ let grindLastTopImpact:[number,number,number,number]|null=null;
 let grindTopDeniedHeight=0,grindTopDeniedLateral=0;
 let grindUndersideSeconds=0,grindTrapRecoveries=0;
 const touchingGrindTop=new Set<string>();
+type TubeState='approach'|'locked'|'holding'|'released';
+type NextLoadState='idle'|'loading'|'ready'|'failed';
+let tubeState:TubeState='approach';
+let tubeDistance=0,tubeAngle=0,tubeLockFrames=0,tubeInvertedFrames=0;
+let tubeEntries=0,tubeExits=0,tubeFalls=0,tubeHoldSeconds=0;
+let tubeMaxRadiusError=0,tubeExitSpeed=0;
+let nextLevelLoadState:NextLoadState='idle';
+let nextLevelLoadMs=0,nextLevelPlanks=0,nextLevelId='';
+let nextLevelLoadError='';
+let nextLevelStaged:{activate:()=>void;roadPlanks:number;id:string}|null=null;
+const noEarlyPreload=new URL(window.location.href).searchParams.get('preload')==='off';
 
 function message(text:string) {
   ui.message.textContent=text;
@@ -240,6 +256,15 @@ const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces,suppressOldEdge,
   d=>grindMode&&d>=GRIND_VOID_FROM&&d<=GRIND_VOID_TO):null;
 const magneticRails=railMode?buildCurveRails(shape):null;
 const grindTrack=grindMode?buildGrindTrack(shape,device,app.root):null;
+const transitPath=transitMode?new TransitTubePath():null;
+const tubeSkin=material('#26789B',.93);
+tubeSkin.emissive=new Color(.02,.13,.25);
+tubeSkin.emissiveIntensity=.7;tubeSkin.update();
+const tubeAccent=material('#46FFE1',.92);
+tubeAccent.emissive=new Color(.09,.83,.70);
+tubeAccent.emissiveIntensity=2.2;tubeAccent.update();
+const tubeWorld=transitPath?
+  buildTubeMesh(device,app.root,transitPath,tubeSkin,tubeAccent):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -341,9 +366,38 @@ const licensedArt=await loadPrivateArt(app,{
   tracks:trackNodes,hazards:hazardNodes,treeCrowns,treeTrunks,
   ball,ballBand:band,finish
 });
+// The entire next sector is fetched and physically staged during tube travel.
+const preloadNextLevel=()=>{
+  if(!transitMode||nextLevelLoadState!=='idle')return;
+  nextLevelLoadState='loading';
+  const start=performance.now();
+  void (async()=>{
+    try {
+      const url=new URL('./levels/transit-next.json',import.meta.url);
+      const response=await fetch(url);
+      if(!response.ok)throw Error('HTTP '+response.status);
+      const manifest=parseTransitManifest(await response.json());
+      nextLevelStaged=stageTransitLevel(manifest,shape,surfaces.track,surfaces.mint);
+      nextLevelPlanks=nextLevelStaged.roadPlanks;
+      nextLevelId=nextLevelStaged.id;
+      nextLevelLoadMs=performance.now()-start;
+      nextLevelLoadState='ready';
+    }catch(err){
+      nextLevelLoadError=String(err);
+      nextLevelLoadMs=performance.now()-start;
+      nextLevelLoadState='failed';
+      message('NEXT LEVEL LOAD FAILED');
+    }
+  })();
+};
+const resetTube=()=>{
+  if(body.type!=='dynamic')body.type='dynamic';
+  tubeState='approach';tubeDistance=0;tubeAngle=0;
+};
 const checkpoint=()=>{ // a fall respawns without changing the authoritative physics body type
   falls++;
   lastFallReason='fell-off-track';
+  resetTube();
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
   body.angularVelocity=new Vec3(0,0,0);
@@ -363,6 +417,9 @@ function restart(){
   if(!realPhysics||phase==='error')return;
   attempts++;
   phase='running';
+  resetTube();
+  tubeLockFrames=0;tubeInvertedFrames=0;tubeEntries=0;tubeExits=0;
+  tubeFalls=0;tubeHoldSeconds=0;tubeMaxRadiusError=0;tubeExitSpeed=0;
   elapsed=0;
   falls=0;
   bumpers=0;
@@ -410,7 +467,9 @@ if(!speedMode)ui.start.textContent='START ROLL →';
 ui.status.textContent='AMMO PHYSICS READY';
 if(speedMode){
   ui.title.innerHTML='SKY <em>SPEED.</em>';
-  ui.description.textContent=grindMode?
+  ui.description.textContent=transitMode?
+    'Ride the green side/top guards, take the narrow top-only rails, then enter a blue 100% magnetic 3D transit tube that loads the next sky island.':
+    grindMode?
     'Green GUARDS boost from their side or top: strong magnetic hold until you swipe away. The separate narrow GRIND track only carries you on its TOP.':
     railMode?
     'Ride the long green curve rails. Lean into them to stick, spark and accelerate, then launch over the sky gap. Flick UP for extra speed.':
@@ -419,7 +478,8 @@ if(speedMode){
     'Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
   document.querySelector('.hint')!.textContent=railMode?
     '↑ FLICK · ↔ LEAN INTO GREEN CURVE RAILS':'↑ FLICK TO ACCELERATE · ↔ STEER';
-  ui.start.textContent=grindMode?'START GUARD + GRIND →':
+  ui.start.textContent=transitMode?'START MAGNETIC TUBE →':
+    grindMode?'START GUARD + GRIND →':
     railMode?'START RAIL RUN →':
     longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
 }
@@ -439,6 +499,7 @@ const releaseGuard=()=>{
   message('RELEASE!');
 };
 const steer=(clientX:number)=>{
+  if(transitMode&&(tubeState==='locked'||tubeState==='holding'))return;
   // In rail mode the legal outer lane must reach the Bullet wall at x≈3.8m.
   // Legacy modes keep their original ±3.3m control envelope untouched.
   const max=railMode?4.18:3.3;
@@ -447,6 +508,7 @@ const steer=(clientX:number)=>{
     releaseGuard();
 };
 const flickForward=()=>{
+  if(transitMode&&(tubeState==='locked'||tubeState==='holding'))return;
   if(!speedMode||phase!=='running')return;
   const p=ball.getPosition(),v=body.linearVelocity;
   const tangent=tangentAt(SPEED_START_Z-p.z);
@@ -470,6 +532,12 @@ root.addEventListener('pointerdown',e=>{
 root.addEventListener('pointermove',e=>{
   if(e.buttons!==0||e.pointerType==='touch'){
     const swipeDelta=pointerLastX===null?0:e.clientX-pointerLastX;
+    if(transitMode&&(tubeState==='locked'||tubeState==='holding')){
+      // Rotation around the pipe, NOT permission to detach from it.
+      tubeAngle+=clamp(swipeDelta/window.innerWidth*2.6,-.28,.28);
+      pointerLastX=e.clientX;pointerLastY=e.clientY;
+      return;
+    }
     // Directional opposite SWIPE, not merely an absolute screen lane.
     // The old control waited for the cursor to cross the entire screen;
     // at 50m/s the short corner could end before it registered release.
@@ -490,6 +558,11 @@ root.addEventListener('pointerup',()=>{pointerLastY=null;pointerLastX=null;});
 root.addEventListener('pointercancel',()=>{pointerLastY=null;pointerLastX=null;});
 window.addEventListener('keydown',e=>{
   if(e.code==='Space'||e.code==='Enter'){e.preventDefault();restart();}
+  if(transitMode&&(tubeState==='locked'||tubeState==='holding')){
+    if(e.code==='ArrowLeft'||e.code==='KeyA')tubeAngle-=.15;
+    if(e.code==='ArrowRight'||e.code==='KeyD')tubeAngle+=.15;
+    return;
+  }
   if(e.code==='ArrowLeft'||e.code==='KeyA')targetX=clamp(targetX-.9,-3.3,3.3);
   if(e.code==='ArrowRight'||e.code==='KeyD')targetX=clamp(targetX+.9,-3.3,3.3);
   if(grindMode&&guardSide!==null&&oppositeToGuard(targetX,guardSide))
@@ -511,10 +584,66 @@ app.on('update',(dt:number)=>{
   if(phase==='running') {
     physicsFrames++;
     elapsed+=tick;
+    // Hard kinematic constraint, not an arbitrarily large magnetic spring:
+    // unlike the guard and rail this cannot detach on an inversion.
+    if(transitMode&&transitPath&&
+      (tubeState==='locked'||tubeState==='holding')){
+      if(tubeState==='locked'){
+        tubeDistance=Math.min(transitPath.length,
+          tubeDistance+TUBE_CRUISE_METRES_PER_SECOND*tick);
+      }
+      const frame=transitPath.at(tubeDistance);
+      const position=transitPath.position(tubeDistance,tubeAngle);
+      body.teleport(...position);
+      tubeLockFrames++;
+      const error=Math.abs(Math.hypot(
+        position[0]-frame.center[0],position[1]-frame.center[1],
+        position[2]-frame.center[2])-TUBE_OFFSET);
+      tubeMaxRadiusError=Math.max(tubeMaxRadiusError,error);
+      if(frame.tangent[2]>0||frame.normal[1]>0)tubeInvertedFrames++;
+      if(tubeDistance>=transitPath.length-.001){
+        tubeState='holding';tubeHoldSeconds+=tick;
+        if(nextLevelLoadState==='idle')preloadNextLevel();
+        if(nextLevelLoadState==='ready'&&nextLevelStaged){
+          nextLevelStaged.activate();
+          // Back to the ORIGINAL dynamic Bullet sphere on the new road.
+          const exit=transitPath.position(transitPath.length,0);
+          const direction=transitPath.at(transitPath.length).tangent;
+          body.type='dynamic';
+          body.teleport(...exit);
+          const releaseSpeed=34;
+          body.linearVelocity=new Vec3(direction[0]*releaseSpeed,
+            direction[1]*releaseSpeed,direction[2]*releaseSpeed);
+          body.angularVelocity=new Vec3(0,0,0);
+          tubeExitSpeed=releaseSpeed;tubeState='released';tubeExits++;
+          previousProgress=TUBE_FINISH_PROGRESS-70;
+          message('NEXT SKY ISLAND!');
+        }else if(nextLevelLoadState==='failed'){
+          // Remain safely latched rather than eject into an unloaded scene.
+          message('TRANSIT HOLD — LOAD ERROR');
+        }
+      }
+    }else{
     // Input forces and actual rigidbody velocity feed Bullet. No animation
     // interpolates a fake ball position. Lateral damping is user-relative.
     if(speedMode){
       const progress=SPEED_START_Z-p.z,t=tangentAt(progress);
+      if(transitMode&&transitPath&&tubeState==='approach'&&
+        progress>=TUBE_START_PROGRESS-1.1&&
+        progress<=TUBE_START_PROGRESS+3.5&&
+        Math.abs(p.x-transitPath.frames[0]!.center[0])<2.7&&
+        Math.abs(p.y-.62)<1.7){
+        // The entrance is reached using genuine preexisting Bullet motion;
+        // only after crossing the mouth do we enable tube ownership.
+        tubeState='locked';tubeDistance=0;tubeAngle=0;tubeEntries++;
+        body.type='kinematic';
+        body.teleport(...transitPath.position(0,0));
+        touchingGrindTop.clear();touchingRails.clear();
+        guardLock='free';guardSide=null;grindLock='off';
+        guardCoolUntil=elapsed+RELEASE_COOLDOWN;
+        if(!noEarlyPreload)preloadNextLevel();
+        message('100% MAGNETIC TRANSIT!');
+      }
       let recoveryProgress:number|null=null;
       const forward=v.x*t.x+v.z*t.z;
       const lateral=v.x*(-t.z)+v.z*t.x;
@@ -782,6 +911,7 @@ app.on('update',(dt:number)=>{
       ui.description.textContent=`You collected ${pickups}/6 gems, bumped ${bumpers} times and finished in ${elapsed.toFixed(1)}s. Roll again?`;
       ui.start.textContent='ROLL AGAIN →';
     }
+    } // legacy Bullet modes / tube approach and exit (not constrained travel)
   }
   const pos=ball.getPosition();
   if(magneticRails){
@@ -808,7 +938,20 @@ app.on('update',(dt:number)=>{
     }
   }
   // Camera composition follows physical position, never controls it.
-  if(speedMode){
+  if(transitMode&&transitPath&&
+    (tubeState==='locked'||tubeState==='holding')){
+    const f=transitPath.at(tubeDistance);
+    const desired=[pos.x-f.tangent[0]*11,
+      pos.y+5-f.tangent[1]*7,pos.z-f.tangent[2]*11];
+    const now=camera.getPosition(),alpha=clamp(tick*7,0,1);
+    camera.setPosition(
+      now.x+(desired[0]!-now.x)*alpha,
+      now.y+(desired[1]!-now.y)*alpha,
+      now.z+(desired[2]!-now.z)*alpha);
+    camera.lookAt(pos.x+f.tangent[0]*16,
+      pos.y+f.tangent[1]*16+.5,pos.z+f.tangent[2]*16);
+    camera.camera!.fov=72;
+  }else if(speedMode){
     const forward=tangentAt(SPEED_START_Z-pos.z);
     const speed=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
     const chase=15+clamp(speed/activeSpeedCap,0,1)*5.5;
@@ -822,10 +965,17 @@ app.on('update',(dt:number)=>{
     camera.lookAt(pos.x*.18,.65,pos.z-12);
   }
   ui.coins.textContent=String(pickups);
-  ui.progress.style.width=(clamp((7-pos.z)/(7-FINISH_Z),0,1)*100).toFixed(1)+'%';
+  const displayedProgress=transitMode&&transitPath&&
+    (tubeState==='locked'||tubeState==='holding')?
+    TUBE_START_PROGRESS+(TUBE_FINISH_PROGRESS-TUBE_START_PROGRESS)*
+      tubeDistance/transitPath.length:SPEED_START_Z-pos.z;
+  ui.progress.style.width=(clamp(displayedProgress/finishDistance,0,1)*100).toFixed(1)+'%';
   if(elapsed>messageUntil)ui.message.classList.remove('show');
   ui.status.textContent=phase==='running'?
-    `ROLLING · ${Math.round(-pos.z+7)} m · ${Math.round(Math.abs(body.linearVelocity.z)*3.6)} km/h`:
+    (transitMode&&(tubeState==='locked'||tubeState==='holding')?
+      `MAGNETIC TRANSIT · ${Math.round(displayedProgress)} m · ${Math.round(
+        tubeState==='locked'?TUBE_CRUISE_METRES_PER_SECOND*3.6:0)} km/h`:
+      `ROLLING · ${Math.round(-pos.z+7)} m · ${Math.round(Math.abs(body.linearVelocity.z)*3.6)} km/h`):
     (phase==='complete'?'PHYSICS COURSE COMPLETE':'AMMO PHYSICS READY');
 });
 app.start();
@@ -848,7 +998,15 @@ Object.assign(window,{__W9_BALL_TEST__:{
       magneticRailSections:magneticRails?.sections.length??0,
       magneticRailSegments:magneticRails?.segments??0,
       railContactEvents,railBoostFrames,railAssistSeconds,
-      grindMode,guardLock,guardSide,guardLockEvents,guardTopEvents,
+      grindMode,transitMode,tubeState,tubeEntries,tubeExits,tubeLockFrames,
+      tubeInvertedFrames,tubeFalls,tubeDistance,tubeAngle,
+      tubeHoldSeconds,tubeMaxRadiusError,tubeExitSpeed,
+      tubeLength:transitPath?.length??0,tubeMeshCount:tubeWorld?.meshCount??0,
+      tubePathSamples:tubeWorld?.pathSampleCount??0,
+      tubeOnSurface:transitMode&&(tubeState==='locked'||tubeState==='holding'),
+      nextLevelLoadState,nextLevelLoadMs,nextLevelPlanks,nextLevelId,
+      nextLevelLoadError,earlyPreloadEnabled:!noEarlyPreload,
+      guardLock,guardSide,guardLockEvents,guardTopEvents,
       guardSideEvents,guardReleaseEvents,guardReleaseByOppositeSwipe,
       guardLockSeconds,guardLockPeakSpeed,guardHoldFrames,guardCoolUntil,
       guardLastTouch,guardReleaseSwipePx,
