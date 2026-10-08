@@ -15,12 +15,19 @@ import { makeLongJumpCourse, longCenter, longTangent, inLongSafetyArc,
   JUMP_LAUNCH_PROGRESS, JUMP_TARGET_Y_VELOCITY } from './LongJumpCourse';
 import { buildCurveRails, railFieldAt, railSectionAt, RAIL_CONTACT_FORCE, RAIL_PULL_MAX,
   RAIL_ADHESION_MAX } from './MagneticRails';
+import {buildGrindTrack} from './GrindTrack';
+import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
+  GRIND_CENTER_FORCE,GRIND_SPEED_FORCE,GRIND_START,GRIND_END,GRIND_TOP_Y,
+  PLAYER_RADIUS,RELEASE_COOLDOWN,guardSurface,allowGuardLock,
+  oppositeToGuard,grindTopQualifies,relativeRailSpring,
+  type GuardLock,type GrindLock} from './RailModes';
 import './style.css';
 
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
 const gameMode=new URL(window.location.href).searchParams.get('mode');
-const railMode=gameMode==='rail';
+const grindMode=gameMode==='grind';
+const railMode=gameMode==='rail'||grindMode;
 const longJumpMode=gameMode==='jump'||railMode;
 const speedMode=gameMode==='speed'||longJumpMode;
 const activeSpeedCap=longJumpMode?LONG_SPEED_CAP:SPEED_CAP;
@@ -69,6 +76,16 @@ let railBoostSpeedGain=0,railPeakContactGain=0,railDownForceEvents=0;
 let railLastContactAt=-100,railRecentSection:number|null=null;
 let legacySafetyForceInRailSection=0,railEntrySteeringFrames=0;
 const touchingRails=new Set<string>();
+let guardLock:GuardLock='free',guardSide:-1|1|null=null;
+let guardLockEvents=0,guardTopEvents=0,guardSideEvents=0;
+let guardReleaseEvents=0,guardReleaseByOppositeSwipe=0;
+let guardLockSeconds=0,guardLockPeakSpeed=0,guardCoolUntil=0;
+let guardHoldFrames=0,guardLastTouch=-100;
+let grindLock:GrindLock='off',grindEntries=0,grindExits=0;
+let grindSeconds=0,grindBoostFrames=0,grindTopContactEvents=0;
+let grindSideContactEvents=0,grindFalseSideRewards=0,grindPeakSpeed=0;
+let grindLastTopTouch=-100;
+const touchingGrindTop=new Set<string>();
 
 function message(text:string) {
   ui.message.textContent=text;
@@ -210,6 +227,7 @@ const suppressOldEdge=(progress:number,side:number)=>
 const speedWorld=speedMode?makeSpeedCourse(shape,surfaces,suppressOldEdge):null;
 const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces,suppressOldEdge):null;
 const magneticRails=railMode?buildCurveRails(shape):null;
+const grindTrack=grindMode?buildGrindTrack(shape):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -230,6 +248,19 @@ if(railMode){
     const id=readContact(event.other);
     if(id===null)return;
     touchingRails.add(event.other.name);
+    if(grindMode&&elapsed>=guardCoolUntil&&guardLock!=='release-cooldown'){
+      const section=magneticRails!.sections[id]!;
+      const surface=guardSurface(ball.getPosition().y);
+      if(allowGuardLock(surface,true,guardCoolUntil,elapsed)&&
+        !oppositeToGuard(targetX,section.side)){
+        if(guardLock!=='locked-side'&&guardLock!=='locked-top')guardLockEvents++;
+        guardLock=surface==='top'?'locked-top':'locked-side';
+        guardSide=section.side;
+        guardLastTouch=elapsed;
+        if(surface==='top')guardTopEvents++;else guardSideEvents++;
+        message(surface==='top'?'GUARD TOP LOCK!':'MAGNET LOCK!');
+      }
+    }
     railContactEvents++;
     railRecentSection=id;railLastContactAt=elapsed;
     railContactSpeedStart=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
@@ -239,6 +270,31 @@ if(railMode){
   // emits the OTHER ENTITY directly. Never dereference `event.other` here.
   ball.collision!.on('collisionend',(other:Entity)=>{
     if(readContact(other)!==null)touchingRails.delete(other.name);
+  });
+}
+if(grindMode){
+  ball.collision!.on('collisionstart',(event:{other:Entity})=>{
+    if(phase!=='running')return;
+    const other=event.other;
+    if(other.name.startsWith('grind-side-')){
+      grindSideContactEvents++;return;
+    }
+    if(!other.name.startsWith('grind-top-'))return;
+    const p=ball.getPosition();
+    const progress=SPEED_START_Z-p.z;
+    const center=centerAt(progress);
+    if(!grindTopQualifies(p.y,p.x,center,true))return;
+    touchingGrindTop.add(other.name);
+    grindTopContactEvents++;
+    grindLastTopTouch=elapsed;
+    if(grindLock!=='top-grind'){
+      grindLock='top-grind';
+      grindEntries++;
+      message('TOP GRIND!');
+    }
+  });
+  ball.collision!.on('collisionend',(other:Entity)=>{
+    if(other.name.startsWith('grind-top-'))touchingGrindTop.delete(other.name);
   });
 }
 if(longJumpMode){
@@ -285,7 +341,10 @@ const checkpoint=()=>{ // a fall respawns without changing the authoritative phy
   targetX=0;
   swipeStacks=0;boostSurge=0;previousProgress=0;triggeredBoosts.clear();
   launched=false;landed=false;jumpAirtime=0;maxJumpHeight=0;
-  touchingRails.clear();magneticRails?.activeSection(null);
+  touchingRails.clear();touchingGrindTop.clear();
+  magneticRails?.activeSection(null);
+  guardLock='free';guardSide=null;guardCoolUntil=0;
+  grindLock='off';grindLastTopTouch=-100;
   railLastContactAt=-100;railRecentSection=null;
   gems.forEach(g=>{g.collected=false;g.node.enabled=true;});
   pickups=0;
@@ -314,6 +373,15 @@ function restart(){
   railLastContactAt=-100;railRecentSection=null;touchingRails.clear();
   legacySafetyForceInRailSection=0;railEntrySteeringFrames=0;
   magneticRails?.activeSection(null);
+  guardLock='free';guardSide=null;guardCoolUntil=0;
+  guardLockEvents=0;guardTopEvents=0;guardSideEvents=0;
+  guardReleaseEvents=0;guardReleaseByOppositeSwipe=0;
+  guardLockSeconds=0;guardLockPeakSpeed=0;guardHoldFrames=0;
+  guardLastTouch=-100;
+  grindLock='off';grindEntries=0;grindExits=0;grindSeconds=0;
+  grindBoostFrames=0;grindTopContactEvents=0;
+  grindSideContactEvents=0;grindFalseSideRewards=0;grindPeakSpeed=0;
+  grindLastTopTouch=-100;touchingGrindTop.clear();
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
   body.angularVelocity=new Vec3(0,0,0);
@@ -326,22 +394,41 @@ if(!speedMode)ui.start.textContent='START ROLL →';
 ui.status.textContent='AMMO PHYSICS READY';
 if(speedMode){
   ui.title.innerHTML='SKY <em>SPEED.</em>';
-  ui.description.textContent=railMode?
+  ui.description.textContent=grindMode?
+    'Green GUARDS boost from their side or top: strong magnetic hold until you swipe away. The separate narrow GRIND track only carries you on its TOP.':
+    railMode?
     'Ride the long green curve rails. Lean into them to stick, spark and accelerate, then launch over the sky gap. Flick UP for extra speed.':
     longJumpMode?
     'Flick UP to build speed. Hit the ramp, fly across the open sky and catch the wide magnetic landing platform.':
     'Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
   document.querySelector('.hint')!.textContent=railMode?
     '↑ FLICK · ↔ LEAN INTO GREEN CURVE RAILS':'↑ FLICK TO ACCELERATE · ↔ STEER';
-  ui.start.textContent=railMode?'START RAIL RUN →':
+  ui.start.textContent=grindMode?'START GUARD + GRIND →':
+    railMode?'START RAIL RUN →':
     longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
 }
 ui.start.addEventListener('click',e=>{e.preventDefault();restart();});
+const releaseGuard=()=>{
+  if(!grindMode||guardSide===null||
+    (guardLock!=='locked-side'&&guardLock!=='locked-top'))return;
+  guardReleaseEvents++;
+  guardReleaseByOppositeSwipe++;
+  guardLock='release-cooldown';
+  guardCoolUntil=elapsed+RELEASE_COOLDOWN;
+  const away=-guardSide;
+  // Exit impulse has real Bullet momentum. Magnetic pull is disabled for the
+  // entire cooldown, so it cannot immediately recapture the player.
+  body.applyImpulse(new Vec3(away*1.4*5.5,0,0));
+  touchingRails.clear();
+  message('RELEASE!');
+};
 const steer=(clientX:number)=>{
   // In rail mode the legal outer lane must reach the Bullet wall at x≈3.8m.
   // Legacy modes keep their original ±3.3m control envelope untouched.
   const max=railMode?4.18:3.3;
   targetX=clamp(((clientX/window.innerWidth)-.5)*(railMode?8.4:7),-max,max);
+  if(grindMode&&guardSide!==null&&oppositeToGuard(targetX,guardSide))
+    releaseGuard();
 };
 const flickForward=()=>{
   if(!speedMode||phase!=='running')return;
@@ -377,6 +464,8 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Space'||e.code==='Enter'){e.preventDefault();restart();}
   if(e.code==='ArrowLeft'||e.code==='KeyA')targetX=clamp(targetX-.9,-3.3,3.3);
   if(e.code==='ArrowRight'||e.code==='KeyD')targetX=clamp(targetX+.9,-3.3,3.3);
+  if(grindMode&&guardSide!==null&&oppositeToGuard(targetX,guardSide))
+    releaseGuard();
   if(e.code==='ArrowUp'||e.code==='KeyW')flickForward();
 });
 function onResize(){
@@ -426,7 +515,36 @@ app.on('update',(dt:number)=>{
         magnetActivations++;
       }
       if(railSection&&Math.abs(targetX)>3.3)railEntrySteeringFrames++;
-      if(railField&&magneticRails){
+      if(grindMode&&guardLock==='release-cooldown'&&elapsed>=guardCoolUntil){
+        guardLock='free';guardSide=null;
+      }
+      if(grindMode&&guardLock.startsWith('locked')&&
+        (railSection===null||elapsed-guardLastTouch>.22)){
+        guardLock='free';guardSide=null;
+      }
+      const guardHeld=grindMode&&
+        (guardLock==='locked-side'||guardLock==='locked-top')&&
+        guardSide!==null&&elapsed>=guardCoolUntil&&railSection!==null;
+      if(grindMode&&guardHeld){
+        const section=railSection!;
+        const outward=section.side*(-t.z);
+        const railX=centerAt(progress)+outward*4.62;
+        const intendedX=guardLock==='locked-top'?railX:
+          railX-outward*(PLAYER_RADIUS+.19);
+        const hold=relativeRailSpring(p.x,v.x,intendedX,340,25,GUARD_HOLD_FORCE);
+        const topTarget=GUARD_TOP_Y+PLAYER_RADIUS;
+        const vertical=guardLock==='locked-top'?
+          relativeRailSpring(p.y,v.y,topTarget,290,30,200):
+          -GUARD_DOWN_FORCE;
+        body.applyForce(new Vec3(hold,vertical,0));
+        body.applyForce(new Vec3(t.x*GUARD_SPEED_FORCE,0,t.z*GUARD_SPEED_FORCE));
+        guardHoldFrames++;guardLockSeconds+=tick;
+        guardLockPeakSpeed=Math.max(guardLockPeakSpeed,Math.hypot(v.x,v.z));
+      }
+      // The old approach field remains a weaker preview, but never competes
+      // with locked guidance or the intentionally released cooldown.
+      if(railField&&magneticRails&&
+        (!grindMode||(!guardHeld&&elapsed>=guardCoolUntil))){
         railApproachFrames++;
         // A finite spring towards the solid rail and a small downforce make
         // high-speed leaning safer. Input forces can still overcome these.
@@ -439,7 +557,7 @@ app.on('update',(dt:number)=>{
         // geometric proximity by itself NEVER grants a rail-speed bonus.
         const touching=[...touchingRails].some(n=>
           n.startsWith('real-magnetic-rail-'+railField.section.id+'-'));
-        if(touching){
+        if(touching&&(!grindMode||elapsed>=guardCoolUntil)){
           const capRoom=Math.max(0,activeSpeedCap-forward);
           const force=RAIL_CONTACT_FORCE*Math.min(1,capRoom/4);
           if(force>0){
@@ -452,6 +570,36 @@ app.on('update',(dt:number)=>{
           railPeakContactGain=Math.max(railPeakContactGain,
             Math.hypot(v.x,v.z)-railContactSpeedStart);
         }
+      }
+      if(grindMode){
+        // Strict top-only: a side wall has its own collider and NEVER grants
+        // grind mode. A real top collision + position validates the surface.
+        const onTop=touchingGrindTop.size>0&&
+          grindTopQualifies(p.y,p.x,centerAt(progress),true)&&
+          progress>=GRIND_START-1&&progress<=GRIND_END+1;
+        if(onTop){
+          grindLastTopTouch=elapsed;
+          if(grindLock!=='top-grind'){
+            grindLock='top-grind';grindEntries++;
+          }
+          const guide=relativeRailSpring(p.x,v.x,centerAt(progress),
+            300,20,GRIND_CENTER_FORCE);
+          const down=relativeRailSpring(p.y,v.y,GRIND_TOP_Y+PLAYER_RADIUS,
+            180,20,130);
+          body.applyForce(new Vec3(guide,down,0));
+          const room=Math.max(0,activeSpeedCap-forward);
+          if(room>.1){
+            const force=GRIND_SPEED_FORCE*Math.min(1,room/5);
+            body.applyForce(new Vec3(t.x*force,0,t.z*force));
+            grindBoostFrames++;
+          }
+          grindSeconds+=tick;
+          grindPeakSpeed=Math.max(grindPeakSpeed,Math.hypot(v.x,v.z));
+        }else if(grindLock==='top-grind'&&elapsed-grindLastTopTouch>.18){
+          grindLock='exit-cooldown';grindExits++;
+        }
+        if(grindLock==='exit-cooldown'&&elapsed-grindLastTopTouch>.7)
+          grindLock='off';
       }
       const crossed=boostCrossed(previousProgress,progress,triggeredBoosts);
       const extra=longJumpMode?nextLongBoost(previousProgress,progress,triggeredBoosts):null;
@@ -586,6 +734,14 @@ Object.assign(window,{__W9_BALL_TEST__:{
       magneticRailSections:magneticRails?.sections.length??0,
       magneticRailSegments:magneticRails?.segments??0,
       railContactEvents,railBoostFrames,railAssistSeconds,
+      grindMode,guardLock,guardSide,guardLockEvents,guardTopEvents,
+      guardSideEvents,guardReleaseEvents,guardReleaseByOppositeSwipe,
+      guardLockSeconds,guardLockPeakSpeed,guardHoldFrames,guardCoolUntil,
+      grindLock,grindEntries,grindExits,grindSeconds,
+      grindBoostFrames,grindTopContactEvents,grindSideContactEvents,
+      grindFalseSideRewards,grindPeakSpeed,
+      grindTrackTopSegments:grindTrack?.topCount??0,
+      grindTrackSideColliders:grindTrack?.sideCount??0,
       legacySafetyForceInRailSection,railEntrySteeringFrames,
       railPrioritySectionId:railMode?railSectionAt(SPEED_START_Z-p.z)?.id??null:null,
       railApproachFrames,railDownForceEvents,
