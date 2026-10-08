@@ -86,7 +86,7 @@ let guardHoldFrames=0,guardLastTouch=-100;
 let grindLock:GrindLock='off',grindEntries=0,grindExits=0;
 let grindSeconds=0,grindBoostFrames=0,grindTopContactEvents=0;
 let grindSideContactEvents=0,grindFalseSideRewards=0,grindPeakSpeed=0;
-let grindLastTopTouch=-100;
+let grindLastTopTouch=-100,grindBridgeFrames=0,grindSecretFrames=0;
 const touchingGrindTop=new Set<string>();
 
 function message(text:string) {
@@ -377,7 +377,8 @@ function restart(){
   grindLock='off';grindEntries=0;grindExits=0;grindSeconds=0;
   grindBoostFrames=0;grindTopContactEvents=0;
   grindSideContactEvents=0;grindFalseSideRewards=0;grindPeakSpeed=0;
-  grindLastTopTouch=-100;touchingGrindTop.clear();
+  grindLastTopTouch=-100;grindBridgeFrames=0;grindSecretFrames=0;
+  touchingGrindTop.clear();
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
   body.angularVelocity=new Vec3(0,0,0);
@@ -595,6 +596,8 @@ app.on('update',(dt:number)=>{
             body.applyForce(new Vec3(t.x*force,0,t.z*force));
             grindBoostFrames++;
           }
+          if(route==='bridge')grindBridgeFrames++;
+          if(route==='secret')grindSecretFrames++;
           grindSeconds+=tick;
           grindPeakSpeed=Math.max(grindPeakSpeed,Math.hypot(v.x,v.z));
         }else if(grindLock==='top-grind'&&elapsed-grindLastTopTouch>.18){
@@ -740,6 +743,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
       guardSideEvents,guardReleaseEvents,guardReleaseByOppositeSwipe,
       guardLockSeconds,guardLockPeakSpeed,guardHoldFrames,guardCoolUntil,
       grindLock,grindEntries,grindExits,grindSeconds,
+      grindBridgeFrames,grindSecretFrames,
       grindBoostFrames,grindTopContactEvents,grindSideContactEvents,
       grindFalseSideRewards,grindPeakSpeed,
       grindTrackTopSegments:grindTrack?.topCount??0,
