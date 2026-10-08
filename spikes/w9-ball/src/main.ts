@@ -13,7 +13,7 @@ import { makeSpeedCourse, trackCenter, trackTangent, inSafetyArc, boostCrossed,
 import { makeLongJumpCourse, longCenter, longTangent, inLongSafetyArc,
   nextLongBoost, LONG_SPEED_CAP, LONG_FINISH_DISTANCE,
   JUMP_LAUNCH_PROGRESS, JUMP_TARGET_Y_VELOCITY } from './LongJumpCourse';
-import { buildCurveRails, railFieldAt, RAIL_CONTACT_FORCE, RAIL_PULL_MAX,
+import { buildCurveRails, railFieldAt, railSectionAt, RAIL_CONTACT_FORCE, RAIL_PULL_MAX,
   RAIL_ADHESION_MAX } from './MagneticRails';
 import './style.css';
 
@@ -67,6 +67,7 @@ let railContactEvents=0,railBoostFrames=0,railAssistSeconds=0;
 let railApproachFrames=0,railMaxSpeed=0,railContactSpeedStart=0;
 let railBoostSpeedGain=0,railPeakContactGain=0,railDownForceEvents=0;
 let railLastContactAt=-100,railRecentSection:number|null=null;
+let legacySafetyForceInRailSection=0,railEntrySteeringFrames=0;
 const touchingRails=new Set<string>();
 
 function message(text:string) {
@@ -204,8 +205,10 @@ for(let i=0;i<(speedMode?9:5);i++){
   shape('cloud-'+i,'sphere',[side*(speedMode?17:8),10+i*.4,-10-i*21],
     [speedMode?8:5,2.2,speedMode?5:3.3],surfaces.cloud);
 }
-const speedWorld=speedMode?makeSpeedCourse(shape,surfaces):null;
-const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces):null;
+const suppressOldEdge=(progress:number,side:number)=>
+  railMode&&railSectionAt(progress)?.side===side;
+const speedWorld=speedMode?makeSpeedCourse(shape,surfaces,suppressOldEdge):null;
+const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces,suppressOldEdge):null;
 const magneticRails=railMode?buildCurveRails(shape):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
@@ -309,6 +312,7 @@ function restart(){
   railApproachFrames=0;railMaxSpeed=0;railContactSpeedStart=0;
   railBoostSpeedGain=0;railPeakContactGain=0;railDownForceEvents=0;
   railLastContactAt=-100;railRecentSection=null;touchingRails.clear();
+  legacySafetyForceInRailSection=0;railEntrySteeringFrames=0;
   magneticRails?.activeSection(null);
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
@@ -327,12 +331,18 @@ if(speedMode){
     longJumpMode?
     'Flick UP to build speed. Hit the ramp, fly across the open sky and catch the wide magnetic landing platform.':
     'Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
-  document.querySelector('.hint')!.textContent='↑ FLICK TO ACCELERATE · ↔ STEER';
+  document.querySelector('.hint')!.textContent=railMode?
+    '↑ FLICK · ↔ LEAN INTO GREEN CURVE RAILS':'↑ FLICK TO ACCELERATE · ↔ STEER';
   ui.start.textContent=railMode?'START RAIL RUN →':
     longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
 }
 ui.start.addEventListener('click',e=>{e.preventDefault();restart();});
-const steer=(clientX:number)=>{targetX=clamp(((clientX/window.innerWidth)-.5)*7,-3.3,3.3);};
+const steer=(clientX:number)=>{
+  // In rail mode the legal outer lane must reach the Bullet wall at x≈3.8m.
+  // Legacy modes keep their original ±3.3m control envelope untouched.
+  const max=railMode?4.18:3.3;
+  targetX=clamp(((clientX/window.innerWidth)-.5)*(railMode?8.4:7),-max,max);
+};
 const flickForward=()=>{
   if(!speedMode||phase!=='running')return;
   const p=ball.getPosition(),v=body.linearVelocity;
@@ -399,10 +409,15 @@ app.on('update',(dt:number)=>{
         t.z*drive+t.x*sideForce));
       body.applyTorque(new Vec3(-7*t.z,0,7*t.x));
       const edgeOffset=p.x-centerAt(progress);
+      const railSection=railMode?railSectionAt(progress):null;
       const railField=railMode?railFieldAt(progress,p.x,p.y):null;
-      // The original inward safety arc would oppose the new attraction
-      // towards the physical rail. Preserve it everywhere else.
-      if(!railField&&(inSafetyArc(progress)||longJumpMode&&inLongSafetyArc(progress))&&
+      // Rail priority is SECTION-based, not proximity-based: the previous
+      // fallback `!railField` re-enabled the old inward push near the edge,
+      // precisely when the player tried to lean into the green rail.
+      // Keep classic safety elsewhere and in untouched ?mode=jump/speed.
+      const legacySafetyAllowed=railSection===null;
+      if(legacySafetyAllowed&&
+        (inSafetyArc(progress)||longJumpMode&&inLongSafetyArc(progress))&&
         Math.abs(edgeOffset)>2.8){
         // Limited physical spring assist (not forced teleport or autopilot).
         const inward=-Math.sign(edgeOffset)*Math.min(260,
@@ -410,6 +425,7 @@ app.on('update',(dt:number)=>{
         body.applyForce(new Vec3(inward,0,0));
         magnetActivations++;
       }
+      if(railSection&&Math.abs(targetX)>3.3)railEntrySteeringFrames++;
       if(railField&&magneticRails){
         railApproachFrames++;
         // A finite spring towards the solid rail and a small downforce make
@@ -568,6 +584,8 @@ Object.assign(window,{__W9_BALL_TEST__:{
       magneticRailSections:magneticRails?.sections.length??0,
       magneticRailSegments:magneticRails?.segments??0,
       railContactEvents,railBoostFrames,railAssistSeconds,
+      legacySafetyForceInRailSection,railEntrySteeringFrames,
+      railPrioritySectionId:railMode?railSectionAt(SPEED_START_Z-p.z)?.id??null:null,
       railApproachFrames,railDownForceEvents,
       railMaxSpeed,railBoostSpeedGain,railPeakContactGain,
       railContactNames:[...touchingRails],
