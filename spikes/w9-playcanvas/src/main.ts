@@ -155,6 +155,9 @@ for(const el of gateLabels){
 }
 let target=0.5, accumulator=0, elapsed=0, lastEventId:string|null=null, showUntil=0;
 let previousMass = model.snapshot().mass;
+let previousPickups = model.snapshot().pickups;
+let previousHits = model.snapshot().hits;
+let previousGates = model.snapshot().gatesPassed;
 let visualFrames=0;
 const showFeedback=(value:string, kind: 'orb' | 'gate' | 'hazard')=>{
   hud.feedback.textContent=value;
@@ -199,17 +202,25 @@ const present=()=>{
   hud.progress.style.width=(s.progress*100).toFixed(1)+'%';
   if(lastEventId!==s.lastEventId&&s.lastEventId){
     const e=level.events.find(x=>x.id===s.lastEventId);
-    if(e){
+    // Frozen model's lastEventId advances even on a MISSED orb/hazard.
+    // Never celebrate a non-collision: react only to confirmed counters.
+    const landed = e?.kind === 'gate' ? s.gatesPassed > previousGates
+      : e?.kind === 'orb' ? s.pickups > previousPickups
+      : e?.kind === 'hazard' ? s.hits > previousHits : false;
+    if(e && landed){
       const delta = s.mass - previousMass;
       const message = e.kind === 'hazard' ? 'OUCH!' :
         delta > 0 ? '+' + delta + ' MASS!' :
-        delta < 0 ? String(delta) + ' MASS' : 'SAFE!';
+        delta < 0 ? String(delta) + ' MASS' : 'NO GAIN';
       showFeedback(message, e.kind);
       softWorld.trigger(e.kind, (s.playerNormX-.5)*6.6);
     }
     lastEventId=s.lastEventId;
   }
   previousMass = s.mass;
+  previousPickups = s.pickups;
+  previousHits = s.hits;
+  previousGates = s.gatesPassed;
   if(showUntil<elapsed)hud.feedback.classList.remove('show');
   player.setPosition((s.playerNormX-.5)*6.6,0,2.5);
   // W9.3: exclusively visual toy motion. Mass, steering and timing remain
