@@ -18,7 +18,8 @@ void main() {
   // World-to-camera pitch: point the camera DOWN at the track, not up.
   // The previous +dz/-dy signs pushed the entire course below the viewport.
   float ey=dy*0.958-dz*0.287, ez=dy*0.287+dz*0.958;
-  float w=max(0.15,-ez);
+  // Let the GPU clip geometry behind the camera instead of clamping it into view.
+  float w=-ez;
   gl_Position=vec4(q.x*1.4/max(0.4,aspect),ey*1.4,w*0.996-0.16,w);
 }`;
 const fragment = `#version 300 es
@@ -125,10 +126,10 @@ export class MassRunner3DRenderer {
     this.frame++;
     gl.viewport(0,0,w,h);gl.clearColor(0.06,0.09,0.2,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     gl.useProgram(p);gl.uniform1f(gl.getUniformLocation(p,'aspect'),w/h);
-    this.draw(this.box,[0,-0.4,-28],[72,0.2,105],[0.1,0.17,0.29]);
-    this.draw(this.box,[0,-0.2,-29],[8.4,0.13,92],[0.24,0.26,0.4]);
-    this.draw(this.box,[-4.2,0.07,-29],[0.15,0.5,92],[0.1,0.9,0.92]);
-    this.draw(this.box,[4.2,0.07,-29],[0.15,0.5,92],[0.9,0.32,0.93]);
+    this.draw(this.box,[0,-0.4,-38],[72,0.2,84],[0.1,0.17,0.29]);
+    this.draw(this.box,[0,-0.2,-38],[8.4,0.13,84],[0.24,0.26,0.4]);
+    this.draw(this.box,[-4.2,0.07,-38],[0.15,0.5,84],[0.1,0.9,0.92]);
+    this.draw(this.box,[4.2,0.07,-38],[0.15,0.5,84],[0.9,0.32,0.93]);
     for(let i=0;i<22;i++){
       const z=3-((i*3.6+state.distance*0.7)%76);
       for(const x of [-1.4,1.4])this.draw(this.box,[x,-0.11,z],[0.05,0.04,1.2],[0.57,0.69,0.82]);
