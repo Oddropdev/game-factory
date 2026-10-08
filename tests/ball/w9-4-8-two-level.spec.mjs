@@ -81,7 +81,6 @@ test('W9.4-8 old W9.4-7 transit mode retains 620m finish and no Sunset world',as
 test('W9.4-8 late preload holds at tube exit safely until second world is ready',async({page})=>{
   test.setTimeout(100_000);
   await page.route('**/levels/second-sky.json',async route=>{
-    await new Promise(resolve=>process.nextTick(resolve));
     await route.continue();
   });
   await page.goto('/ball/?mode=twolevel&preload=off');
