@@ -101,3 +101,19 @@ test('W9.3-3 never celebrates a missed pickup, but reacts to a real hit', async 
   expect(await page.locator('#feedback').textContent()).toBe('OUCH!');
   await page.screenshot({path:path.join(out,'portrait-confirmed-hit-juice.png')});
 });
+
+test('W9.3-3 a clamped zero-gain gate never emits celebratory confetti',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.goto('/3d/');
+  await expect.poll(async()=>(await read(page))?.loadedCC0Models).toBe(5);
+  await page.locator('#start').click();
+  // Default centre trajectory hits hazard then takes -3 from mass floor 1.
+  await expect.poll(async()=>(await read(page))?.gatesPassed,{timeout:8000})
+    .toBeGreaterThanOrEqual(1);
+  const result=await read(page);
+  expect(result.mass).toBe(1);
+  expect(result.juiceActive).toBe(0);
+  await expect(page.locator('#feedback')).toHaveText('NO GAIN');
+  await expect(page.locator('#feedback')).toHaveAttribute('data-kind','hazard');
+  await page.screenshot({path:path.join(out,'portrait-no-false-gate-reward.png')});
+});
