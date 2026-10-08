@@ -64,6 +64,16 @@ Turn the first functional release candidate into a sensory/product-quality verti
 
 W8 presentation work remains game-local unless a later real game independently proves an abstraction reusable.
 
+### W9 — First Real Human Playtest / Publishing Test
+
+The W8 automated PASS did not prove first-time player comprehension or subjective reward.
+
+- W9.1 — Playtest Release Gate: stand-alone mass-runner browser package, safe manual publishing path, zero backend or telemetry, actual browser tests.
+- W9.2 — Human Feel Test: owner hands-on phone+desktop trial and 5–8 unaided first-time players; collect direct copyable feedback, not automated metrics.
+- W9.3 — Go / Iterate / Stop: decide from observed start comprehension, control feel, audiovisual reward and willingness to replay; patch only top recurring issues.
+
+Human action is intentionally required for platform publishing authorization and for subjective feel. Do not widen exposure before physical-device QA.
+
 ## North-star engineering metric
 
 **New Game Core Churn:** a new game should add game-specific files/configuration and require minimal changes to shared `core/`.

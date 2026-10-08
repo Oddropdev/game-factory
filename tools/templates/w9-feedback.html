@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#101626">
+  <title>Mass Runner — 60-second playtest feedback</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #101626; color: #f3f6fd; }
+    main { max-width: 590px; margin: 0 auto; padding: 32px 20px 70px; }
+    h1 { font-size: clamp(27px, 6vw, 36px); letter-spacing: -.04em; margin: 8px 0; }
+    p { color: #b7c3d8; line-height: 1.55; }
+    label { display: block; font-weight: 650; margin: 24px 0 8px; }
+    select, textarea { width: 100%; color: #fff; background: #1e2b42; border: 1px solid #556782;
+      border-radius: 11px; padding: 13px; font-size: 16px; font-family: inherit; }
+    textarea { min-height: 96px; resize: vertical; }
+    button { cursor: pointer; background: #b9f9ba; color: #062513; border: 0; border-radius: 12px;
+      padding: 14px 20px; font-weight: 750; font-size: 16px; margin-top: 22px; }
+    button:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+      outline: 3px solid #f9d979; outline-offset: 3px;
+    }
+    .kicker { color: #a2eec3; font-size: 13px; font-weight: 800; letter-spacing: .12em; }
+    .help { font-size: 14px; color: #a9b8cc; }
+    .secondary { display: inline-block; margin-left: 12px; color: #c8e6ff; }
+    #result { display: none; min-height: 160px; margin-top: 12px; }
+    #status { min-height: 24px; margin-top: 12px; color: #c5f4d1; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="kicker">W9 · EARLY PLAYTEST</div>
+    <h1>How did Mass Runner feel?</h1>
+    <p>This takes about 60 seconds. There is no account, analytics, or automatic upload.
+      Your answers stay on this page until you copy and send them to the person who invited you.</p>
+    <form id="feedback" autocomplete="off">
+      <label for="device">1. What did you play on?</label>
+      <select id="device" required>
+        <option value="">Choose a device</option>
+        <option>Android phone</option>
+        <option>iPhone</option>
+        <option>Desktop / laptop</option>
+        <option>Tablet</option>
+        <option>Other</option>
+      </select>
+
+      <label for="understood">2. Did you understand how to play without instructions?</label>
+      <select id="understood" required>
+        <option value="">Choose one</option>
+        <option>Yes, immediately</option>
+        <option>Eventually</option>
+        <option>No</option>
+      </select>
+
+      <label for="level">3. How far did you get?</label>
+      <select id="level" required>
+        <option value="">Choose one</option>
+        <option>Did not start</option>
+        <option>Started Level 1</option>
+        <option>Cleared Level 1</option>
+        <option>Cleared Levels 2–4</option>
+        <option>Finished all 5 levels</option>
+      </select>
+
+      <label for="steering">4. How good did steering feel? (1–5)</label>
+      <select id="steering" required>
+        <option value="">Choose 1–5</option>
+        <option value="1">1 — Frustrating</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5 — Excellent</option>
+      </select>
+
+      <label for="fun">5. How fun was the game? (1–5)</label>
+      <select id="fun" required>
+        <option value="">Choose 1–5</option>
+        <option value="1">1 — Not fun</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5 — Very fun</option>
+      </select>
+
+      <label for="sound">6. How did the sound feel?</label>
+      <select id="sound" required>
+        <option value="">Choose one</option>
+        <option>Good / satisfying</option>
+        <option>Okay / forgettable</option>
+        <option>Annoying / harsh</option>
+        <option>Could not hear / played muted</option>
+      </select>
+
+      <label for="issue">7. What was the most confusing or disappointing moment?</label>
+      <textarea id="issue" maxlength="600" placeholder="One sentence is enough."></textarea>
+      <p class="help">Please avoid adding names, emails, or other personal information.</p>
+
+      <button type="submit">Generate feedback to copy</button>
+      <a class="secondary" href="./">Play again</a>
+      <div id="status" role="status" aria-live="polite"></div>
+      <textarea id="result" readonly aria-label="Feedback to copy"></textarea>
+    </form>
+  </main>
+  <script>
+    const ids = ['device', 'understood', 'level', 'steering', 'fun', 'sound', 'issue'];
+    document.getElementById('feedback').addEventListener('submit', async event => {
+      event.preventDefault();
+      const parts = ids.map(id => id + ': ' + document.getElementById(id).value.trim());
+      const summary = ['MASS RUNNER W9 PLAYTEST FEEDBACK', ...parts].join('\n');
+      const output = document.getElementById('result');
+      output.value = summary;
+      output.style.display = 'block';
+      output.focus();
+      output.select();
+      const status = document.getElementById('status');
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable');
+        await navigator.clipboard.writeText(summary);
+        status.textContent = 'Copied. Paste this into your chat with the person who invited you.';
+      } catch {
+        status.textContent = 'Feedback prepared below. Select and copy it, then send it to the person who invited you.';
+      }
+    });
+  </script>
+</body>
+</html>

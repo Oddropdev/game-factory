@@ -1,0 +1,64 @@
+name: W9 Publish Playtest to GitHub Pages (manual)
+
+# No public release is initiated by commits or pull requests.
+# After W9.1 is merged: repository Settings > Pages > Source: GitHub Actions.
+# Then a repository maintainer starts this workflow manually from main.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify original accepted gameplay and package
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+          npm run build
+          npm run check:artifact
+          npm run package:distributions
+          npm run check:w6-distribution
+          npm run package:playtest
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke actual export before publishing
+        run: npm run test:w9-playtest
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: playtest-dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
