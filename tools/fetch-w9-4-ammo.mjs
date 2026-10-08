@@ -8,8 +8,10 @@ const origin = 'https://developer.playcanvas.com/assets/modules/ammo/';
 const destination = path.resolve('spikes/w9-ball/public/ammo');
 fs.mkdirSync(destination, { recursive: true });
 const expected = [
-  {name:'ammo.wasm.js',kind:'js',min:10_000,max:2_000_000},
-  {name:'ammo.wasm.wasm',kind:'wasm',min:100_000,max:5_000_000}
+  {name:'ammo.wasm.js',kind:'js',min:10_000,max:2_000_000,
+   sha256:'8481c5250507d3f2c0cecff7cc55a34727f52f96590a2304556a43ca4cf4e0b3'},
+  {name:'ammo.wasm.wasm',kind:'wasm',min:100_000,max:5_000_000,
+   sha256:'de36b300b25d244a79ae56ef0e7fee5efe2a3281f346a134945eef0b2fbaa5d8'}
 ];
 const records=[];
 for(const item of expected) {
@@ -29,7 +31,10 @@ for(const item of expected) {
     throw new Error('Physics wasm signature mismatch');
   if(item.kind==='js' && !bytes.toString('utf8').includes('Ammo'))
     throw new Error('Physics glue is not an Ammo script');
+  const digest=crypto.createHash('sha256').update(bytes).digest('hex');
+  if(digest!==item.sha256)
+    throw new Error('Physics runtime SHA256 pin mismatch: '+item.name+' '+digest);
   fs.writeFileSync(file,bytes);
-  records.push({name:item.name,bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex')});
+  records.push({name:item.name,bytes:bytes.length,sha256:digest});
 }
 console.log(JSON.stringify({marker:'W9_4_1_SELF_HOSTED_AMMO_PASS',origin,files:records},null,2));
