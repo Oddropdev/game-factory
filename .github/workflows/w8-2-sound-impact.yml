@@ -35,8 +35,8 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install pinned dependencies (lockfile not tracked)
+        run: npm install --no-audit --no-fund
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
