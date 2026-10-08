@@ -103,7 +103,8 @@ camera.setPosition(0,8.4,21);
 camera.lookAt(0,.8,-10);
 app.root.addChild(camera);
 const light=new Entity('sun');
-light.addComponent('light',{type:'directional',intensity:1.65,castShadows:true,shadowResolution:768});
+light.addComponent('light',{type:'directional',intensity:1.65,castShadows:true,
+  shadowResolution:768,shadowBias:.12,normalOffsetBias:.07});
 light.setEulerAngles(52,-30,0);
 app.root.addChild(light);
 app.scene.ambientLight=new Color(.63,.72,.84);
