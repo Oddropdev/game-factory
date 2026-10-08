@@ -33,10 +33,13 @@ test('W8.3 five-level polished session is complete and capturable', async ({ pag
 
   for (let level = 0; level < 5; level += 1) {
     const before = await state(page);
-    expect(before.levelIndex).toBe(level);
+    // The accepted model advances its index when the player taps on CLEAR,
+    // not when the previous level reaches the finish.
+    expect(before.levelIndex).toBe(level === 0 ? 0 : level - 1);
     expect(before.phase).toBe(level === 0 ? 'ready' : 'level-clear');
     await tapToAdvance(page);
     await expect.poll(async () => (await state(page)).phase).toBe('running');
+    await expect.poll(async () => (await state(page)).levelIndex).toBe(level);
 
     if (level === 2) {
       await page.setViewportSize({ width: 844, height: 390 });
