@@ -256,11 +256,11 @@ const present=()=>{
       }
     }
   }
-  if(s.phase==='level-clear'||s.phase==='level-fail'){
+  if(s.phase==='complete'||s.phase==='level-clear'||s.phase==='level-fail'){
     hud.dialog.classList.remove('hidden');
-    hud.title.innerHTML=s.phase==='level-clear'?'LEVEL <em>CLEAR!</em>':'NOT <em>ENOUGH.</em>';
-    hud.description.textContent=s.phase==='level-clear'?'The first 3D hero slice is complete. Play again to compare the feel.':'Pick better gates and collect more coins to reach your target.';
-    hud.button.textContent=s.phase==='level-clear'?'PLAY AGAIN →':'RETRY RUN →';
+    hud.title.innerHTML=s.phase==='complete'||s.phase==='level-clear'?'LEVEL <em>CLEAR!</em>':'NOT <em>ENOUGH.</em>';
+    hud.description.textContent=s.phase==='complete'||s.phase==='level-clear'?'The first 3D hero slice is complete. Play again to compare the feel.':'Pick better gates and collect more coins to reach your target.';
+    hud.button.textContent=s.phase==='complete'||s.phase==='level-clear'?'PLAY AGAIN →':'RETRY RUN →';
   }
   if(s.phase==='running')hud.dialog.classList.add('hidden');
 };
