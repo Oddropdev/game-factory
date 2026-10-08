@@ -1,0 +1,60 @@
+name: W9.3-1 Rounded Avatar + Soft Materials
+
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-playcanvas/**"
+      - "tests/playcanvas/w9-3-soft-avatar.spec.mjs"
+      - "docs/evidence/W9.3*"
+      - "docs/playtest/W9.3*"
+      - ".github/workflows/w9-3-soft-avatar.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-3-1-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify frozen Factory and level model
+        run: npm run verify
+      - name: Verify accepted audio + complete runner regressions
+        run: npm run test:w8-feel
+      - name: Verify original public W9 playtest export
+        run: |
+          npm run package:playtest
+          npm run test:w9-playtest
+      - name: Build actual standalone PlayCanvas hero with pinned CC0 models
+        run: npm run build:w9-2d
+      - name: Verify previously accepted PlayCanvas functionality
+        run: npm run test:w9-2d
+      - name: Capture W9.3 smooth avatar at three actual mobile viewports
+        run: npx playwright test tests/playcanvas/w9-3-soft-avatar.spec.mjs --config=playwright.w9-2d.config.mjs
+      - name: Reject gameplay/factory changes and record bundle budget
+        env:
+          W9_3_BASE_SHA: 7571b6fea99e5a329057ea0c30c52c1a3930fa1c
+        run: node tools/check-w9-3-1.mjs
+      - name: Attach before/after candidates and playable isolated 3D
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-3-1-rounded-avatar-evidence
+          path: |
+            playtest-dist/3d/
+            evidence/w9-3/
+            test-results/
+          if-no-files-found: warn
