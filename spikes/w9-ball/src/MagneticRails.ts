@@ -18,6 +18,12 @@ export const RAIL_APPROACH_END=4.65;
 export const RAIL_CONTACT_FORCE=155; // N, forward only while Bullet contact exists
 export const RAIL_PULL_MAX=100; // N, limited, so steering can overpower it
 export const RAIL_ADHESION_MAX=64; // N down, only inside magnetic field
+// Runtime priority belongs to the WHOLE rail section. Checking just the
+// magnetic field caused classic inward safety to re-engage at its boundary.
+export function railSectionAt(progress:number):RailSection|null{
+  return LONG_CURVE_RAILS.find(section=>
+    progress>=section.start&&progress<=section.end)??null;
+}
 
 type Point=[number,number,number];
 type Shape=(name:string,type:'box'|'sphere'|'cylinder',position:Point,
@@ -48,7 +54,7 @@ export type RailField={
   normalX:number;
 };
 export function railFieldAt(progress:number,x:number,y:number):RailField|null{
-  const section=LONG_CURVE_RAILS.find(s=>progress>=s.start&&progress<=s.end);
+  const section=railSectionAt(progress);
   if(!section||y<-.6||y>2.3)return null;
   const normalX=section.side*(-longTangent(progress).z);
   const railX=longCenter(progress)+normalX*RAIL_EDGE_OFFSET;

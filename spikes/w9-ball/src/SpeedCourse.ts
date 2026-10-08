@@ -43,11 +43,12 @@ export function boostCrossed(from:number,to:number,used:Set<number>):number|null
   }
   return null;
 }
-export function makeSpeedCourse(shape:Shape,surfaces:Surfaces) {
+export function makeSpeedCourse(shape:Shape,surfaces:Surfaces,
+  suppressLegacyEdge:(progress:number,side:number)=>boolean=()=>false) {
   const road:Entity[]=[];
   const rails:Entity[]=[];
   const pads:Entity[]=[];
-  let curveDegrees=0,segments=0;
+  let curveDegrees=0,segments=0,hiddenLegacyEdges=0;
   for(let d=0;d<=SPEED_FINISH_DISTANCE+6;d+=SPEED_SEGMENT_STEP){
     const center=trackCenter(d),t=trackTangent(d),z=SPEED_START_Z-d;
     // Slight overlapping box-proxy seams prevent the physical ball from falling
@@ -57,6 +58,7 @@ export function makeSpeedCourse(shape:Shape,surfaces:Surfaces) {
       segments%2===0?surfaces.track:surfaces.side,'static',t.yaw));
     if(Math.abs(t.yaw)>curveDegrees)curveDegrees=Math.abs(t.yaw);
     for(const side of [-1,1] as const){
+      if(suppressLegacyEdge(d,side)){hiddenLegacyEdges++;continue;}
       const outside=side*(SPEED_TRACK_WIDTH/2-.16);
       const x=center+outside*(-t.z);
       const vz=outside*t.x;
@@ -85,6 +87,9 @@ export function makeSpeedCourse(shape:Shape,surfaces:Surfaces) {
     for(let d=start;d<=end;d+=5.25){
       const t=trackTangent(d),center=trackCenter(d),z=SPEED_START_Z-d;
       for(const side of [-1,1] as const){
+        // Rail-mode green grind surfaces replace overlapping decorative
+        // safety rails; no duplicate silhouette competing for the contact.
+        if(suppressLegacyEdge(d,side))continue;
         const edge=side*(SPEED_TRACK_WIDTH/2+.16);
         const x=center+edge*(-t.z);
         const zz=z+edge*t.x;
@@ -95,6 +100,6 @@ export function makeSpeedCourse(shape:Shape,surfaces:Surfaces) {
     }
   }
   return {road,rails,pads,segmentCount:segments,curveDegrees,
-    safetyMarkers,boostCount:SPEED_BOOSTS.length,treeCount:0 as const,
+    safetyMarkers,hiddenLegacyEdges,boostCount:SPEED_BOOSTS.length,treeCount:0 as const,
     skyKind:'clean-sky-horizon' as const};
 }
