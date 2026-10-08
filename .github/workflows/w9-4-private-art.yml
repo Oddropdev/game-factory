@@ -38,6 +38,19 @@ jobs:
           npm run typecheck
           npm run lint
           npm run test
+      - name: Verify Windows private importer PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'tools/install-w9-4-ithappy.ps1').Path,
+            [ref]$tokens, [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
       - name: Build isolated original-physics ball WITHOUT licensed art
         run: npm run build:w9-4:ball
       - name: Existing physics regression
