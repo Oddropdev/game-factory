@@ -15,7 +15,9 @@ void main() {
   vec3 normal=vec3(n.x*c-n.y*s,n.x*s+n.y*c,n.z);
   lightColor=tint*(0.48+0.52*max(dot(normalize(normal),normalize(vec3(-0.4,0.85,0.5))),0.0));
   float dy=q.y-5.0, dz=q.z-12.0;
-  float ey=dy*0.958+dz*0.287, ez=-dy*0.287+dz*0.958;
+  // World-to-camera pitch: point the camera DOWN at the track, not up.
+  // The previous +dz/-dy signs pushed the entire course below the viewport.
+  float ey=dy*0.958-dz*0.287, ez=dy*0.287+dz*0.958;
   float w=max(0.15,-ez);
   gl_Position=vec4(q.x*1.4/max(0.4,aspect),ey*1.4,w*0.996-0.16,w);
 }`;
