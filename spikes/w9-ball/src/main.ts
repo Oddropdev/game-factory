@@ -524,8 +524,11 @@ app.on('update',(dt:number)=>{
       if(grindMode&&guardLock==='release-cooldown'&&elapsed>=guardCoolUntil){
         guardLock='free';guardSide=null;
       }
+      // Once a real side/top contact engages the guard, temporary contact
+      // jitter must NOT unlatch it. Hold for the current long curve section
+      // until intentional opposite swipe, or exit after the section ends.
       if(grindMode&&guardLock.startsWith('locked')&&
-        (railSection===null||elapsed-guardLastTouch>.22)){
+        (railSection===null||railSection.side!==guardSide)){
         guardLock='free';guardSide=null;
       }
       const guardHeld=grindMode&&
