@@ -1,0 +1,59 @@
+name: W9.4-5.1 Magnetic Rail Priority Fix
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/src/main.ts"
+      - "spikes/w9-ball/src/MagneticRails.ts"
+      - "spikes/w9-ball/src/SpeedCourse.ts"
+      - "spikes/w9-ball/src/LongJumpCourse.ts"
+      - "tests/ball/w9-4-rail-priority.spec.mjs"
+      - "tools/check-w9-4-5-1.mjs"
+      - "docs/evidence/W9.4-5.1*"
+      - ".github/workflows/w9-4-rail-priority.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref,'w9-4-5-1-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      W9_4_5_1_BASE_SHA: 95f06b070df888dd74a268129a6ce445359d5851
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install accepted dependencies
+        run: npm install --no-audit --no-fund
+      - name: Chromium browser
+        run: npx playwright install --with-deps chromium
+      - name: Protect Factory type lint and original unit tests
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Build independent local Ammo physics runner without paid assets
+        run: npm run build:w9-4:ball
+      - name: Original ball, speed, jump and rail physics regression
+        run: npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-private-art.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs tests/ball/w9-4-magnetic-rails.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Prove player can reach contact without opposing safety force on three screen sizes
+        run: npx playwright test tests/ball/w9-4-rail-priority.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Repeat small Android engagement three times
+        run: npx playwright test tests/ball/w9-4-rail-priority.spec.mjs --config=playwright.w9-4.config.mjs --grep "small-android-360x800" --repeat-each=3
+      - name: Guard legacy games and paid asset source
+        run: node tools/check-w9-4-5-1.mjs
+      - name: Save browser evidence and private-preview-ready build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-5-1-rail-priority-evidence
+          path: |
+            playtest-dist/ball/
+            evidence/w9-4-5-1/
+            test-results/
+          if-no-files-found: warn
