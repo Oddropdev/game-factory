@@ -1,0 +1,10 @@
+{
+  "id": "sky-islands-2",
+  "version": 1,
+  "startProgress": 550,
+  "endProgress": 620,
+  "plankStep": 3.5,
+  "width": 9,
+  "baseTopY": 0,
+  "theme": "teal-sky"
+}
