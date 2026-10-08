@@ -22,7 +22,7 @@ import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
   GRIND_VOID_FROM,GRIND_VOID_TO,SECRET_START,SECRET_END,
   grindPath,activeGrindRoute,
   PLAYER_RADIUS,RELEASE_COOLDOWN,guardSurface,allowGuardLock,
-  oppositeToGuard,grindTopQualifies,relativeRailSpring,
+  oppositeToGuard,grindTopQualifies,trappedBelowGrind,relativeRailSpring,
   type GuardLock,type GrindLock} from './RailModes';
 import './style.css';
 
@@ -95,6 +95,7 @@ let bridgeCatchFrames=0,bridgeCatchDownFrames=0;
 let grindVoidEarlyFrames=0,grindVoidLateFrames=0;
 let grindLastTopImpact:[number,number,number,number]|null=null;
 let grindTopDeniedHeight=0,grindTopDeniedLateral=0;
+let grindUndersideSeconds=0,grindTrapRecoveries=0;
 const touchingGrindTop=new Set<string>();
 
 function message(text:string) {
@@ -238,7 +239,7 @@ const speedWorld=speedMode?makeSpeedCourse(shape,surfaces,suppressOldEdge):null;
 const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces,suppressOldEdge,
   d=>grindMode&&d>=GRIND_VOID_FROM&&d<=GRIND_VOID_TO):null;
 const magneticRails=railMode?buildCurveRails(shape):null;
-const grindTrack=grindMode?buildGrindTrack(shape):null;
+const grindTrack=grindMode?buildGrindTrack(shape,device,app.root):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -352,7 +353,7 @@ const checkpoint=()=>{ // a fall respawns without changing the authoritative phy
   touchingRails.clear();touchingGrindTop.clear();
   magneticRails?.activeSection(null);
   guardLock='free';guardSide=null;guardCoolUntil=0;
-  grindLock='off';grindLastTopTouch=-100;
+  grindLock='off';grindLastTopTouch=-100;grindUndersideSeconds=0;
   railLastContactAt=-100;railRecentSection=null;
   gems.forEach(g=>{g.collected=false;g.node.enabled=true;});
   pickups=0;
@@ -395,6 +396,7 @@ function restart(){
   bridgeCatchFrames=0;bridgeCatchDownFrames=0;
   grindVoidEarlyFrames=0;grindVoidLateFrames=0;
   grindLastTopImpact=null;grindTopDeniedHeight=0;grindTopDeniedLateral=0;
+  grindUndersideSeconds=0;grindTrapRecoveries=0;
   touchingGrindTop.clear();
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
@@ -513,6 +515,7 @@ app.on('update',(dt:number)=>{
     // interpolates a fake ball position. Lateral damping is user-relative.
     if(speedMode){
       const progress=SPEED_START_Z-p.z,t=tangentAt(progress);
+      let recoveryProgress:number|null=null;
       const forward=v.x*t.x+v.z*t.z;
       const lateral=v.x*(-t.z)+v.z*t.x;
       const sideError=p.x-centerAt(progress)-targetX;
@@ -681,6 +684,37 @@ app.on('update',(dt:number)=>{
         if(grindLock==='exit-cooldown'&&elapsed-grindLastTopTouch>.7)
           grindLock='off';
       }
+      if(grindMode){
+        const route=activeGrindRoute(progress);
+        const beneath=(route==='secret'&&progress>=SECRET_START+14)||
+          (route==='bridge'&&progress>=GRIND_VOID_FROM);
+        const path=beneath&&route?
+          grindPath(progress,centerAt(progress),route):null;
+        const validTop=grindLock==='top-grind'&&
+          elapsed-grindLastTopTouch<.18;
+        if(path&&trappedBelowGrind(p.y,p.x,path.x,path.y,
+          Math.hypot(v.x,v.z),validTop)){
+          grindUndersideSeconds+=tick;
+        }else grindUndersideSeconds=0;
+        if(grindUndersideSeconds>=1.0){
+          // Do NOT snap to the upper rail. Restore a genuine dynamic ball on
+          // the last broad ground BEFORE the junction and let Bullet drive on.
+          const safe=route==='bridge'?GRIND_ENTRY_START-12:SECRET_START-47;
+          const tx=centerAt(safe);
+          body.teleport(tx,2.2,SPEED_START_Z-safe);
+          body.linearVelocity=new Vec3(0,0,-10);
+          body.angularVelocity=new Vec3(0,0,0);
+          targetX=0;recoveryProgress=safe;
+          touchingGrindTop.clear();touchingRails.clear();
+          grindLock='off';guardLock='free';guardSide=null;
+          guardCoolUntil=elapsed+RELEASE_COOLDOWN;
+          grindLastTopTouch=-100;grindUndersideSeconds=0;
+          railLastContactAt=-100;railRecentSection=null;
+          grindTrapRecoveries++;falls++;
+          lastFallReason='rail-underside-trap';
+          message('RAIL RECOVERY!');
+        }
+      }
       const crossed=boostCrossed(previousProgress,progress,triggeredBoosts);
       const extra=longJumpMode?nextLongBoost(previousProgress,progress,triggeredBoosts):null;
       if(crossed!==null){
@@ -713,7 +747,7 @@ app.on('update',(dt:number)=>{
         jumpAirtime+=tick;
         maxJumpHeight=Math.max(maxJumpHeight,p.y);
       }
-      previousProgress=Math.max(previousProgress,progress);
+      previousProgress=recoveryProgress??Math.max(previousProgress,progress);
       boostSurge=Math.max(0,boostSurge-tick*1.6);
       const planar=Math.hypot(v.x,v.z);
       if(planar>activeSpeedCap){
@@ -826,6 +860,9 @@ Object.assign(window,{__W9_BALL_TEST__:{
       grindLastTopImpact,grindTopDeniedHeight,grindTopDeniedLateral,
       grindBoostFrames,grindTopContactEvents,grindSideContactEvents,
       grindFalseSideRewards,grindPeakSpeed,
+      grindUndersideSeconds,grindTrapRecoveries,
+      grindSmoothMeshCount:grindTrack?.smoothMeshCount??0,
+      grindSmoothVisualSegments:grindTrack?.smoothVisualSegments??0,
       grindTrackTopSegments:grindTrack?.topCount??0,
       grindTrackBridgeSegments:grindTrack?.bridgeTops??0,
       grindTrackSecretSegments:grindTrack?.secretTops??0,

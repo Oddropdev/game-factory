@@ -1,6 +1,7 @@
 // W9.4-6 — physically supported top-only narrow train rails, NOT a guard.
 // Bridge crosses a floorless gap; secret route branches over and above road.
-import {Color,Entity,StandardMaterial} from 'playcanvas';
+import {Color,Entity,StandardMaterial,type GraphicsDevice} from 'playcanvas';
+import {buildSmoothSecretGrind} from './SmoothGrind';
 import {SPEED_START_Z,SPEED_SEGMENT_STEP} from './SpeedCourse';
 import {longCenter,longTangent} from './LongJumpCourse';
 import {GRIND_START,GRIND_END,GRIND_TOP_Y,GRIND_HALF_WIDTH,
@@ -15,13 +16,14 @@ const mat=(color:Color,emission:Color,strength:number)=>{
   m.diffuse=color;m.emissive=emission;m.emissiveIntensity=strength;
   m.gloss=.91;m.update();return m;
 };
-export function buildGrindTrack(shape:Shape) {
+export function buildGrindTrack(shape:Shape,device:GraphicsDevice,root:Entity) {
   const steel=mat(new Color(.31,.56,.75),new Color(.02,.19,.35),.47);
   const stripe=mat(new Color(.17,.99,.84),new Color(.12,.91,.67),1.5);
   const sides=mat(new Color(.27,.35,.51),new Color(.01,.07,.14),.25);
   let bridgeTops=0,secretTops=0,sideCount=0;
   const route=(kind:GrindRoute,start:number,end:number)=>{
-    for(let d=start;d<=end;d+=SPEED_SEGMENT_STEP){
+    const step=kind==='secret'?1.75:SPEED_SEGMENT_STEP;
+    for(let d=start;d<=end;d+=step){
       const center=longCenter(d);
       const p=grindPath(d,center,kind);
       const ahead=grindPath(d+.25,longCenter(d+.25),kind);
@@ -32,22 +34,25 @@ export function buildGrindTrack(shape:Shape) {
       // On the fast straight bridge these are render-only panels. The
       // separate single long STATIC collider below is the contact authority
       // and eliminates frame-dependent jumps at adjacent Bullet seams.
-      // The curved rising secret keeps genuine individual sloped colliders.
-      shape(entityName+(kind==='bridge'?bridgeTops:secretTops),
+      // Short overlapping Bullet proxies follow the actual rising curve.
+      // Render-only panels are replaced by ONE continuous spline mesh.
+      const top=shape(entityName+(kind==='bridge'?bridgeTops:secretTops),
         'box',[p.x,p.y-.12,SPEED_START_Z-d],
-        [GRIND_HALF_WIDTH*2,.24,SPEED_SEGMENT_STEP+.48],
+        [GRIND_HALF_WIDTH*2,.24,step+.48],
         steel,kind==='bridge'?false:'static',tangent.yaw,incline);
+      if(kind==='secret')top.children[0]!.enabled=false;
       if(kind==='bridge')bridgeTops++;else secretTops++;
       // Separate steel SIDE colliders to test forbidden side attachment.
       for(const sign of [-1,1]){
-        shape('grind-side-'+kind+'-'+sideCount++,'box',
+        const sideCollider=shape('grind-side-'+kind+'-'+sideCount++,'box',
           [p.x+sign*(GRIND_HALF_WIDTH+.105),p.y-.48,SPEED_START_Z-d],
-          [.21,.75,SPEED_SEGMENT_STEP+.36],sides,'static',
+          [.21,.75,step+.36],sides,'static',
           tangent.yaw,incline);
+        if(kind==='secret')sideCollider.children[0]!.enabled=false;
       }
-      shape('grind-energy-spine-'+kind+'-'+d,'box',
+      if(kind==='bridge')shape('grind-energy-spine-'+kind+'-'+d,'box',
         [p.x,p.y+.025,SPEED_START_Z-d],
-        [.19,.04,SPEED_SEGMENT_STEP+.17],stripe,false,
+        [.19,.04,step+.17],stripe,false,
         tangent.yaw,incline);
     }
   };
@@ -75,13 +80,16 @@ export function buildGrindTrack(shape:Shape) {
   const secretLength=SECRET_START+1-secretEntry;
   const secretMid=secretEntry+secretLength/2;
   const secretApproach=grindPath(secretMid,longCenter(secretMid),'secret');
-  shape('real-secret-rail-entry-ramp','box',
+  const entry=shape('real-secret-rail-entry-ramp','box',
     [secretApproach.x,.49,SPEED_START_Z-secretMid],
     [2.4,.24,secretLength],stripe,'static',
     longTangent(secretMid).yaw,2.05);
+  entry.children[0]!.enabled=false;
   // Separated LEFT elevated side branch, never crosses centerline/right guard.
   route('secret',SECRET_START,SECRET_END);
+  const smooth=buildSmoothSecretGrind(device,root,steel,stripe,sides);
   return {bridgeTops,secretTops,topCount:bridgeTops+secretTops,
+    smoothMeshCount:smooth.meshCount,smoothVisualSegments:smooth.visualSegments,
     sideCount,bridge:[GRIND_START,GRIND_END] as const,
     secret:[SECRET_START,SECRET_END] as const,
     floorlessGap:[GRIND_VOID_FROM,GRIND_VOID_TO] as const,

@@ -81,6 +81,11 @@ test('W9.4-6 BRIDGE: physical top-only grind travels across missing ground',
     await read(page)));
   await expect.poll(async()=>(await read(page))?.grindBridgeFrames,
     {timeout:10_000}).toBeGreaterThan(0);
+  // Async browser polling can observe the FIRST top-grind frame at ~201m.
+  // Wait independently for contact in the far half of the 19m void; otherwise
+  // an early correct snapshot gets misdiagnosed as an absent late contact.
+  await expect.poll(async()=>(await read(page))?.grindVoidLateFrames,
+    {timeout:12_000,intervals:[100,200,300]}).toBeGreaterThan(0);
   const riding=await read(page);
   expect(riding.grindEntries).toBeGreaterThan(0);
   // The ball must have an authoritative TOP contact at both ends of the
