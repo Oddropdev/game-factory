@@ -1,0 +1,60 @@
+name: W9.3-3 Soft World Materials Juice
+
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-playcanvas/**"
+      - "tests/playcanvas/w9-3-soft-world.spec.mjs"
+      - "tools/check-w9-3-3.mjs"
+      - "docs/evidence/W9.3-3*"
+      - ".github/workflows/w9-3-soft-world.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-3-3-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      W9_3_3_BASE_SHA: 170b12c0437f4696cf6b4134db186f6b7b0d6d93
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify frozen Factory and all unit tests
+        run: npm run verify
+      - name: Verify W8 original sound and session
+        run: npm run test:w8-feel
+      - name: Verify W9 original public release
+        run: |
+          npm run package:playtest
+          npm run test:w9-playtest
+      - name: Build PlayCanvas 3D with pinned original CC0 assets
+        run: npm run build:w9-2d
+      - name: Verify all accepted PlayCanvas and W9.3-2 snapshots
+        run: npm run test:w9-2d
+      - name: W9.3-3 actual mobile screenshots, visual-juice bounds, input
+        run: npx playwright test tests/playcanvas/w9-3-soft-world.spec.mjs --config=playwright.w9-2d.config.mjs
+      - name: Frozen gameplay contract and package size evidence
+        run: node tools/check-w9-3-3.mjs
+      - name: Archive screenshot evidence and isolated build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-3-3-soft-world-evidence
+          path: |
+            playtest-dist/3d/
+            evidence/w9-3-3/
+            test-results/
+          if-no-files-found: warn
