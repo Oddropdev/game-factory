@@ -2,7 +2,8 @@
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {resolve,extname,sep} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,URL} from 'node:url';
+import process from 'node:process';
 import {spawn} from 'node:child_process';
 const root=resolve(fileURLToPath(new URL('../playtest-dist/ball/',import.meta.url)));
 const port=4177;
