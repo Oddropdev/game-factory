@@ -256,10 +256,16 @@ const present=()=>{
       for(let i=0;i<2;i++){
         const targetPosition=new Vec3(i===0?-1.9:1.9,3.08,z);
         const world=camera.camera!.worldToScreen(targetPosition);
-        const cssX=world.x/(device.maxPixelRatio||1);
-        const cssY=world.y/(device.maxPixelRatio||1);
+        // PlayCanvas worldToScreen returns CSS viewport coordinates even when
+        // the render device uses a larger backing resolution (DPR 2 capped
+        // at 1.6). Dividing by maxPixelRatio displaces the labels on phones.
+        const cssX=world.x;
+        const cssY=world.y;
         const element=gateLabels[i]!;
         element.textContent=opLabel(op[i]!,s.mass);
+        // Observable independent projection for CSS-anchor QA at DPR1/2.
+        element.dataset.projectedX=String(world.x);
+        element.dataset.projectedY=String(world.y);
         const betterLeft=applyMassOperation(s.mass,op[0]!)>=applyMassOperation(s.mass,op[1]!);
         const advantageous=i===0?betterLeft:!betterLeft;
         element.style.background=advantageous?'#149D84':'#CE547B';
