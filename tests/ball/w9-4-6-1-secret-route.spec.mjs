@@ -1,0 +1,96 @@
+import {test,expect} from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const folder=path.resolve('evidence/w9-4-6-1');
+fs.mkdirSync(folder,{recursive:true});
+const snap=page=>page.evaluate(()=>globalThis.__W9_BALL_TEST__?.snapshot());
+const progress=s=>7-s.position[2];
+
+const screens=[
+  {name:'portrait-390x844',width:390,height:844},
+  {name:'small-android-360x800',width:360,height:800},
+  {name:'landscape-844x390',width:844,height:390}
+];
+for(const vp of screens){
+test('W9.4-6.1 optional player-chosen secret top grind climbs + descends '+vp.name,async({page})=>{
+  test.setTimeout(65_000);
+  await page.setViewportSize({width:vp.width,height:vp.height});
+  page.setDefaultTimeout(5000);
+  const errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/ball/?mode=grind');
+  await expect.poll(async()=>(await snap(page))?.physicsLoaded,{timeout:20_000}).toBe(true);
+  await page.locator('#start').click();
+  // The player chooses a shortcut while approaching, not after the
+  // entrance is already under the ball. Browser frame timing varies by size:
+  // at 50m/s the old 302m polling gate could return at 335m (too late).
+  await expect.poll(async()=>progress(await snap(page)),{timeout:25_000}).toBeGreaterThan(265);
+  // A real player steering choice; not a teleport or test-only body setter.
+  await page.mouse.move(Math.round(vp.width*.123),Math.round(vp.height*.70));
+  await page.mouse.down();
+  const samples=[],start=Date.now();
+  let peak=0,rode=false,climbed=false,descended=false;
+  let savedCrest=false,savedExit=false;
+  let previousSecretFrames=0;
+  while(Date.now()-start<24_000){
+    const s=await snap(page);
+    const p=progress(s);
+    if(s.grindSecretFrames>previousSecretFrames){
+      rode=true;
+      peak=Math.max(peak,s.position[1]);
+      if(p>=359&&p<=390&&s.position[1]>=2.7)climbed=true;
+    }
+    // The rail may stop supporting the ball on the final descent as it
+    // rejoins the road. Proof of *physical return* is falling from a
+    // previously top-contact-verified crest, not demanding a new collider
+    // event in the ~10m exit where the narrow TOP has already ended.
+    if(rode&&climbed&&p>=392&&p<=425&&s.position[1]<peak-.5)
+      descended=true;
+    previousSecretFrames=s.grindSecretFrames;
+    if(samples.length===0||p-samples[samples.length-1].p>8)
+      samples.push({p:+p.toFixed(1),x:+s.position[0].toFixed(2),
+        y:+s.position[1].toFixed(2),speed:+s.planarSpeed.toFixed(1),
+        secret:s.grindSecretFrames,side:s.grindSideContactEvents,
+        top:s.grindTopContactEvents,falls:s.fallCount,phase:s.phase});
+    if(climbed&&!savedCrest){
+      await page.screenshot({path:path.join(folder,vp.name+'-secret-crest.png')});
+      savedCrest=true;
+    }
+    if(descended&&!savedExit){
+      await page.screenshot({path:path.join(folder,vp.name+'-secret-descent.png')});
+      savedExit=true;
+    }
+    if(s.phase==='complete'||s.phase==='error')break;
+    if(p>422)break;
+    await page.waitForTimeout(65);
+  }
+  await page.mouse.up();
+  const end=await snap(page);
+  globalThis.console.log('W9461_SECRET_TRACE',JSON.stringify({samples,rode,climbed,descended,
+    peak,end:{phase:end.phase,position:end.position,falls:end.fallCount,
+    secret:end.grindSecretFrames,entries:end.grindEntries,
+    top:end.grindTopContactEvents,side:end.grindSideContactEvents}}));
+  await page.screenshot({path:path.join(folder,vp.name+'-secret-end.png')});
+  expect(errors).toEqual([]);
+  expect(end.fallCount).toBe(0);
+  expect(rode).toBe(true);
+  expect(climbed).toBe(true);
+  expect(descended).toBe(true);
+  expect(peak).toBeGreaterThan(3);
+  expect(savedCrest).toBe(true);
+  expect(savedExit).toBe(true);
+});
+}
+
+test('W9.4-6.1 center-lane baseline may bypass secret without free TOP reward',async({page})=>{
+  test.setTimeout(50_000);
+  await page.goto('/ball/?mode=grind');
+  await expect.poll(async()=>(await snap(page))?.physicsLoaded,{timeout:20_000}).toBe(true);
+  await page.locator('#start').click();
+  await expect.poll(async()=>progress(await snap(page)),{timeout:27_000}).toBeGreaterThan(411);
+  const end=await snap(page);
+  globalThis.console.log('W9461_CENTER_TRACE',JSON.stringify({pos:end.position,secret:end.grindSecretFrames,fallCount:end.fallCount}));
+  expect(end.fallCount).toBe(0);
+  expect(end.grindSecretFrames).toBe(0);
+});

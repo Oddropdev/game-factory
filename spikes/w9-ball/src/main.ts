@@ -18,7 +18,8 @@ import { buildCurveRails, railFieldAt, railSectionAt, RAIL_CONTACT_FORCE, RAIL_P
 import {buildGrindTrack} from './GrindTrack';
 import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
   GRIND_CENTER_FORCE,GRIND_SPEED_FORCE,GRIND_TOP_Y,
-  GRIND_VOID_FROM,GRIND_VOID_TO,
+  GRIND_ENTRY_START,GRIND_END,
+  GRIND_VOID_FROM,GRIND_VOID_TO,SECRET_START,SECRET_END,
   grindPath,activeGrindRoute,
   PLAYER_RADIUS,RELEASE_COOLDOWN,guardSurface,allowGuardLock,
   oppositeToGuard,grindTopQualifies,relativeRailSpring,
@@ -89,6 +90,8 @@ let grindLock:GrindLock='off',grindEntries=0,grindExits=0;
 let grindSeconds=0,grindBoostFrames=0,grindTopContactEvents=0;
 let grindSideContactEvents=0,grindFalseSideRewards=0,grindPeakSpeed=0;
 let grindLastTopTouch=-100,grindBridgeFrames=0,grindSecretFrames=0;
+let secretApproachForceFrames=0,secretApproachDownFrames=0;
+let bridgeCatchFrames=0,bridgeCatchDownFrames=0;
 let grindVoidEarlyFrames=0,grindVoidLateFrames=0;
 let grindLastTopImpact:[number,number,number,number]|null=null;
 let grindTopDeniedHeight=0,grindTopDeniedLateral=0;
@@ -388,6 +391,8 @@ function restart(){
   grindBoostFrames=0;grindTopContactEvents=0;
   grindSideContactEvents=0;grindFalseSideRewards=0;grindPeakSpeed=0;
   grindLastTopTouch=-100;grindBridgeFrames=0;grindSecretFrames=0;
+  secretApproachForceFrames=0;secretApproachDownFrames=0;
+  bridgeCatchFrames=0;bridgeCatchDownFrames=0;
   grindVoidEarlyFrames=0;grindVoidLateFrames=0;
   grindLastTopImpact=null;grindTopDeniedHeight=0;grindTopDeniedLateral=0;
   touchingGrindTop.clear();
@@ -597,6 +602,37 @@ app.on('update',(dt:number)=>{
             Math.hypot(v.x,v.z)-railContactSpeedStart);
         }
       }
+      if(grindMode&&progress>=GRIND_ENTRY_START&&progress<=GRIND_END&&
+        Math.abs(p.x-centerAt(progress))<2.6){
+        // Mandatory train bridge: damp racing-speed ballistic kick from the
+        // inclined entry before it can throw the sphere ABOVE the top rail.
+        // This only applies bounded BULLET forces. It never grants GRIND;
+        // the physical named top collider remains the sole reward authority.
+        const cx=centerAt(progress);
+        const xForce=relativeRailSpring(p.x,v.x,cx,240,27,390);
+        const topY=1.12+PLAYER_RADIUS;
+        const down=Math.max(0,Math.min(620,
+          (p.y-topY)*190+Math.max(0,v.y)*44));
+        body.applyForce(new Vec3(xForce,-down,0));
+        bridgeCatchFrames++;
+        if(down>0)bridgeCatchDownFrames++;
+      }
+      if(grindMode&&progress>=SECRET_START-34&&progress<=SECRET_END&&
+        targetX< -2.4){
+        const path=grindPath(progress,centerAt(progress),'secret');
+        // Player-chosen magnetic catch field; FORCE on the existing Bullet
+        // body, not a teleport/kinematic rail transform. Side impacts
+        // alone never give a grind reward. No activation for middle lane.
+        if(Math.abs(p.x-path.x)<2.6){
+          const xForce=relativeRailSpring(p.x,v.x,path.x,280,30,460);
+          const targetY=path.y+PLAYER_RADIUS;
+          const down=Math.max(0,Math.min(620,
+            (p.y-targetY)*190+Math.max(0,v.y)*44));
+          body.applyForce(new Vec3(xForce,-down,0));
+          secretApproachForceFrames++;
+          if(down>0)secretApproachDownFrames++;
+        }
+      }
       if(grindMode){
         // Strict top-only: a side wall has its own collider and NEVER grants
         // grind mode. A real top collision + position validates the surface.
@@ -784,6 +820,8 @@ Object.assign(window,{__W9_BALL_TEST__:{
       guardLastTouch,guardReleaseSwipePx,
       grindLock,grindEntries,grindExits,grindSeconds,
       grindBridgeFrames,grindSecretFrames,
+      secretApproachForceFrames,secretApproachDownFrames,
+      bridgeCatchFrames,bridgeCatchDownFrames,
       grindVoidEarlyFrames,grindVoidLateFrames,
       grindLastTopImpact,grindTopDeniedHeight,grindTopDeniedLateral,
       grindBoostFrames,grindTopContactEvents,grindSideContactEvents,
