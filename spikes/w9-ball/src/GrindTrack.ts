@@ -47,12 +47,14 @@ export function buildGrindTrack(shape:Shape) {
         tangent.yaw,incline);
     }
   };
-  // Real sloped entry from main floor to +1.12m rail. No physics teleport.
-  const entryLength=GRIND_START+3-GRIND_ENTRY_START;
+  // Real gentle entry. The former 8-degree, 10m approach launched
+  // the ball vertically ~15.7m/s at 50m/s and missed the train track.
+  // Spread the rise over 30m at ~2deg; do not teleport or fake contact.
+  const entryLength=GRIND_START+2-GRIND_ENTRY_START;
   const mid=GRIND_ENTRY_START+entryLength/2;
   shape('real-grind-entry-ramp','box',
-    [longCenter(mid),.48,SPEED_START_Z-mid],
-    [2.6,.28,entryLength],stripe,'static',longTangent(mid).yaw,8);
+    [longCenter(mid),.51,SPEED_START_Z-mid],
+    [2.8,.24,entryLength],stripe,'static',longTangent(mid).yaw,2.05);
   route('bridge',GRIND_START,GRIND_END);
   // Elevated secret rail: rises ABOVE the road, bends outward and returns.
   // Road remains underneath, so top-only riders have a genuine high path.
