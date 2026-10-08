@@ -9,6 +9,7 @@ import {
 import { MassRunnerModel } from '../../../src/games/mass-runner/MassRunnerModel';
 import { MASS_RUNNER_LEVELS, applyMassOperation, type MassRunnerEvent } from '../../../src/games/mass-runner/MassRunnerLevels';
 import { createSoftAvatar } from './SoftAvatar';
+import { createSoftWorld } from './SoftWorld';
 import {
   createSoftTrack, createSoftPortal, createSoftHazard,
   createSoftStripe, createSoftDecoration, createSoftShadow,
@@ -49,21 +50,21 @@ const material = (hex: string, emissive = 0): StandardMaterial => {
   const blue = parseInt(hex.slice(5,7), 16)/255;
   m.diffuse = new Color(red, green, blue);
   m.emissive = new Color(red*emissive, green*emissive, blue*emissive);
-  m.metalness = 0.07;
-  m.gloss = 0.38;
+  m.metalness = 0;
+  m.gloss = 0.52;
   m.update();
   return m;
 };
 const mats = {
-  road: material('#6979d8'), edge: material('#f6c75f',.22),
-  stripe: material('#dcf9fc',.25), cyan: material('#22e6e8',.35),
-  red: material('#ff517a',.2), grass: material('#57c487'),
-  blue: material('#62b7ff'), white: material('#eefcff'),
-  purple: material('#e99cf9',.25), gold: material('#ffdc4c',.45)
+  road: material('#928EE5'), edge: material('#FFE5A3', .14),
+  stripe: material('#FFF8E4', .12), cyan: material('#4DD9BD', .10),
+  red: material('#FF8197', .06), grass: material('#9DE5B7'),
+  blue: material('#73BFF6'), white: material('#FFF9E8', .08),
+  purple: material('#B9A8FF', .10), gold: material('#FFD778', .15)
 };
 const camera = new Entity('hero-camera');
 camera.addComponent('camera',{
-  clearColor:new Color(.51,.77,.98),fov:63,nearClip:.1,farClip:160
+  clearColor:new Color(.655,.865,1),fov:63,nearClip:.1,farClip:160
 });
 camera.setPosition(0,7.4,12.8);
 camera.lookAt(0,.8,-12);
@@ -73,9 +74,10 @@ sun.addComponent('light',{type:'directional',intensity:2.1,castShadows:true,
   shadowResolution:1024,shadowBias:.12,normalOffsetBias:.07});
 sun.setEulerAngles(48, -25, 0);
 app.root.addChild(sun);
-app.scene.ambientLight = new Color(.53,.61,.72);
+app.scene.ambientLight = new Color(.65,.70,.78);
 
 const courseMetrics = createSoftTrack(app.root, mats);
+const softWorld = createSoftWorld(app.root);
 const stripes: Entity[] = [];
 for (let i = 0; i < 17; i++) for (const x of [-1.25, 1.25]) {
   stripes.push(createSoftStripe('lane-glow', app.root, mats, x, 4 - i * 4));
@@ -137,16 +139,13 @@ const clone=(id:typeof assets[number],parent:Entity,pos:[number,number,number],s
   parent.addChild(e);
   return e;
 };
-// Do not replace the new soft hero with the old blocky character GLB.
-for(const [i,dec] of decorations.entries()){
-  if(i%2===0)clone('tree',app.root,[(i%2===0?-1:1)*8.4,0,-(i/2)*8],1.9);
-  dec.enabled=true;
-}
+// The former angular GLB trees were replaced by the sculpted soft garden.
+for(const dec of decorations) dec.enabled = true;
 for(const item of data){
   if(item.event.kind==='orb')clone('coin',item.node,[0,.98,0],1.0);
   // No blocky Kenney platform overlays on rounded soft hazard rollers.
 }
-clone('flag',app.root,[4,0,-53],1.2);
+// Legacy hard flag omitted: the world now follows one soft visual language.
 
 const gateLabels=[document.createElement('div'),document.createElement('div')];
 for(const el of gateLabels){
@@ -155,9 +154,13 @@ for(const el of gateLabels){
   root.append(el);
 }
 let target=0.5, accumulator=0, elapsed=0, lastEventId:string|null=null, showUntil=0;
+let previousMass = model.snapshot().mass;
 let visualFrames=0;
-const showFeedback=(value:string)=>{
-  hud.feedback.textContent=value;hud.feedback.classList.add('show');showUntil=elapsed+1.0;
+const showFeedback=(value:string, kind: 'orb' | 'gate' | 'hazard')=>{
+  hud.feedback.textContent=value;
+  hud.feedback.dataset.kind = kind;
+  hud.feedback.classList.add('show');
+  showUntil=elapsed+0.72;
 };
 const start=()=>{
   model.startOrAdvance();
@@ -196,11 +199,17 @@ const present=()=>{
   hud.progress.style.width=(s.progress*100).toFixed(1)+'%';
   if(lastEventId!==s.lastEventId&&s.lastEventId){
     const e=level.events.find(x=>x.id===s.lastEventId);
-    if(e?.kind==='gate')showFeedback('MASS × / +');
-    else if(e?.kind==='orb')showFeedback('+ COINS');
-    else if(e?.kind==='hazard')showFeedback('OUCH!');
+    if(e){
+      const delta = s.mass - previousMass;
+      const message = e.kind === 'hazard' ? 'OUCH!' :
+        delta > 0 ? '+' + delta + ' MASS!' :
+        delta < 0 ? String(delta) + ' MASS' : 'SAFE!';
+      showFeedback(message, e.kind);
+      softWorld.trigger(e.kind, (s.playerNormX-.5)*6.6);
+    }
     lastEventId=s.lastEventId;
   }
+  previousMass = s.mass;
   if(showUntil<elapsed)hud.feedback.classList.remove('show');
   player.setPosition((s.playerNormX-.5)*6.6,0,2.5);
   // W9.3: exclusively visual toy motion. Mass, steering and timing remain
@@ -208,7 +217,9 @@ const present=()=>{
   avatar.update(elapsed, s.phase === 'running', s.playerNormX, s.mass);
   baseShadow.setPosition((s.playerNormX-.5)*6.6,.025,2.5);
   const growth=Math.min(1.32,.68+s.mass*.017);
-  player.setLocalScale(growth,growth,growth);
+  // Transient presentation reaction; accepted model owns physics/growth.
+  const juice = 1 + softWorld.pulse() * 0.055;
+  player.setLocalScale(growth * juice, growth / Math.sqrt(juice), growth * juice);
   for(let i=0;i<stripes.length;i++){
     const index=Math.floor(i/2),x=i%2===0?-1.25:1.25;
     stripes[i]!.setPosition(x,.04,5-((index*4+s.distance*.4)%66));
@@ -261,6 +272,7 @@ const present=()=>{
 };
 app.on('update',(dt:number)=>{
   elapsed+=Math.min(dt,.1);
+  softWorld.update(dt, elapsed);
   visualFrames++;
   accumulator+=Math.min(dt,.08);
   while(accumulator>1/60){
@@ -291,6 +303,13 @@ Object.assign(window,{
       portalCount,
       hazardCount,
       softCourseBoxPieces:courseMetrics.boxParts,
+      softWorldStyle:'rounded-garden-v1',
+      softEnvironmentPieces:softWorld.environmentPieces,
+      softGardenPlants:softWorld.plantCount,
+      softCloudBanks:softWorld.cloudCount,
+      softBackgroundBoxPieces:softWorld.backgroundBoxPieces,
+      juiceCapacity:softWorld.particleCapacity,
+      juiceActive:softWorld.activeParticleCount(),
       fullViewport:canvas.clientWidth>=window.innerWidth-2&&canvas.clientHeight>=window.innerHeight-2
     })
   }
