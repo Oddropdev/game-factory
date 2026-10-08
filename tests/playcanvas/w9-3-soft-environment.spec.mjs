@@ -38,7 +38,7 @@ for (const size of sizes) {
     expect(initial.fullViewport).toBe(true);
     expect(initial.levelId).toBe('bulk-up');
     const capture = async phase => {
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.window.innerWidth + 1)).toBe(true);
       await page.screenshot({ path: path.join(out, size.name + '-' + phase + '.png') });
     };
     await capture('ready');
@@ -84,14 +84,14 @@ test('W9.3-3 real HUD gate typography + visual feedback cannot intercept gesture
   await page.setViewportSize({width:390,height:844});
   await page.goto('/3d/');
   await expect.poll(async () => (await probe(page))?.loadedCC0Models).toBe(5);
-  expect(await page.locator('#hud').evaluate(e => getComputedStyle(e).pointerEvents)).toBe('none');
-  expect(await page.locator('#start').evaluate(e => getComputedStyle(e).minHeight)).toBe('48px');
+  expect(await page.locator('#hud').evaluate(e => globalThis.getComputedStyle(e).pointerEvents)).toBe('none');
+  expect(await page.locator('#start').evaluate(e => globalThis.getComputedStyle(e).minHeight)).toBe('48px');
   await page.locator('#start').click();
   await expect.poll(async () => page.locator('.world-gate-label:visible').count(), { timeout:6000 }).toBe(2);
   const typography = await page.locator('.world-gate-label:visible').evaluateAll(els =>
     els.map(e => ({
-      font: parseFloat(getComputedStyle(e).fontSize),
-      pointer: getComputedStyle(e).pointerEvents,
+      font: parseFloat(globalThis.getComputedStyle(e).fontSize),
+      pointer: globalThis.getComputedStyle(e).pointerEvents,
       bounds: e.getBoundingClientRect().toJSON()
     }))
   );
