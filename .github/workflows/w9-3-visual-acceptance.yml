@@ -1,0 +1,61 @@
+name: W9.3-4 Visual Acceptance and Android Handoff
+
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-playcanvas/src/main.ts"
+      - "tests/playcanvas/w9-3-visual-acceptance.spec.mjs"
+      - "tools/check-w9-3-4.mjs"
+      - "docs/evidence/W9.3-4*"
+      - "docs/playtest/W9.3-4*"
+      - ".github/workflows/w9-3-visual-acceptance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-3-4-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      W9_3_4_BASE_SHA: 0e58db691ecd3c4573ef79464e7a4cbf6eec70e7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Frozen Factory gameplay and distributions
+        run: npm run verify
+      - name: W8 feel and sound regressions
+        run: npm run test:w8-feel
+      - name: Original W9 public game is unchanged
+        run: |
+          npm run package:playtest
+          npm run test:w9-playtest
+      - name: Build isolated W9.3 /3d/ candidate
+        run: npm run build:w9-2d
+      - name: All prior PlayCanvas W9.2D and W9.3 regression gates
+        run: npm run test:w9-2d
+      - name: Final ready, gate, result, replay, high DPR and UI audit
+        run: npx playwright test tests/playcanvas/w9-3-visual-acceptance.spec.mjs --config=playwright.w9-2d.config.mjs
+      - name: Frozen diff, screenshot authenticity and release budget
+        run: node tools/check-w9-3-4.mjs
+      - name: Archive screenshots, audits and opt-in candidate (no public deploy)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-3-4-visual-acceptance
+          path: |
+            playtest-dist/3d/
+            evidence/w9-3-4/
+            test-results/
+          if-no-files-found: warn
