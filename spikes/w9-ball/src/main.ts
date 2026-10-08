@@ -581,6 +581,8 @@ Object.assign(window,{__W9_BALL_TEST__:{
       coursePlanks:speedMode?(speedWorld!.segmentCount+(jumpWorld?.segmentCount??0)):tracks.length,
       physicalBumpers:hazardNodes.length,
       speedMode,longJumpMode,railMode,skyKind:speedWorld?.skyKind??'classic',
+      legacyRailVisualsSuppressed:(speedWorld?.hiddenLegacyEdges??0)+
+        (jumpWorld?.hiddenLegacyEdges??0),
       magneticRailSections:magneticRails?.sections.length??0,
       magneticRailSegments:magneticRails?.segments??0,
       railContactEvents,railBoostFrames,railAssistSeconds,
