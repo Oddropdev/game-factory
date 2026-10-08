@@ -39,9 +39,14 @@ test('W9.4-6.1 optional player-chosen secret top grind climbs + descends '+vp.na
     if(s.grindSecretFrames>previousSecretFrames){
       rode=true;
       peak=Math.max(peak,s.position[1]);
-      if(p>=359&&p<=385&&s.position[1]>=2.7)climbed=true;
-      if(p>391&&p<=418&&s.position[1]<peak-.5)descended=true;
+      if(p>=359&&p<=390&&s.position[1]>=2.7)climbed=true;
     }
+    // The rail may stop supporting the ball on the final descent as it
+    // rejoins the road. Proof of *physical return* is falling from a
+    // previously top-contact-verified crest, not demanding a new collider
+    // event in the ~10m exit where the narrow TOP has already ended.
+    if(rode&&climbed&&p>=392&&p<=425&&s.position[1]<peak-.5)
+      descended=true;
     previousSecretFrames=s.grindSecretFrames;
     if(samples.length===0||p-samples[samples.length-1].p>8)
       samples.push({p:+p.toFixed(1),x:+s.position[0].toFixed(2),
