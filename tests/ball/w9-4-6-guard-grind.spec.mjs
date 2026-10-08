@@ -48,22 +48,19 @@ test('W9.4-6 GUARD: side lock is strong but opposite swipe releases immediately'
   await page.locator('#start').click();
   await page.mouse.move(387,650);
   await page.mouse.down();
-  await expect.poll(async()=>(await read(page))?.guardLockEvents,{timeout:12_000})
-    .toBeGreaterThan(0);
-  await expect.poll(async()=>(await read(page))?.guardHoldFrames,{timeout:5_000})
-    .toBeGreaterThan(0);
-  const locked=await read(page);
-  expect(['locked-side','locked-top']).toContain(locked.guardLock);
-  expect(locked.railContactEvents).toBeGreaterThan(0);
-  expect(locked.guardLockPeakSpeed).toBeGreaterThan(5);
-  // Release immediately while physical contact is still active.
-  // Screenshot capture cost ~0.4s at speed, enough to leave the curve.
+  await expect.poll(async()=>(await read(page))?.guardLock,{timeout:12_000})
+    .toMatch(/^locked-(side|top)$/);
+  // Release in the SAME magnetic section: snapshot/screenshot waits could
+  // consume 10–20 metres at racing speed and miss the player's release.
   await page.mouse.move(4,620,{steps:2});
   await expect.poll(async()=>(await read(page))?.guardReleaseByOppositeSwipe,
     {timeout:2_000}).toBe(1);
   const released=await read(page);
   await page.screenshot({path:path.join(evidence,'guard-released.png')});
   expect(released.guardReleaseEvents).toBeGreaterThan(0);
+  expect(released.guardHoldFrames).toBeGreaterThan(0);
+  expect(released.guardLockPeakSpeed).toBeGreaterThan(5);
+  expect(released.railContactEvents).toBeGreaterThan(0);
   expect(released.guardLock).toBe('release-cooldown');
   expect(released.guardCoolUntil).toBeGreaterThan(0);
   expect(released.targetX).toBeLessThan(-3.8);
