@@ -1,0 +1,61 @@
+name: W9.3-3 Soft Environment and Juice
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-playcanvas/**"
+      - "tests/playcanvas/w9-3-soft-environment.spec.mjs"
+      - "tools/check-w9-3-3.mjs"
+      - "docs/evidence/W9.3-3*"
+      - ".github/workflows/w9-3-environment-juice.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-3-3-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      W9_3_3_BASE_SHA: 170b12c0437f4696cf6b4134db186f6b7b0d6d93
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Frozen Factory and MassRunnerModel
+        run: npm run verify
+      - name: W8 presentation and audio
+        run: npm run test:w8-feel
+      - name: Original public W9 game
+        run: |
+          npm run package:playtest
+          npm run test:w9-playtest
+      - name: Build isolated PlayCanvas app and pinned CC0
+        run: npm run build:w9-2d
+      - name: Existing PlayCanvas 3D and W9.3-1/2 tests
+        run: |
+          npm run test:w9-2d
+          npx playwright test tests/playcanvas/w9-3-soft-course.spec.mjs --config=playwright.w9-2d.config.mjs
+      - name: W9.3-3 15 five-state device captures + event/HUD gates
+        run: npx playwright test tests/playcanvas/w9-3-soft-environment.spec.mjs --config=playwright.w9-2d.config.mjs
+      - name: Check unchanged gameplay / rounded geometry / screenshot sizes
+        run: node tools/check-w9-3-3.mjs
+      - name: Archive real rendered evidence, no Pages publish
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-3-3-environment-juice-evidence
+          path: |
+            playtest-dist/3d/
+            evidence/w9-3-3/
+            test-results/
+          if-no-files-found: warn
