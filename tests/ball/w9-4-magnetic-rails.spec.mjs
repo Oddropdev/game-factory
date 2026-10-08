@@ -46,13 +46,16 @@ for(const vp of cases){
         .toBeGreaterThan(0);
       await expect.poll(async()=>(await snap(page))?.railBoostFrames,{timeout:8_000})
         .toBeGreaterThan(0);
-      await expect.poll(async()=>(await snap(page))?.railSparkCount,{timeout:4_000})
-        .toBeGreaterThanOrEqual(1);
-      const contact=await snap(page);
+      // Atomically sample contact, glow and sparks in the SAME physics
+      // snapshot; separate awaited polls can straddle the afterglow timeout.
+      let contact;
+      await expect.poll(async()=>{
+        contact=await snap(page);
+        return contact.railSparkCount>0&&contact.railGlowSections.length>0&&
+          contact.railBoostFrames>0&&contact.railBoostSpeedGain>0;
+      },{timeout:5_000}).toBe(true);
       expect(contact.railDownForceEvents).toBeGreaterThan(0);
       expect(contact.railAssistSeconds).toBeGreaterThan(0);
-      expect(contact.railBoostSpeedGain).toBeGreaterThan(0);
-      expect(contact.railGlowSections.length).toBeGreaterThan(0);
       expect(contact.rigidbodyType).toBe('dynamic');
       await page.screenshot({path:path.join(root,vp.id+'-contact-sparks.png')});
       await page.mouse.up();
