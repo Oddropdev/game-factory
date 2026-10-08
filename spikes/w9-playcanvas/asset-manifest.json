@@ -1,0 +1,14 @@
+{
+  "upstream": "Hidencod/tge-assets",
+  "commit": "08f0c913f6783cc81f9f6105a7cdda8562b1c192",
+  "creator": "Kenney",
+  "license": "CC0-1.0",
+  "source": "https://kenney.nl/assets",
+  "files": [
+    {"id":"character","path":"packs/mini-characters/character-male-a.glb","size":253400},
+    {"id":"platform","path":"packs/platformer-kit/block-grass-long.glb","size":21356},
+    {"id":"coin","path":"packs/prototype-kit/coin.glb","size":30872},
+    {"id":"tree","path":"packs/nature-kit/tree-oak.glb","size":14644},
+    {"id":"flag","path":"packs/platformer-kit/flag.glb","size":18512}
+  ]
+}
