@@ -2,7 +2,7 @@
 // Upstream: playcanvas/create-playcanvas (MIT), Engine third-person starter.
 // Gameplay source of truth: accepted local MassRunnerModel (no duplicate scoring).
 import {
-  AppBase, AppOptions, CameraComponentSystem, Color, ContainerHandler,
+  AppBase, AppOptions, CameraComponentSystem, Color, ContainerHandler, type ContainerResource,
   Entity, FILLMODE_FILL_WINDOW, LightComponentSystem, RenderComponentSystem,
   RESOLUTION_AUTO, StandardMaterial, TextureHandler, Vec3, createGraphicsDevice
 } from 'playcanvas';
@@ -128,7 +128,7 @@ async function loadModel(id:typeof assets[number]):Promise<void>{
   return new Promise(resolve=>{
     app.assets.loadFromUrl('./models/'+id+'.glb','container',(err,asset)=>{
       if(err || !asset?.resource){failures++; console.error('W9.2D missing CC0 model',id,err);resolve();return;}
-      templates.set(id,asset.resource.instantiateRenderEntity({castShadows:true}));
+      templates.set(id,(asset.resource as ContainerResource).instantiateRenderEntity({castShadows:true}));
       loaded++;
       resolve();
     });
