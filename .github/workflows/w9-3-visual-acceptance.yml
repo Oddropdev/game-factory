@@ -47,6 +47,8 @@ jobs:
         run: npm run test:w9-2d
       - name: Final ready, gates, clear/fail, replay, high DPR and UI audit
         run: npx playwright test tests/playcanvas/w9-3-visual-acceptance.spec.mjs --config=playwright.w9-2d.config.mjs
+      - name: Repeated real-pointer successful route (reject CI-only luck)
+        run: npx playwright test tests/playcanvas/w9-3-visual-acceptance.spec.mjs --config=playwright.w9-2d.config.mjs --grep "beneficial first-left" --repeat-each=4
       - name: Frozen diff, screenshot authenticity and release budget
         run: node tools/check-w9-3-4.mjs
       - name: Archive screenshots, audits and opt-in candidate (no public deploy)
