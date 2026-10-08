@@ -21,7 +21,7 @@ for (const file of manifest.files) {
   if (bytes.toString('ascii', 0, 4) !== 'glTF') {
     throw new Error(`Not a binary glTF: ${file.id}`);
   }
-  if (bytes.length < 1000 || bytes.length > 1_000_000) {
+  if (bytes.length !== file.size || bytes.length < 1000 || bytes.length > 1_000_000) {
     throw new Error(`Unexpected CC0 model size: ${file.id} ${bytes.length}`);
   }
   if (bytes.readUInt32LE(8) !== bytes.length) {
