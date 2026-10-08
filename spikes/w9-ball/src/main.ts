@@ -8,11 +8,14 @@ import {
   StandardMaterial, TextureHandler, Vec3, WasmModule, createGraphicsDevice
 } from 'playcanvas';
 import { loadPrivateArt } from './LicensedArt';
+import { makeSpeedCourse, trackCenter, trackTangent, inSafetyArc, boostCrossed,
+  SPEED_CAP, SPEED_CRUISE, SPEED_FINISH_DISTANCE, SPEED_START_Z } from './SpeedCourse';
 import './style.css';
 
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
-const FINISH_Z = -97;
+const speedMode=new URL(window.location.href).searchParams.get('mode')==='speed';
+const FINISH_Z = speedMode?SPEED_START_Z-SPEED_FINISH_DISTANCE:-97;
 const BALL_RADIUS = 0.62;
 const MAX_FORWARD_SPEED = 9.5;
 const MAX_SIDE_SPEED = 7.5;
@@ -41,6 +44,10 @@ let targetX=0;
 let messageUntil=0;
 let lastFallReason='';
 let realPhysics=false;
+let swipeCount=0,swipeStacks=0,boostCount=0,boostSurge=0;
+let maxSpeedObserved=0,magnetActivations=0,previousProgress=0;
+const triggeredBoosts=new Set<number>();
+let pointerLastY:number|null=null;
 
 function message(text:string) {
   ui.message.textContent=text;
@@ -100,7 +107,8 @@ app.setCanvasResolution(RESOLUTION_AUTO);
 const physics=app.systems.rigidbody as RigidBodyComponentSystem;
 physics.gravity.set(0,-22,0);
 const camera=new Entity('follow-camera');
-camera.addComponent('camera',{fov:58,nearClip:.1,farClip:150,clearColor:new Color(.71,.90,.97)});
+camera.addComponent('camera',{fov:58,nearClip:.1,farClip:250,
+  clearColor:new Color(.59,.84,.99)});
 camera.setPosition(0,8.4,21);
 camera.lookAt(0,.8,-10);
 app.root.addChild(camera);
@@ -113,9 +121,10 @@ app.scene.ambientLight=new Color(.63,.72,.84);
 
 type Point=[number,number,number];
 function shape(name:string,type:'box'|'sphere'|'cylinder',pos:Point,scale:Point,
-  surface:StandardMaterial,solid:'static'|'dynamic'|false=false):Entity {
+  surface:StandardMaterial,solid:'static'|'dynamic'|false=false,yaw=0):Entity {
   const e=new Entity(name);
   e.setPosition(...pos);
+  if(yaw)e.setEulerAngles(0,yaw,0);
   // World-space collision proxies stay at unit entity scale. Only the render
   // child is scaled. Never rely on a scaled rigidbody parent to resize Bullet.
   const visual=new Entity(name+'-visual');
@@ -140,7 +149,7 @@ function shape(name:string,type:'box'|'sphere'|'cylinder',pos:Point,scale:Point,
 // The independent physics course: genuine separated planks, not a moving background.
 const tracks=[8,-12,-32,-52,-72,-92];
 const trackNodes:Entity[]=[];
-for(let i=0;i<tracks.length;i++){
+if(!speedMode)for(let i=0;i<tracks.length;i++){
   const z=tracks[i]!;
   trackNodes.push(shape('platform-'+i,'box',[0,-.28,z],[8,.55,19.4],
     i%2===0?surfaces.track:surfaces.side,'static'));
@@ -154,7 +163,7 @@ const hazards:[number,number,'sphere'|'cylinder'][]=[
   [-17,0,'cylinder'],[-37,-1.45,'sphere'],[-57,1.45,'cylinder'],[-77,0,'sphere']
 ];
 const hazardNodes:Entity[]=[];
-for(let i=0;i<hazards.length;i++) {
+if(!speedMode)for(let i=0;i<hazards.length;i++) {
   const [z,x,type]=hazards[i]!;
   hazardNodes.push(shape('hazard-'+i,type,[x,.69,z],
     type==='sphere'?[1.35,1.35,1.35]:[1.25,1.35,1.25],
@@ -162,7 +171,7 @@ for(let i=0;i<hazards.length;i++) {
 }
 const treeCrowns:Entity[]=[];
 const treeTrunks:Entity[]=[];
-for(let i=0;i<9;i++){
+if(!speedMode)for(let i=0;i<9;i++){
   const z=7-i*13;
   const side=i%2===0?-1:1;
   treeCrowns.push(shape('off-track-round-tree-'+i,'sphere',[side*8.5,1.3,z],
@@ -170,10 +179,12 @@ for(let i=0;i<9;i++){
   treeTrunks.push(shape('off-track-trunk-'+i,'cylinder',[side*8.5,.35,z],
     [.5,1.7,.5],surfaces.cream));
 }
-for(let i=0;i<5;i++){
-  shape('cloud-'+i,'sphere',[(i%2?1:-1)*8,10+i*.4,-10-i*21],
-    [5,2.2,3.3],surfaces.cloud);
+for(let i=0;i<(speedMode?9:5);i++){
+  const side=i%2?1:-1;
+  shape('cloud-'+i,'sphere',[side*(speedMode?17:8),10+i*.4,-10-i*21],
+    [speedMode?8:5,2.2,speedMode?5:3.3],surfaces.cloud);
 }
+const speedWorld=speedMode?makeSpeedCourse(shape,surfaces):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -194,13 +205,15 @@ ball.collision!.on('collisionstart',(event:{other:Entity})=>{
 const gems:{node:Entity;collected:boolean}[]=[];
 for(let i=0;i<6;i++){
   const z=-6-i*15.2;
-  const x=[-2.5,2.5,0,-2.2,2.4,0][i]!;
+  const x=speedMode?trackCenter(SPEED_START_Z-z):[-2.5,2.5,0,-2.2,2.4,0][i]!;
   const e=shape('gem-'+i,'sphere',[x,1,z],[.88,.88,.88],surfaces.jewel);
   // Explicit pickup radius is presentation/game logic; dynamic ball physics
   // remains responsible for the ball's actual position and velocity.
   gems.push({node:e,collected:false});
 }
-const finish=shape('finish-line','box',[0,.045,-98],[8,.1,.65],surfaces.teal);
+const finish=shape('finish-line','box',
+  [speedMode?trackCenter(SPEED_FINISH_DISTANCE):0,.045,FINISH_Z-1],
+  [8,.1,.65],surfaces.teal);
 // Licensed GLB art overlays are opt-in and never alter the unit-scale
 // Bullet rigidbodies or authored course. CI without private packs is unchanged.
 const licensedArt=await loadPrivateArt(app,{
@@ -214,6 +227,7 @@ const checkpoint=()=>{ // a fall respawns without changing the authoritative phy
   body.linearVelocity=new Vec3(0,0,0);
   body.angularVelocity=new Vec3(0,0,0);
   targetX=0;
+  swipeStacks=0;boostSurge=0;previousProgress=0;triggeredBoosts.clear();
   gems.forEach(g=>{g.collected=false;g.node.enabled=true;});
   pickups=0;
   if(phase==='running')message('TRY AGAIN!');
@@ -229,6 +243,9 @@ function restart(){
   lastFallReason='';
   lastImpact=-100;
   targetX=0;
+  swipeCount=0;swipeStacks=0;boostCount=0;boostSurge=0;
+  maxSpeedObserved=0;magnetActivations=0;previousProgress=0;
+  triggeredBoosts.clear();pointerLastY=null;
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
   body.angularVelocity=new Vec3(0,0,0);
@@ -237,22 +254,51 @@ function restart(){
   ui.message.classList.remove('show');
 }
 ui.start.disabled=false;
-ui.start.textContent='START ROLL →';
+if(!speedMode)ui.start.textContent='START ROLL →';
 ui.status.textContent='AMMO PHYSICS READY';
+if(speedMode){
+  ui.title.innerHTML='SKY <em>SPEED.</em>';
+  ui.description.textContent='Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
+  document.querySelector('.hint')!.textContent='↑ FLICK TO ACCELERATE · ↔ STEER';
+  ui.start.textContent='START SKY ROLL →';
+}
 ui.start.addEventListener('click',e=>{e.preventDefault();restart();});
 const steer=(clientX:number)=>{targetX=clamp(((clientX/window.innerWidth)-.5)*7,-3.3,3.3);};
+const flickForward=()=>{
+  if(!speedMode||phase!=='running')return;
+  const p=ball.getPosition(),v=body.linearVelocity;
+  const tangent=trackTangent(SPEED_START_Z-p.z);
+  const current=v.x*tangent.x+v.z*tangent.z;
+  if(current>=SPEED_CAP-.4)return;
+  swipeStacks=Math.min(6,swipeStacks+1);
+  swipeCount++;
+  // Mass * target delta-velocity is a real Bullet impulse, not an animated
+  // speed display. Do not overshoot the measured safe speed ceiling.
+  const delta=Math.min(6.8,SPEED_CAP-current);
+  body.applyImpulse(new Vec3(tangent.x*delta*1.4,0,tangent.z*delta*1.4));
+  message('FLICK + SPEED!');
+};
 root.addEventListener('pointerdown',e=>{
   if((e.target as HTMLElement).closest('button'))return;
   if(phase!=='running')restart();
   steer(e.clientX);
+  pointerLastY=e.clientY;
 });
 root.addEventListener('pointermove',e=>{
-  if(e.buttons!==0||e.pointerType==='touch')steer(e.clientX);
+  if(e.buttons!==0||e.pointerType==='touch'){
+    steer(e.clientX);
+    if(pointerLastY!==null&&pointerLastY-e.clientY>52){
+      flickForward();pointerLastY=e.clientY;
+    }
+  }
 });
+root.addEventListener('pointerup',()=>{pointerLastY=null;});
+root.addEventListener('pointercancel',()=>{pointerLastY=null;});
 window.addEventListener('keydown',e=>{
   if(e.code==='Space'||e.code==='Enter'){e.preventDefault();restart();}
   if(e.code==='ArrowLeft'||e.code==='KeyA')targetX=clamp(targetX-.9,-3.3,3.3);
   if(e.code==='ArrowRight'||e.code==='KeyD')targetX=clamp(targetX+.9,-3.3,3.3);
+  if(e.code==='ArrowUp'||e.code==='KeyW')flickForward();
 });
 function onResize(){
   app.resizeCanvas();
@@ -271,15 +317,51 @@ app.on('update',(dt:number)=>{
     elapsed+=tick;
     // Input forces and actual rigidbody velocity feed Bullet. No animation
     // interpolates a fake ball position. Lateral damping is user-relative.
-    const sideForce=clamp((targetX-p.x)*36-v.x*11,-95,95);
-    const drive=clamp((-MAX_FORWARD_SPEED-v.z)*13,-60,100);
-    body.applyForce(new Vec3(sideForce,0,drive));
-    // Contact friction supplies roll; torque reinforces visible spin.
-    body.applyTorque(new Vec3(-4,0,-sideForce*.028));
-    if(Math.abs(v.x)>MAX_SIDE_SPEED||Math.abs(v.z)>MAX_FORWARD_SPEED+2){
-      body.linearVelocity=new Vec3(
-        clamp(v.x,-MAX_SIDE_SPEED,MAX_SIDE_SPEED),v.y,
-        clamp(v.z,-MAX_FORWARD_SPEED-2,MAX_FORWARD_SPEED+2));
+    if(speedMode){
+      const progress=SPEED_START_Z-p.z,t=trackTangent(progress);
+      const forward=v.x*t.x+v.z*t.z;
+      const lateral=v.x*(-t.z)+v.z*t.x;
+      const sideError=p.x-trackCenter(progress)-targetX;
+      const sideForce=clamp(-sideError*76-(lateral)*13,-270,270);
+      const requested=Math.min(SPEED_CAP,SPEED_CRUISE+swipeStacks*6+boostSurge);
+      const drive=clamp((requested-forward)*24,-130,240);
+      body.applyForce(new Vec3(t.x*drive+(-t.z)*sideForce,0,
+        t.z*drive+t.x*sideForce));
+      body.applyTorque(new Vec3(-7*t.z,0,7*t.x));
+      const edgeOffset=p.x-trackCenter(progress);
+      if(inSafetyArc(progress)&&Math.abs(edgeOffset)>2.8){
+        // Limited physical spring assist (not forced teleport or autopilot).
+        const inward=-Math.sign(edgeOffset)*Math.min(260,
+          (Math.abs(edgeOffset)-2.8)*150+Math.max(0,Math.sign(edgeOffset)*lateral)*18);
+        body.applyForce(new Vec3(inward,0,0));
+        magnetActivations++;
+      }
+      const crossed=boostCrossed(previousProgress,progress,triggeredBoosts);
+      if(crossed!==null){
+        triggeredBoosts.add(crossed);boostCount++;
+        boostSurge=Math.min(22,boostSurge+13);
+        const impulse=Math.max(0,Math.min(12,SPEED_CAP-forward));
+        body.applyImpulse(new Vec3(t.x*impulse*1.4,0,t.z*impulse*1.4));
+        message('MAGNETIC BOOST!');
+      }
+      previousProgress=Math.max(previousProgress,progress);
+      boostSurge=Math.max(0,boostSurge-tick*1.6);
+      const planar=Math.hypot(v.x,v.z);
+      if(planar>SPEED_CAP){
+        const ratio=SPEED_CAP/planar;
+        body.linearVelocity=new Vec3(v.x*ratio,v.y,v.z*ratio);
+      }
+      maxSpeedObserved=Math.max(maxSpeedObserved,Math.min(planar,SPEED_CAP));
+    }else{
+      const sideForce=clamp((targetX-p.x)*36-v.x*11,-95,95);
+      const drive=clamp((-MAX_FORWARD_SPEED-v.z)*13,-60,100);
+      body.applyForce(new Vec3(sideForce,0,drive));
+      body.applyTorque(new Vec3(-4,0,-sideForce*.028));
+      if(Math.abs(v.x)>MAX_SIDE_SPEED||Math.abs(v.z)>MAX_FORWARD_SPEED+2){
+        body.linearVelocity=new Vec3(
+          clamp(v.x,-MAX_SIDE_SPEED,MAX_SIDE_SPEED),v.y,
+          clamp(v.z,-MAX_FORWARD_SPEED-2,MAX_FORWARD_SPEED+2));
+      }
     }
     for(const g of gems){
       if(g.collected)continue;
@@ -289,7 +371,7 @@ app.on('update',(dt:number)=>{
         g.collected=true;g.node.enabled=false;pickups++;message('+ GEM!');
       }
     }
-    if(p.y< -3 || Math.abs(p.x)>9.5)checkpoint();
+    if(p.y< -3 || (speedMode?Math.abs(p.x-trackCenter(SPEED_START_Z-p.z))>9.5:Math.abs(p.x)>9.5))checkpoint();
     if(p.z<=FINISH_Z){
       phase='complete';
       ui.dialog.classList.remove('hidden');
@@ -300,8 +382,17 @@ app.on('update',(dt:number)=>{
   }
   const pos=ball.getPosition();
   // Camera composition follows physical position, never controls it.
-  camera.setPosition(pos.x*.24,8.1,pos.z+14.8);
-  camera.lookAt(pos.x*.18,.65,pos.z-12);
+  if(speedMode){
+    const forward=trackTangent(SPEED_START_Z-pos.z);
+    const speed=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
+    const chase=15+clamp(speed/SPEED_CAP,0,1)*5.5;
+    camera.setPosition(pos.x-forward.x*chase*.48,8.8,pos.z+chase);
+    camera.lookAt(pos.x+forward.x*21,.5,pos.z-22);
+    camera.camera!.fov=clamp((window.innerWidth/window.innerHeight<.78?68:58)+speed*.29,58,84);
+  }else{
+    camera.setPosition(pos.x*.24,8.1,pos.z+14.8);
+    camera.lookAt(pos.x*.18,.65,pos.z-12);
+  }
   ui.coins.textContent=String(pickups);
   ui.progress.style.width=(clamp((7-pos.z)/(7-FINISH_Z),0,1)*100).toFixed(1)+'%';
   if(elapsed>messageUntil)ui.message.classList.remove('show');
@@ -321,7 +412,17 @@ Object.assign(window,{__W9_BALL_TEST__:{
       linearVelocity:[v.x,v.y,v.z],angularVelocity:[w.x,w.y,w.z],
       targetX,fallCount:falls,bumpCount:bumpers,gemCount:pickups,
       attempts,elapsed,finishZ:FINISH_Z,lastFallReason,
-      coursePlanks:tracks.length,physicalBumpers:hazards.length,
+      coursePlanks:speedMode?speedWorld!.segmentCount:tracks.length,
+      physicalBumpers:hazardNodes.length,
+      speedMode,skyKind:speedWorld?.skyKind??'classic',
+      curveDegrees:speedWorld?.curveDegrees??0,
+      magneticSafetyArcs:speedMode?2:0,
+      boostPads:speedWorld?.boostCount??0, boostCount, swipeCount,swipeStacks,
+      magneticAssistEvents:magnetActivations,
+      speedCap:speedMode?SPEED_CAP:MAX_FORWARD_SPEED,
+      planarSpeed:Math.hypot(v.x,v.z),maxSpeedObserved,
+      centerlineX:speedMode?trackCenter(SPEED_START_Z-p.z):0,
+      treeCount:speedMode?0:treeCrowns.length,
       artMode:licensedArt.mode,licensedModels:licensedArt.loaded,
       licensedMeshes:licensedArt.activeMeshes,
       licensedMissing:licensedArt.requiredMissing,
