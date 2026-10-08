@@ -7,8 +7,15 @@ fs.mkdirSync(folder,{recursive:true});
 const snap=page=>page.evaluate(()=>globalThis.__W9_BALL_TEST__?.snapshot());
 const progress=s=>7-s.position[2];
 
-test('W9.4-6.1 optional secret rail is actually selectable, climbs, rides and returns via physical TOP',async({page})=>{
+const screens=[
+  {name:'portrait-390x844',width:390,height:844},
+  {name:'small-android-360x800',width:360,height:800},
+  {name:'landscape-844x390',width:844,height:390}
+];
+for(const vp of screens){
+test('W9.4-6.1 optional player-chosen secret top grind climbs + descends '+vp.name,async({page})=>{
   test.setTimeout(65_000);
+  await page.setViewportSize({width:vp.width,height:vp.height});
   page.setDefaultTimeout(5000);
   const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -17,10 +24,11 @@ test('W9.4-6.1 optional secret rail is actually selectable, climbs, rides and re
   await page.locator('#start').click();
   await expect.poll(async()=>progress(await snap(page)),{timeout:25_000}).toBeGreaterThan(302);
   // A real player steering choice; not a teleport or test-only body setter.
-  await page.mouse.move(48,595);
+  await page.mouse.move(Math.round(vp.width*.123),Math.round(vp.height*.70));
   await page.mouse.down();
   const samples=[],start=Date.now();
-  let peak=0,rode=false,climbed=false,descended=false,finished=false;
+  let peak=0,rode=false,climbed=false,descended=false;
+  let savedCrest=false,savedExit=false;
   let previousSecretFrames=0;
   while(Date.now()-start<24_000){
     const s=await snap(page);
@@ -37,7 +45,15 @@ test('W9.4-6.1 optional secret rail is actually selectable, climbs, rides and re
         y:+s.position[1].toFixed(2),speed:+s.planarSpeed.toFixed(1),
         secret:s.grindSecretFrames,side:s.grindSideContactEvents,
         top:s.grindTopContactEvents,falls:s.fallCount,phase:s.phase});
-    if(s.phase==='complete'||s.phase==='error'){finished=true;break;}
+    if(climbed&&!savedCrest){
+      await page.screenshot({path:path.join(folder,vp.name+'-secret-crest.png')});
+      savedCrest=true;
+    }
+    if(descended&&!savedExit){
+      await page.screenshot({path:path.join(folder,vp.name+'-secret-descent.png')});
+      savedExit=true;
+    }
+    if(s.phase==='complete'||s.phase==='error')break;
     if(p>422)break;
     await page.waitForTimeout(65);
   }
@@ -47,14 +63,17 @@ test('W9.4-6.1 optional secret rail is actually selectable, climbs, rides and re
     peak,end:{phase:end.phase,position:end.position,falls:end.fallCount,
     secret:end.grindSecretFrames,entries:end.grindEntries,
     top:end.grindTopContactEvents,side:end.grindSideContactEvents}}));
-  await page.screenshot({path:path.join(folder,'secret-route-end.png')});
+  await page.screenshot({path:path.join(folder,vp.name+'-secret-end.png')});
   expect(errors).toEqual([]);
   expect(end.fallCount).toBe(0);
   expect(rode).toBe(true);
   expect(climbed).toBe(true);
   expect(descended).toBe(true);
   expect(peak).toBeGreaterThan(3);
+  expect(savedCrest).toBe(true);
+  expect(savedExit).toBe(true);
 });
+}
 
 test('W9.4-6.1 center-lane baseline may bypass secret without free TOP reward',async({page})=>{
   test.setTimeout(50_000);
