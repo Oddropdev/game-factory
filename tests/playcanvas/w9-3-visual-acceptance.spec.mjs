@@ -126,6 +126,33 @@ for (const size of sizes) {
   });
 }
 
+
+test('W9.3-4 beneficial first-left / second-right path reaches level-clear', async ({page}) => {
+  test.setTimeout(45_000);
+  await page.setViewportSize({width:390,height:844});
+  await page.goto('/3d/');
+  await expect.poll(async () => (await snapshot(page))?.loadedCC0Models).toBe(5);
+  await page.locator('#start').click();
+  // Left of the center hazard, collect the left orb and take +4 at gate one.
+  await page.mouse.move(96,475);
+  await page.mouse.down();
+  await expect.poll(async () => (await snapshot(page))?.distance).toBeGreaterThan(54);
+  const midpoint = await snapshot(page);
+  expect(midpoint.gatesPassed).toBe(1);
+  expect(midpoint.mass).toBeGreaterThanOrEqual(8);
+  // Route right in time for the second orb and the +3 branch at gate two.
+  await page.mouse.move(296,475);
+  await expect.poll(async () => (await snapshot(page))?.phase, {timeout:16000}).not.toBe('running');
+  await page.mouse.up();
+  const final = await snapshot(page);
+  expect(final.phase).toBe('complete');
+  expect(final.gatesPassed).toBe(2);
+  expect(final.mass).toBeGreaterThanOrEqual(final.targetMass);
+  await expect(page.locator('#dialog-title')).toContainText('CLEAR!');
+  expect(await page.locator('#feedback').evaluate(el => el.classList.contains('show'))).toBe(false);
+  await capture(page,'portrait-390x844-clear');
+});
+
 test.describe('W9.3-4 high-DPI mobile touch acceptance', () => {
   test.use({ deviceScaleFactor:2 });
   test('projected portal labels remain inside CSS viewport and steering works at DPR 2', async ({page}) => {
