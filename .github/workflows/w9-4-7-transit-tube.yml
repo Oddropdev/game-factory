@@ -1,0 +1,45 @@
+name: W9.4-7 Magnetic Transit Tube
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/src/**"
+      - "tests/ball/w9-4-7-*.spec.mjs"
+      - "tests/unit/w9-4-7-*.test.ts"
+      - ".github/workflows/w9-4-7-transit-tube.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  magnetic-tube:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref,'w9-4-7-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Unit, types, lint, isolated Ball build (no private models)
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+          npm run build:w9-4:ball
+      - name: Real browser tube and inverted travel test
+        run: npx playwright test tests/ball/w9-4-7-transit-tube.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Frozen guard/grind/secret and original ball regressions
+        run: |
+          npx playwright test tests/ball/w9-4-6-2-smooth-rail.spec.mjs tests/ball/w9-4-6-1-secret-route.spec.mjs tests/ball/w9-4-6-guard-grind.spec.mjs --config=playwright.w9-4.config.mjs
+          npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs tests/ball/w9-4-magnetic-rails.spec.mjs tests/ball/w9-4-rail-priority.spec.mjs tests/ball/w9-4-private-art.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-7-magnetic-transit-preview
+          path: |
+            playtest-dist/ball/
+            test-results/
+            evidence/w9-4-6/
+            evidence/w9-4-6-1/
+          if-no-files-found: warn
