@@ -1,6 +1,7 @@
 # W9.4-2 — install ONLY six owner-licensed GLBs from the two purchased ZIPs.
 # Does not upload files, does not run Unity, and does not modify public Git history.
 param(
+  [string]$SelectedZip = '',
   [string]$ObstaclesZip = (Join-Path $env:USERPROFILE 'Downloads\Platformer_2_Obstacles_glb.zip'),
   [string]$DeathrunZip = (Join-Path $env:USERPROFILE 'Downloads\Platformer_Deathrun_glb.zip')
 )
@@ -19,6 +20,10 @@ $want = @(
   @{ Pack='deathrun'; Name='tree_002.glb'; Sha='a1c8510fe9c00c68d4dae2212928aca51e71428a8c773bd0e8fc4a8f9cdfaca8' }
 )
 $zips = @{ obstacles=$ObstaclesZip; deathrun=$DeathrunZip }
+if($SelectedZip){
+  $zips['obstacles']=$SelectedZip
+  $zips['deathrun']=$SelectedZip
+}
 foreach($p in @('obstacles','deathrun')){
   if(-not (Test-Path -LiteralPath $zips[$p])){ throw "ZIP not found: $($zips[$p])" }
 }
