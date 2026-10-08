@@ -19,6 +19,8 @@ import {buildGrindTrack} from './GrindTrack';
 import {TransitTubePath,buildTubeMesh,TUBE_START_PROGRESS,TUBE_FINISH_PROGRESS,
   TUBE_OFFSET,TUBE_CRUISE_METRES_PER_SECOND} from './TubeTransit';
 import {parseTransitManifest,stageTransitLevel} from './TransitNextSector';
+import {secondCenter,secondTangent,parseSecondLevelManifest,stageSecondLevel,
+  type SecondLevelInstance} from './SecondSkyLevel';
 import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
   GRIND_CENTER_FORCE,GRIND_SPEED_FORCE,GRIND_TOP_Y,
   GRIND_ENTRY_START,GRIND_END,
@@ -32,16 +34,19 @@ import './style.css';
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
 const gameMode=new URL(window.location.href).searchParams.get('mode');
-const transitMode=gameMode==='transit';
+const twoLevelMode=gameMode==='twolevel';
+const transitMode=gameMode==='transit'||twoLevelMode;
 const grindMode=gameMode==='grind'||transitMode;
 const railMode=gameMode==='rail'||grindMode;
 const longJumpMode=gameMode==='jump'||railMode;
 const speedMode=gameMode==='speed'||longJumpMode;
 const activeSpeedCap=longJumpMode?LONG_SPEED_CAP:SPEED_CAP;
-const finishDistance=transitMode?TUBE_FINISH_PROGRESS:
+const finishDistance=twoLevelMode?700:transitMode?TUBE_FINISH_PROGRESS:
   longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE;
-const centerAt=(progress:number)=>longJumpMode?longCenter(progress):trackCenter(progress);
-const tangentAt=(progress:number)=>longJumpMode?longTangent(progress):trackTangent(progress);
+const centerAt=(progress:number)=>twoLevelMode&&progress>=550?
+  secondCenter(progress):longJumpMode?longCenter(progress):trackCenter(progress);
+const tangentAt=(progress:number)=>twoLevelMode&&progress>=550?
+  secondTangent(progress):longJumpMode?longTangent(progress):trackTangent(progress);
 const FINISH_Z = speedMode?SPEED_START_Z-finishDistance:-97;
 const BALL_RADIUS = 0.62;
 const MAX_FORWARD_SPEED = 9.5;
@@ -57,7 +62,8 @@ const ui={
   dialog:document.getElementById('dialog')!,
   title:document.getElementById('dialog-title')!,
   description:document.getElementById('dialog-description')!,
-  start:document.getElementById('start') as HTMLButtonElement
+  start:document.getElementById('start') as HTMLButtonElement,
+  level:document.getElementById('level-name')!
 };
 let phase:Phase='ready';
 let frames=0;
@@ -113,6 +119,12 @@ let nextLevelLoadMs=0,nextLevelPlanks=0,nextLevelId='';
 let nextLevelLoadError='';
 let nextLevelStaged:{activate:()=>void;roadPlanks:number;id:string}|null=null;
 const noEarlyPreload=new URL(window.location.href).searchParams.get('preload')==='off';
+let levelIndex:1|2=1,levelOneComplete=false,levelTwoComplete=false;
+let levelTransitionEvents=0,level2Frames=0,level2GemsCollected=0;
+let secondLevel:SecondLevelInstance|null=null;
+let level2RoadContactEvents=0;
+const firstSkyColor=new Color(.59,.84,.99);
+const secondSkyColor=new Color(.95,.59,.72);
 
 function message(text:string) {
   ui.message.textContent=text;
@@ -265,6 +277,18 @@ tubeAccent.emissive=new Color(.09,.83,.70);
 tubeAccent.emissiveIntensity=2.2;tubeAccent.update();
 const tubeWorld=transitPath?
   buildTubeMesh(device,app.root,transitPath,tubeSkin,tubeAccent):null;
+const level2Palette={
+  road:material('#BAA5F1',.66),
+  alternate:material('#FFD3B2',.58),
+  arch:material('#FD84C0',.82),
+  trim:material('#FCF3B8',.82),
+  gem:material('#FFF18B',.95),
+  island:material('#B283D2',.64)
+};
+level2Palette.trim.emissive=new Color(.65,.42,.16);
+level2Palette.trim.emissiveIntensity=.8;level2Palette.trim.update();
+level2Palette.gem.emissive=new Color(.62,.36,.08);
+level2Palette.gem.emissiveIntensity=1.8;level2Palette.gem.update();
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -331,6 +355,12 @@ if(grindMode){
     if(other.name.startsWith('grind-top-'))touchingGrindTop.delete(other.name);
   });
 }
+if(twoLevelMode){
+  ball.collision!.on('collisionstart',(event:{other:Entity})=>{
+    if(levelIndex===2&&event.other.name.startsWith('level2-real-road-'))
+      level2RoadContactEvents++;
+  });
+}
 if(longJumpMode){
   ball.collision!.on('collisionstart',(event:{other:Entity})=>{
     if(event.other.name==='long-landing-deck'&&launched&&!landed&&phase==='running'){
@@ -373,11 +403,19 @@ const preloadNextLevel=()=>{
   const start=performance.now();
   void (async()=>{
     try {
-      const url=new URL('./levels/transit-next.json',document.baseURI);
+      const url=new URL(twoLevelMode?'./levels/second-sky.json':
+        './levels/transit-next.json',document.baseURI);
       const response=await fetch(url);
       if(!response.ok)throw Error('HTTP '+response.status);
-      const manifest=parseTransitManifest(await response.json());
-      nextLevelStaged=stageTransitLevel(manifest,shape,surfaces.track,surfaces.mint);
+      const manifest=await response.json();
+      if(twoLevelMode){
+        secondLevel=stageSecondLevel(parseSecondLevelManifest(manifest),
+          shape,level2Palette);
+        nextLevelStaged=secondLevel;
+      }else{
+        nextLevelStaged=stageTransitLevel(parseTransitManifest(manifest),
+          shape,surfaces.track,surfaces.mint);
+      }
       nextLevelPlanks=nextLevelStaged.roadPlanks;
       nextLevelId=nextLevelStaged.id;
       nextLevelLoadMs=performance.now()-start;
@@ -393,6 +431,13 @@ const preloadNextLevel=()=>{
 const resetTube=()=>{
   if(body.type!=='dynamic')body.type='dynamic';
   tubeState='approach';tubeDistance=0;tubeAngle=0;
+  if(twoLevelMode){
+    levelIndex=1;levelOneComplete=false;levelTwoComplete=false;
+    secondLevel?.deactivate();
+    camera.camera!.clearColor.copy(firstSkyColor);
+    app.scene.ambientLight=new Color(.63,.72,.84);
+    ui.level.textContent='LEVEL 1 · SKY SPEED';
+  }
 };
 const checkpoint=()=>{ // a fall respawns without changing the authoritative physics body type
   falls++;
@@ -425,6 +470,10 @@ function restart(){
   bumpers=0;
   pickups=0;
   lastFallReason='';
+  if(twoLevelMode){
+    levelTransitionEvents=0;level2Frames=0;level2GemsCollected=0;
+    level2RoadContactEvents=0;
+  }
   lastImpact=-100;
   targetX=0;
   swipeCount=0;swipeStacks=0;boostCount=0;boostSurge=0;
@@ -467,7 +516,9 @@ if(!speedMode)ui.start.textContent='START ROLL →';
 ui.status.textContent='AMMO PHYSICS READY';
 if(speedMode){
   ui.title.innerHTML='SKY <em>SPEED.</em>';
-  ui.description.textContent=transitMode?
+  ui.description.textContent=twoLevelMode?
+    'Two worlds in one run: race across the blue sky, ride a fully magnetic looping rollercoaster tube, then emerge into the Sunset Ribbon islands.':
+    transitMode?
     'Ride the green side/top guards, take the narrow top-only rails, then enter a blue 100% magnetic 3D transit tube that loads the next sky island.':
     grindMode?
     'Green GUARDS boost from their side or top: strong magnetic hold until you swipe away. The separate narrow GRIND track only carries you on its TOP.':
@@ -478,7 +529,8 @@ if(speedMode){
     'Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
   document.querySelector('.hint')!.textContent=railMode?
     '↑ FLICK · ↔ LEAN INTO GREEN CURVE RAILS':'↑ FLICK TO ACCELERATE · ↔ STEER';
-  ui.start.textContent=transitMode?'START MAGNETIC TUBE →':
+  ui.start.textContent=twoLevelMode?'START TWO LEVELS →':
+    transitMode?'START MAGNETIC TUBE →':
     grindMode?'START GUARD + GRIND →':
     railMode?'START RAIL RUN →':
     longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
@@ -597,6 +649,13 @@ app.on('update',(dt:number)=>{
         // re-enabling free Bullet physics (never snap angles at the lip).
         tubeAngle*=Math.exp(-tick*7);
       }
+      if(twoLevelMode){
+        const fade=clamp((tubeDistance/transitPath.length-.12)/.72,0,1);
+        camera.camera!.clearColor.set(
+          firstSkyColor.r+(secondSkyColor.r-firstSkyColor.r)*fade,
+          firstSkyColor.g+(secondSkyColor.g-firstSkyColor.g)*fade,
+          firstSkyColor.b+(secondSkyColor.b-firstSkyColor.b)*fade);
+      }
       const frame=transitPath.at(tubeDistance);
       const position=transitPath.position(tubeDistance,tubeAngle);
       body.teleport(...position);
@@ -622,7 +681,13 @@ app.on('update',(dt:number)=>{
           body.angularVelocity=new Vec3(0,0,0);
           tubeExitSpeed=releaseSpeed;tubeState='released';tubeExits++;
           previousProgress=TUBE_FINISH_PROGRESS-70;
-          message('NEXT SKY ISLAND!');
+          if(twoLevelMode){
+            levelIndex=2;levelTransitionEvents++;
+            ui.level.textContent='LEVEL 2 · SUNSET RIBBON';
+            camera.camera!.clearColor.copy(secondSkyColor);
+            app.scene.ambientLight=new Color(.84,.61,.79);
+            message('LEVEL 2 — SUNSET RIBBON!');
+          }else message('NEXT SKY ISLAND!');
         }else if(nextLevelLoadState==='failed'){
           // Remain safely latched rather than eject into an unloaded scene.
           message('TRANSIT HOLD — LOAD ERROR');
@@ -641,6 +706,10 @@ app.on('update',(dt:number)=>{
         // The entrance is reached using genuine preexisting Bullet motion;
         // only after crossing the mouth do we enable tube ownership.
         tubeState='locked';tubeDistance=0;tubeAngle=0;tubeEntries++;
+        if(twoLevelMode){
+          levelOneComplete=true;
+          ui.level.textContent='TRANSIT · ROLLERCOASTER';
+        }
         body.type='kinematic';
         body.teleport(...transitPath.position(0,0));
         touchingGrindTop.clear();touchingRails.clear();
@@ -900,6 +969,18 @@ app.on('update',(dt:number)=>{
           clamp(v.z,-MAX_FORWARD_SPEED-2,MAX_FORWARD_SPEED+2));
       }
     }
+    if(twoLevelMode&&levelIndex===2&&secondLevel?.active){
+      level2Frames++;
+      for(const g of secondLevel.gems){
+        if(g.collected)continue;
+        const gp=g.node.getPosition();
+        const dx=p.x-gp.x,dy=p.y-gp.y,dz=p.z-gp.z;
+        if(dx*dx+dy*dy+dz*dz<1.5*1.5){
+          g.collected=true;g.node.enabled=false;
+          level2GemsCollected++;message('SUNSET GEM!');
+        }
+      }
+    }
     for(const g of gems){
       if(g.collected)continue;
       const gp=g.node.getPosition();
@@ -910,10 +991,15 @@ app.on('update',(dt:number)=>{
     }
     if(p.y< -5 || (speedMode?Math.abs(p.x-centerAt(SPEED_START_Z-p.z))>(longJumpMode?12:9.5):Math.abs(p.x)>9.5))checkpoint();
     if(p.z<=FINISH_Z){
+      if(twoLevelMode)levelTwoComplete=levelIndex===2&&levelOneComplete&&
+        tubeExits===1&&level2Frames>0;
       phase='complete';
       ui.dialog.classList.remove('hidden');
-      ui.title.innerHTML='TRACK <em>CLEARED!</em>';
-      ui.description.textContent=`You collected ${pickups}/6 gems, bumped ${bumpers} times and finished in ${elapsed.toFixed(1)}s. Roll again?`;
+      ui.title.innerHTML=twoLevelMode?'TWO WORLDS <em>CLEARED!</em>':
+        'TRACK <em>CLEARED!</em>';
+      ui.description.textContent=twoLevelMode?
+        `Level 1 → magnetic coaster → Sunset Ribbon complete. Second-world gems ${level2GemsCollected}/5. Total ${elapsed.toFixed(1)}s. Ride again?`:
+        `You collected ${pickups}/6 gems, bumped ${bumpers} times and finished in ${elapsed.toFixed(1)}s. Roll again?`;
       ui.start.textContent='ROLL AGAIN →';
     }
     } // legacy Bullet modes / tube approach and exit (not constrained travel)
@@ -969,7 +1055,8 @@ app.on('update',(dt:number)=>{
     camera.setPosition(pos.x*.24,8.1,pos.z+14.8);
     camera.lookAt(pos.x*.18,.65,pos.z-12);
   }
-  ui.coins.textContent=String(pickups);
+  ui.coins.textContent=String(twoLevelMode&&levelIndex===2?
+    level2GemsCollected:pickups);
   const displayedProgress=transitMode&&transitPath&&
     (tubeState==='locked'||tubeState==='holding')?
     TUBE_START_PROGRESS+(TUBE_FINISH_PROGRESS-TUBE_START_PROGRESS)*
@@ -980,7 +1067,7 @@ app.on('update',(dt:number)=>{
     (transitMode&&(tubeState==='locked'||tubeState==='holding')?
       `MAGNETIC TRANSIT · ${Math.round(displayedProgress)} m · ${Math.round(
         tubeState==='locked'?TUBE_CRUISE_METRES_PER_SECOND*3.6:0)} km/h`:
-      `ROLLING · ${Math.round(-pos.z+7)} m · ${Math.round(Math.abs(body.linearVelocity.z)*3.6)} km/h`):
+      `${twoLevelMode?(levelIndex===2?'SUNSET RIBBON':'SKY SPEED')+' · ':''}ROLLING · ${Math.round(-pos.z+7)} m · ${Math.round(Math.abs(body.linearVelocity.z)*3.6)} km/h`):
     (phase==='complete'?'PHYSICS COURSE COMPLETE':'AMMO PHYSICS READY');
 });
 app.start();
@@ -1003,7 +1090,13 @@ Object.assign(window,{__W9_BALL_TEST__:{
       magneticRailSections:magneticRails?.sections.length??0,
       magneticRailSegments:magneticRails?.segments??0,
       railContactEvents,railBoostFrames,railAssistSeconds,
-      grindMode,transitMode,tubeState,tubeEntries,tubeExits,tubeLockFrames,
+      grindMode,transitMode,twoLevelMode,levelIndex,levelOneComplete,
+      levelTwoComplete,levelTransitionEvents,level2Frames,
+      level2GemsCollected,level2RoadContactEvents,
+      level2GateCount:secondLevel?.gateCount??0,
+      level2Active:secondLevel?.active??false,
+      level2Title:secondLevel?.title??'',
+      tubeState,tubeEntries,tubeExits,tubeLockFrames,
       tubeInvertedFrames,tubeFalls,tubeDistance,tubeAngle,
       tubeHoldSeconds,tubeMaxRadiusError,tubeExitSpeed,
       tubeLength:transitPath?.length??0,tubeMeshCount:tubeWorld?.meshCount??0,
