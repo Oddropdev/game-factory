@@ -21,6 +21,10 @@ if (forbidden.length) error.push('Non-acceptance or frozen code changes: '+forbi
 if (!src.includes("hud.feedback.classList.remove('show');") ||
     !src.includes('createSoftEnvironment') || !src.includes("MassRunnerModel([level])"))
   error.push('Expected stable W9.3 scene/gameplay and result message cleanup');
+if (!src.includes('const cssX=world.x;') || !src.includes('const cssY=world.y;') ||
+    !src.includes('element.dataset.projectedX=String(world.x);') ||
+    src.includes('world.x/(device.maxPixelRatio') || src.includes('world.y/(device.maxPixelRatio'))
+  error.push('Projected portal labels must use CSS coordinates at all pixel densities');
 const expected = ['portrait-390x844','small-android-360x800','landscape-844x390']
   .flatMap(device=>['ready','gate-decision','result'].map(phase=>device+'-'+phase+'.png'))
   .concat('portrait-390x844-dpr2-gate.png', 'portrait-390x844-clear.png');
