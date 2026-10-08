@@ -1,0 +1,60 @@
+name: W9.3-2 Rounded Gates and Track
+
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-playcanvas/**"
+      - "tests/playcanvas/w9-3-soft-course.spec.mjs"
+      - "tools/check-w9-3-2.mjs"
+      - "docs/evidence/W9.3-2*"
+      - ".github/workflows/w9-3-rounded-course.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-3-2-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      W9_3_2_BASE_SHA: f08a493decd8d79851aa50ee9bf8a3b692b52a69
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Frozen factory and MassRunnerModel regressions
+        run: npm run verify
+      - name: W8 and audio regression
+        run: npm run test:w8-feel
+      - name: Original W9 public game untouched
+        run: |
+          npm run package:playtest
+          npm run test:w9-playtest
+      - name: Build pinned Kenney CC0 PlayCanvas hero
+        run: npm run build:w9-2d
+      - name: Test original and W9.3-1 PlayCanvas functionality
+        run: npm run test:w9-2d
+      - name: Nine real mobile screenshot states plus color and touch gates
+        run: npx playwright test tests/playcanvas/w9-3-soft-course.spec.mjs --config=playwright.w9-2d.config.mjs
+      - name: Protect frozen code and archive artifact sizes
+        run: node tools/check-w9-3-2.mjs
+      - name: Visual inspection evidence and opt-in /3d build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-3-2-rounded-course-evidence
+          path: |
+            playtest-dist/3d/
+            evidence/w9-3-2/
+            test-results/
+          if-no-files-found: warn
