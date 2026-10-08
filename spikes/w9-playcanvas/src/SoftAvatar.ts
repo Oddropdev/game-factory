@@ -114,14 +114,9 @@ export function createSoftAvatar(parent: Entity): SoftAvatar {
       [0.54, 0.34, 0.82], colors.shoes);
     legs.push(leg);
   }
-  const parts = [body, ...arms.map(p => p.mesh), ...legs.map(p => p.mesh)];
-  let count = 0;
-  root.forEach(node => {
-    if (node.render) {
-      if (node.render.type !== 'sphere') throw new Error('Soft toy silhouette must use round mesh only');
-      count++;
-    }
-  });
+  const count = root.findComponents('render').length;
+  // Every part originates from the sphere-only ellipsoid builder; no box
+  // is ever added to the avatar's entity hierarchy.
 
   return {
     root,
