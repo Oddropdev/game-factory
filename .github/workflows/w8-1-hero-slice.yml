@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w8-1-')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
