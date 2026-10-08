@@ -4,7 +4,7 @@
 import {
   AppBase, AppOptions, CameraComponentSystem, Color, ContainerHandler,
   Entity, FILLMODE_FILL_WINDOW, LightComponentSystem, RenderComponentSystem,
-  RESOLUTION_AUTO, StandardMaterial, Vec3, createGraphicsDevice
+  RESOLUTION_AUTO, StandardMaterial, TextureHandler, Vec3, createGraphicsDevice
 } from 'playcanvas';
 import { MassRunnerModel } from '../../../src/games/mass-runner/MassRunnerModel';
 import { MASS_RUNNER_LEVELS, applyMassOperation, type MassRunnerEvent } from '../../../src/games/mass-runner/MassRunnerLevels';
@@ -30,7 +30,7 @@ device.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.6);
 const options = new AppOptions();
 options.graphicsDevice = device;
 options.componentSystems = [RenderComponentSystem, CameraComponentSystem, LightComponentSystem];
-options.resourceHandlers = [ContainerHandler];
+options.resourceHandlers = [TextureHandler, ContainerHandler];
 const app = new AppBase(canvas);
 app.init(options);
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
