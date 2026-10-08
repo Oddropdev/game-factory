@@ -54,6 +54,7 @@ const MAX_SIDE_SPEED = 7.5;
 const clamp=(x:number,min:number,max:number)=>Math.max(min,Math.min(max,x));
 const canvas=document.getElementById('application-canvas') as HTMLCanvasElement;
 const root=document.getElementById('game')!;
+if(twoLevelMode)root.classList.add('two-worlds');
 const ui={
   status:document.getElementById('status')!,
   progress:document.getElementById('progress')!,
@@ -63,7 +64,8 @@ const ui={
   title:document.getElementById('dialog-title')!,
   description:document.getElementById('dialog-description')!,
   start:document.getElementById('start') as HTMLButtonElement,
-  level:document.getElementById('level-name')!
+  level:document.getElementById('level-name')!,
+  gemLabel:document.getElementById('gem-label')!
 };
 let phase:Phase='ready';
 let frames=0;
@@ -437,6 +439,8 @@ const resetTube=()=>{
     camera.camera!.clearColor.copy(firstSkyColor);
     app.scene.ambientLight=new Color(.63,.72,.84);
     ui.level.textContent='LEVEL 1 · SKY SPEED';
+    ui.gemLabel.textContent=' / 6 SKY GEMS';
+    root.classList.remove('sunset-world');
   }
 };
 const checkpoint=()=>{ // a fall respawns without changing the authoritative physics body type
@@ -514,6 +518,10 @@ function restart(){
 ui.start.disabled=false;
 if(!speedMode)ui.start.textContent='START ROLL →';
 ui.status.textContent='AMMO PHYSICS READY';
+if(twoLevelMode){
+  ui.level.textContent='LEVEL 1 · SKY SPEED';
+  ui.gemLabel.textContent=' / 6 SKY GEMS';
+}
 if(speedMode){
   ui.title.innerHTML='SKY <em>SPEED.</em>';
   ui.description.textContent=twoLevelMode?
@@ -684,6 +692,8 @@ app.on('update',(dt:number)=>{
           if(twoLevelMode){
             levelIndex=2;levelTransitionEvents++;
             ui.level.textContent='LEVEL 2 · SUNSET RIBBON';
+            ui.gemLabel.textContent=' / 5 SUNSET GEMS';
+            root.classList.add('sunset-world');
             camera.camera!.clearColor.copy(secondSkyColor);
             app.scene.ambientLight=new Color(.84,.61,.79);
             message('LEVEL 2 — SUNSET RIBBON!');
