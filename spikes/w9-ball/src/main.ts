@@ -18,7 +18,7 @@ import { buildCurveRails, railFieldAt, railSectionAt, RAIL_CONTACT_FORCE, RAIL_P
 import {buildGrindTrack} from './GrindTrack';
 import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
   GRIND_CENTER_FORCE,GRIND_SPEED_FORCE,GRIND_TOP_Y,
-  GRIND_VOID_FROM,GRIND_VOID_TO,SECRET_START,SECRET_END,
+  GRIND_VOID_FROM,GRIND_VOID_TO,
   grindPath,activeGrindRoute,
   PLAYER_RADIUS,RELEASE_COOLDOWN,guardSurface,allowGuardLock,
   oppositeToGuard,grindTopQualifies,relativeRailSpring,
