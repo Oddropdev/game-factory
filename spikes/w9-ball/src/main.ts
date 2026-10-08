@@ -217,7 +217,8 @@ band.setLocalScale(.85,.17,.85);
 ball.addChild(band);
 const body=ball.rigidbody!;
 if(railMode){
-  const readContact=(other:Entity)=>{
+  const readContact=(other:Entity|null|undefined)=>{
+    if(!other)return null;
     const match=/^real-magnetic-rail-(\d+)-/.exec(other.name);
     return match?Number(match[1]):null;
   };
@@ -231,8 +232,10 @@ if(railMode){
     railContactSpeedStart=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
     message('RAIL BOOST!');
   });
-  ball.collision!.on('collisionend',(event:{other:Entity})=>{
-    if(readContact(event.other)!==null)touchingRails.delete(event.other.name);
+  // Unlike collisionstart's ContactResult.other, PlayCanvas collisionend
+  // emits the OTHER ENTITY directly. Never dereference `event.other` here.
+  ball.collision!.on('collisionend',(other:Entity)=>{
+    if(readContact(other)!==null)touchingRails.delete(other.name);
   });
 }
 if(longJumpMode){
