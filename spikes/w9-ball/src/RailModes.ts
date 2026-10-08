@@ -30,9 +30,13 @@ const smooth=(a:number,b:number,v:number)=>{
 // track, then descends. Geometry is independent from the side-boost guard.
 export function grindPath(progress:number,centerlineX:number,route:GrindRoute){
   if(route==='bridge')return {x:centerlineX,y:GRIND_TOP_Y};
-  const lateral=3.1*(smooth(345,364,progress)-smooth(386,401,progress));
-  const elevation=2.5*(smooth(348,371,progress)-smooth(382,401,progress));
-  return {x:centerlineX+lateral,y:GRIND_TOP_Y+elevation};
+  // The upper shortcut is a CHOICE on the left lane, never an obstacle
+  // in the centerline. Side selection begins well ahead of the 344m rail.
+  // Third green GUARD is on the opposite outer right edge.
+  const entryLane=-3.0*(smooth(301,313,progress)-smooth(398,417,progress));
+  const branchBend=-1.35*(smooth(352,374,progress)-smooth(385,399,progress));
+  const elevation=2.5*(smooth(348,375,progress)-smooth(382,401,progress));
+  return {x:centerlineX+entryLane+branchBend,y:GRIND_TOP_Y+elevation};
 }
 export function activeGrindRoute(progress:number):GrindRoute|null{
   if(progress>=GRIND_START-1&&progress<=GRIND_END+1)return 'bridge';
