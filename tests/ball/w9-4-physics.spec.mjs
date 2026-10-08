@@ -34,6 +34,17 @@ for(const size of sizes) {
     const status=page.locator('#status');
     await expect(status).toContainText('PHYSICS READY');
     await page.locator('#start').click();
+    await page.waitForTimeout(1200);
+    const physicsAfterStart=await snap(page);
+    console.log('W9_4_PHYSICS_INITIAL_DRIVE '+JSON.stringify({
+      position:physicsAfterStart.position,
+      velocity:physicsAfterStart.linearVelocity,
+      spin:physicsAfterStart.angularVelocity,
+      falls:physicsAfterStart.fallCount,
+      phase:physicsAfterStart.phase,
+      frames:physicsAfterStart.physicsFrames
+    }));
+    expect(physicsAfterStart.fallCount).toBe(0);
     await expect.poll(async()=> (await snap(page))?.position?.[2],{timeout:7_000})
       .toBeLessThan(-1);
     const moving=await snap(page);
