@@ -33,7 +33,8 @@
     "test:w9-2b": "playwright test --config=playwright.w9-2b.config.mjs",
     "check:w9-2b": "node tools/check-w9-2b.mjs",
     "assets:w9-2d": "node tools/fetch-w9-2d-assets.mjs",
-    "build:w9-2d": "npm run assets:w9-2d && vite build --config spikes/w9-playcanvas/vite.config.ts",
+    "typecheck:w9-2d": "tsc --project spikes/w9-playcanvas/tsconfig.json --noEmit",
+    "build:w9-2d": "npm run typecheck:w9-2d && npm run assets:w9-2d && vite build --config spikes/w9-playcanvas/vite.config.ts",
     "test:w9-2d": "playwright test --config=playwright.w9-2d.config.mjs"
   },
   "dependencies": {
