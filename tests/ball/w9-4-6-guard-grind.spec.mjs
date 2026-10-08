@@ -58,6 +58,7 @@ test('W9.4-6 GUARD: side lock is strong but opposite swipe releases immediately'
   const released=await read(page);
   await page.screenshot({path:path.join(evidence,'guard-released.png')});
   expect(released.guardReleaseEvents).toBeGreaterThan(0);
+  expect(released.guardReleaseSwipePx).toBeGreaterThan(65);
   expect(released.guardHoldFrames).toBeGreaterThan(0);
   expect(released.guardLockPeakSpeed).toBeGreaterThan(5);
   expect(released.railContactEvents).toBeGreaterThan(0);
