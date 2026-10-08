@@ -138,26 +138,46 @@ test('W9.3-4 beneficial first-left / second-right path reaches level-clear', asy
   await page.setViewportSize({width:390,height:844});
   await page.goto('/3d/');
   await expect.poll(async () => (await snapshot(page))?.loadedCC0Models).toBe(5);
-  // Touch starts AND steers on the first frame (not after the button click);
-  // otherwise the 15-unit first coin can pass during the click/drag handoff.
+
+  // Start via real pointer input, steer immediately to the first pickup
+  // at distance 15, avoid the middle hazard at 32, then take +4 at 50.
   await page.mouse.move(96,700);
   await page.mouse.down();
   await expect.poll(async () => (await snapshot(page))?.phase).toBe('running');
-  await expect.poll(async () => (await snapshot(page))?.distance).toBeGreaterThan(54);
-  const midpoint = await snapshot(page);
-  expect(midpoint.gatesPassed).toBe(1);
-  expect(midpoint.pickups).toBeGreaterThanOrEqual(1);
-  expect(midpoint.mass).toBeGreaterThanOrEqual(10);
-  // Route right in time for the second orb and the +3 branch at gate two.
-  await page.mouse.move(296,700);
-  await expect.poll(async () => (await snapshot(page))?.phase, {timeout:16000}).not.toBe('running');
+  await expect.poll(async () => (await snapshot(page))?.pickups, {timeout:5000}).toBe(1);
+  const firstPickup = await snapshot(page);
+  expect(firstPickup.mass).toBe(6);
+  expect(firstPickup.hits).toBe(0);
+  await expect.poll(async () => (await snapshot(page))?.gatesPassed, {timeout:5000}).toBe(1);
+  const firstGate = await snapshot(page);
+  expect(firstGate.mass).toBe(10);
+  expect(firstGate.hits).toBe(0);
+  expect(firstGate.playerNormX).toBeLessThan(0.5);
+
+  // Switch lanes IMMEDIATELY after gate one (not several frames later).
+  // Verify the actual model player position before the second gate, not
+  // merely that a pointermove event was dispatched.
+  await page.mouse.move(350,700);
+  await expect.poll(async () => (await snapshot(page))?.playerNormX, {timeout:1500})
+    .toBeGreaterThan(0.70);
+  const inRightLane = await snapshot(page);
+  expect(inRightLane.gatesPassed).toBe(1);
+  expect(inRightLane.distance).toBeLessThan(86);
+  await expect.poll(async () => (await snapshot(page))?.gatesPassed, {timeout:5000}).toBe(2);
+  const secondGate = await snapshot(page);
+  expect(secondGate.playerNormX).toBeGreaterThan(0.5);
+  expect(secondGate.mass).toBeGreaterThanOrEqual(13); // 4 + 2 + 4 + 3
+  expect(secondGate.hits).toBe(0);
+
+  await expect.poll(async () => (await snapshot(page))?.phase, {timeout:10000})
+    .toBe('complete');
   await page.mouse.up();
   const final = await snapshot(page);
-  expect(final.phase).toBe('complete');
   expect(final.gatesPassed).toBe(2);
   expect(final.mass).toBeGreaterThanOrEqual(final.targetMass);
   await expect(page.locator('#dialog-title')).toContainText('CLEAR!');
-  expect(await page.locator('#feedback').evaluate(el => el.classList.contains('show'))).toBe(false);
+  expect(await page.locator('#feedback').evaluate(el => el.classList.contains('show')))
+    .toBe(false);
   await capture(page,'portrait-390x844-clear');
 });
 
