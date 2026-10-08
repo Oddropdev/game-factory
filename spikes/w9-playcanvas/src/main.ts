@@ -151,6 +151,8 @@ for(const el of gateLabels){
 }
 let target=0.5, accumulator=0, elapsed=0, lastEventId:string|null=null, showUntil=0;
 let previousMass = model.snapshot().mass;
+let previousPickups = model.snapshot().pickups;
+let previousHits = model.snapshot().hits;
 let visualFrames=0;
 const showFeedback=(value:string)=>{
   hud.feedback.textContent=value;hud.feedback.classList.add('show');showUntil=elapsed+1.0;
@@ -195,14 +197,21 @@ const present=()=>{
   hud.progress.style.width=(s.progress*100).toFixed(1)+'%';
   if(lastEventId!==s.lastEventId&&s.lastEventId){
     const e=level.events.find(x=>x.id===s.lastEventId);
-    if(e?.kind==='gate')showFeedback('MASS × / +');
-    else if(e?.kind==='orb')showFeedback('+ COINS');
-    else if(e?.kind==='hazard')showFeedback('OUCH!');
-    if(e)juice.trigger(e.kind==='hazard'||s.mass<previousMass?'impact':'reward',
+    // Model reports processed events even when an orb/hazard is missed.
+    // Feedback must only fire on a real pickup/hit or an actual gate crossing.
+    const didPickup=e?.kind==='orb'&&s.pickups>previousPickups;
+    const didHit=e?.kind==='hazard'&&s.hits>previousHits;
+    const didGate=e?.kind==='gate';
+    if(didGate)showFeedback(s.mass>previousMass?'MASS UP!':'GATE!');
+    else if(didPickup)showFeedback('+ COINS');
+    else if(didHit)showFeedback('OUCH!');
+    if(didGate||didPickup||didHit)juice.trigger(didHit||s.mass<previousMass?'impact':'reward',
       elapsed,(s.playerNormX-.5)*6.6);
     lastEventId=s.lastEventId;
   }
   previousMass=s.mass;
+  previousPickups=s.pickups;
+  previousHits=s.hits;
   if(showUntil<elapsed)hud.feedback.classList.remove('show');
   player.setPosition((s.playerNormX-.5)*6.6,0,2.5);
   // W9.3: exclusively visual toy motion. Mass, steering and timing remain
