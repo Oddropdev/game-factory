@@ -178,6 +178,12 @@ export class MassRunnerGame implements GameModule {
   render(): void {
     const snapshot = this.model.snapshot();
     const level = this.model.getCurrentLevel();
+
+    // C renders only one scene: avoid wasting phone GPU time on the hidden 2D layer.
+    if (this.renderer3d?.supported) {
+      this.renderer3d.render(snapshot, level);
+      return;
+    }
     const layout = this.layout();
 
     if (this.presentationMode === 'baseline') {
@@ -191,11 +197,14 @@ export class MassRunnerGame implements GameModule {
       layout,
       this.presentation.snapshot(snapshot)
     );
-    this.renderer3d?.render(snapshot, level);
   }
 
   renderHud(): void {
     const snapshot = this.model.snapshot();
+    if (this.renderer3d?.supported) {
+      this.renderer3d.renderHud(snapshot, this.model.getCurrentLevel());
+      return;
+    }
 
     if (this.presentationMode === 'baseline') {
       this.renderBaselineHud(snapshot);
@@ -206,7 +215,6 @@ export class MassRunnerGame implements GameModule {
       snapshot,
       this.presentation.snapshot(snapshot)
     );
-    this.renderer3d?.renderHud(snapshot, this.model.getCurrentLevel());
   }
 
   foundationState(): FoundationGameState {
