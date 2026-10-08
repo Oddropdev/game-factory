@@ -77,7 +77,7 @@ sun.setEulerAngles(48, -25, 0);
 app.root.addChild(sun);
 app.scene.ambientLight = new Color(.53,.61,.72);
 
-const track = block('wide-3d-track',[0,-.28,-24],[7.8,.5,80],mats.road);
+block('wide-3d-track',[0,-.28,-24],[7.8,.5,80],mats.road);
 block('grass-left',[-12,-.7,-27],[17,1.0,92],mats.grass);
 block('grass-right',[12,-.7,-27],[17,1.0,92],mats.grass);
 block('edge-left',[-3.8,.14,-24],[.22,.33,80],mats.gold);
