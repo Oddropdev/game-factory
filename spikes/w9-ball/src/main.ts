@@ -373,7 +373,7 @@ const preloadNextLevel=()=>{
   const start=performance.now();
   void (async()=>{
     try {
-      const url=new URL('./levels/transit-next.json',import.meta.url);
+      const url=new URL('./levels/transit-next.json',document.baseURI);
       const response=await fetch(url);
       if(!response.ok)throw Error('HTTP '+response.status);
       const manifest=parseTransitManifest(await response.json());
@@ -591,6 +591,11 @@ app.on('update',(dt:number)=>{
       if(tubeState==='locked'){
         tubeDistance=Math.min(transitPath.length,
           tubeDistance+TUBE_CRUISE_METRES_PER_SECOND*tick);
+      }
+      if(tubeDistance>transitPath.length-22){
+        // Ease around the cylinder to the safe road-bottom exit before
+        // re-enabling free Bullet physics (never snap angles at the lip).
+        tubeAngle*=Math.exp(-tick*7);
       }
       const frame=transitPath.at(tubeDistance);
       const position=transitPath.position(tubeDistance,tubeAngle);
@@ -1044,7 +1049,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
       launchSpeed,landingSpeed,airborneFrames,landingContactEvents,
       gapMeters:jumpWorld?.gapMeters??0,
       landingWidth:jumpWorld?.landingWidth??0,
-      courseLength:longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE,
+      courseLength:finishDistance,
       magneticAssistEvents:magnetActivations,
       speedCap:speedMode?activeSpeedCap:MAX_FORWARD_SPEED,
       planarSpeed:Math.hypot(v.x,v.z),maxSpeedObserved,
