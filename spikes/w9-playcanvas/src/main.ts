@@ -9,6 +9,12 @@ import {
 import { MassRunnerModel } from '../../../src/games/mass-runner/MassRunnerModel';
 import { MASS_RUNNER_LEVELS, applyMassOperation, type MassRunnerEvent } from '../../../src/games/mass-runner/MassRunnerLevels';
 import { createSoftAvatar } from './SoftAvatar';
+import {
+  createSoftTrack, createSoftPortal, createSoftHazard,
+  createSoftStripe, createSoftDecoration, createSoftShadow,
+  type SoftPortal
+
+} from './SoftCourse';
 import './style.css';
 
 const level = MASS_RUNNER_LEVELS[0]!;
@@ -78,49 +84,42 @@ sun.setEulerAngles(48, -25, 0);
 app.root.addChild(sun);
 app.scene.ambientLight = new Color(.53,.61,.72);
 
-block('wide-3d-track',[0,-.28,-24],[7.8,.5,80],mats.road);
-block('grass-left',[-12,-.7,-27],[17,1.0,92],mats.grass);
-block('grass-right',[12,-.7,-27],[17,1.0,92],mats.grass);
-block('edge-left',[-3.8,.14,-24],[.22,.33,80],mats.gold);
-block('edge-right',[3.8,.14,-24],[.22,.33,80],mats.gold);
-const stripes: Entity[]=[];
-for(let i=0;i<17;i++)for(const x of [-1.25,1.25]){
-  stripes.push(block('lane-glow',[x,.01,4-i*4],[.065,.045,1.9],mats.stripe));
+const courseMetrics = createSoftTrack(app.root, mats);
+const stripes: Entity[] = [];
+for (let i = 0; i < 17; i++) for (const x of [-1.25, 1.25]) {
+  stripes.push(createSoftStripe('lane-glow', app.root, mats, x, 4 - i * 4));
 }
-const decorations:Entity[]=[];
-for(let i=0;i<13;i++)for(const sign of [-1,1]){
-  decorations.push(block('road-bumper',[sign*4.55,.07,3-i*6],[.3,.25,1.7],i%2?mats.cyan:mats.purple));
+const decorations: Entity[] = [];
+for (let i = 0; i < 13; i++) for (const side of [-1, 1]) {
+  decorations.push(createSoftDecoration('soft-road-bumper', app.root, mats,
+    side * 4.55, 3 - i * 6, i % 2 === 0));
 }
 const player = new Entity('character-anchor');
 player.setPosition(0,0,2.5);
 app.root.addChild(player);
-const baseShadow=block('player-shadow',[0,.02,2.5],[1.25,.03,.96],material('#405a7e'));
+const baseShadow = createSoftShadow(app.root, material('#405a7e'));
 // PlayCanvas owns smooth toy avatar geometry; the legacy Kenney character is
 // still available as a pinned reference but is not the visible W9.3 hero.
 const avatar = createSoftAvatar(player);
 
-const data: Array<{event:MassRunnerEvent;node:Entity;left?:Entity;right?:Entity}>=[];
-for(const event of level.events){
-  const node=new Entity('event-'+event.id);
+const data: Array<{event: MassRunnerEvent; node: Entity; portal?: SoftPortal}> = [];
+let portalCount = 0;
+let hazardCount = 0;
+for (const event of level.events) {
+  const node = new Entity('event-' + event.id);
   app.root.addChild(node);
-  if(event.kind==='gate'){
-    const left=block(event.id+'-left',[-1.93,1.33,0],[3.6,2.66,.46],mats.cyan,node);
-    const right=block(event.id+'-right',[1.93,1.33,0],[3.6,2.66,.46],mats.red,node);
-    // The gate opening is readable in depth: thin portal headers, not solid walls.
-    left.setLocalScale(3.5,.38,.48);
-    right.setLocalScale(3.5,.38,.48);
-    left.setLocalPosition(-1.85,2.5,0);
-    right.setLocalPosition(1.85,2.5,0);
-    for(const [x,m] of [[-3.47,mats.cyan],[-.25,mats.cyan],[.25,mats.red],[3.47,mats.red]] as const){
-      block('portal-post',[x,1.28,0],[.27,2.55,.4],m,node).setLocalPosition(x,1.28,0);
-    }
-    data.push({event,node,left,right});
-  }else if(event.kind==='hazard'){
-    block('hazard-plinth',[0,.5,0],[event.width*7.7,1,.9],mats.red,node);
-    block('hazard-light',[0,1.08,0],[event.width*7.9,.17,1],mats.gold,node);
-    data.push({event,node});
-  }else{
-    data.push({event,node});
+  if (event.kind === 'gate') {
+    const portal = createSoftPortal(event.id, node, mats);
+    courseMetrics.portalParts += portal.roundedParts;
+    portalCount++;
+    data.push({ event, node, portal });
+  } else if (event.kind === 'hazard') {
+    const parts = createSoftHazard(event.id, node, event.width, mats);
+    courseMetrics.hazardParts += parts;
+    hazardCount++;
+    data.push({ event, node });
+  } else {
+    data.push({ event, node });
   }
 }
 
@@ -154,7 +153,7 @@ for(const [i,dec] of decorations.entries()){
 }
 for(const item of data){
   if(item.event.kind==='orb')clone('coin',item.node,[0,.98,0],1.0);
-  if(item.event.kind==='hazard')clone('platform',item.node,[0,.25,0],.5);
+  // No blocky Kenney platform overlays on rounded soft hazard rollers.
 }
 clone('flag',app.root,[4,0,-53],1.2);
 
@@ -234,8 +233,7 @@ const present=()=>{
     );
     if(item.event.kind==='gate'){
       const betterLeft=applyMassOperation(s.mass,item.event.left)>=applyMassOperation(s.mass,item.event.right);
-      item.left!.render!.material=betterLeft?mats.cyan:mats.red;
-      item.right!.render!.material=betterLeft?mats.red:mats.cyan;
+      item.portal!.setBestLeft(betterLeft);
       if(!nextGate&&remaining>0)nextGate=item;
     }
   }
@@ -246,13 +244,17 @@ const present=()=>{
       const op=[nextGate.event.left,nextGate.event.right];
       const z=1.5-remaining*.47;
       for(let i=0;i<2;i++){
-        const targetPosition=new Vec3(i===0?-1.93:1.93,3.2,z);
+        const targetPosition=new Vec3(i===0?-1.9:1.9,3.08,z);
         const world=camera.camera!.worldToScreen(targetPosition);
         const cssX=world.x/(device.maxPixelRatio||1);
         const cssY=world.y/(device.maxPixelRatio||1);
         const element=gateLabels[i]!;
         element.textContent=opLabel(op[i]!,s.mass);
-        element.style.background=i===0?'#1a9ca5':'#dc426a';
+        const betterLeft=applyMassOperation(s.mass,op[0]!)>=applyMassOperation(s.mass,op[1]!);
+        const advantageous=i===0?betterLeft:!betterLeft;
+        element.style.background=advantageous?'#149D84':'#CE547B';
+        element.dataset.gateQuality=advantageous?'better':'worse';
+        element.dataset.gateOperation=op[i]!.op;
         element.style.left=cssX+'px';element.style.top=cssY+'px';
         element.style.display=cssX>0&&cssX<window.innerWidth&&cssY>100&&cssY<window.innerHeight?'block':'none';
       }
@@ -291,6 +293,13 @@ Object.assign(window,{
       avatarKind:'soft-toy-v1',
       avatarRoundedParts:avatar.partCount,
       avatarBoxParts:avatar.boxPartCount,
+      softCourse:'rounded-toy-v1',
+      softTrackPieces:courseMetrics.trackParts,
+      roundedPortalPieces:courseMetrics.portalParts,
+      roundedHazardPieces:courseMetrics.hazardParts,
+      portalCount,
+      hazardCount,
+      softCourseBoxPieces:courseMetrics.boxParts,
       fullViewport:canvas.clientWidth>=window.innerWidth-2&&canvas.clientHeight>=window.innerHeight-2
     })
   }
