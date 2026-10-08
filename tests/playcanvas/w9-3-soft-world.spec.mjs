@@ -77,3 +77,27 @@ test('W9.3-3 does not change original gate values or drag steering', async({page
   expect((await read(page)).playerNormX).toBeGreaterThan(.55);
   await page.mouse.up();
 });
+
+test('W9.3-3 never celebrates a missed pickup, but reacts to a real hit', async ({page}) => {
+  await page.setViewportSize({width:390,height:844});
+  await page.goto('/3d/');
+  await expect.poll(async()=>(await read(page))?.loadedCC0Models).toBe(5);
+  await page.locator('#start').click();
+  // At x=0.5 the first orb (x=0.25) is missed; the centre hazard is hit.
+  await expect.poll(async()=>(await read(page))?.eventsProcessed,{timeout:6500})
+    .toBeGreaterThanOrEqual(1);
+  const missed=await read(page);
+  expect(missed.lastEventId).toBe('l1-orb-a');
+  expect(missed.pickups).toBe(0);
+  expect(missed.juiceActive).toBe(0);
+  await expect(page.locator('#feedback')).not.toHaveClass(/show/);
+  await expect.poll(async()=>(await read(page))?.eventsProcessed,{timeout:6500})
+    .toBeGreaterThanOrEqual(2);
+  const hit=await read(page);
+  expect(hit.lastEventId).toBe('l1-hazard');
+  expect(hit.hits).toBe(1);
+  expect(hit.juiceActive).toBeGreaterThan(0);
+  expect(hit.juiceActive).toBeLessThanOrEqual(hit.juiceCapacity);
+  expect(await page.locator('#feedback').textContent()).toBe('OUCH!');
+  await page.screenshot({path:path.join(out,'portrait-confirmed-hit-juice.png')});
+});
