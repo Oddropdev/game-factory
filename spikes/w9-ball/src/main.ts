@@ -69,6 +69,8 @@ let swipeCount=0,swipeStacks=0,boostCount=0,boostSurge=0;
 let maxSpeedObserved=0,magnetActivations=0,previousProgress=0;
 const triggeredBoosts=new Set<number>();
 let pointerLastY:number|null=null;
+let pointerLastX:number|null=null;
+let guardReleaseSwipePx=0;
 let launched=false,landed=false,jumpCount=0,landingCount=0;
 let jumpAirtime=0,maxJumpHeight=0,launchSpeed=0,landingSpeed=0;
 let landingContactEvents=0,airborneFrames=0;
@@ -365,7 +367,8 @@ function restart(){
   targetX=0;
   swipeCount=0;swipeStacks=0;boostCount=0;boostSurge=0;
   maxSpeedObserved=0;magnetActivations=0;previousProgress=0;
-  triggeredBoosts.clear();pointerLastY=null;
+  triggeredBoosts.clear();pointerLastY=null;pointerLastX=null;
+  guardReleaseSwipePx=0;
   launched=false;landed=false;jumpCount=0;landingCount=0;
   jumpAirtime=0;maxJumpHeight=0;launchSpeed=0;landingSpeed=0;
   airborneFrames=0;landingContactEvents=0;
@@ -453,17 +456,29 @@ root.addEventListener('pointerdown',e=>{
   if(phase!=='running')restart();
   steer(e.clientX);
   pointerLastY=e.clientY;
+  pointerLastX=e.clientX;
 });
 root.addEventListener('pointermove',e=>{
   if(e.buttons!==0||e.pointerType==='touch'){
+    const swipeDelta=pointerLastX===null?0:e.clientX-pointerLastX;
+    // Directional opposite SWIPE, not merely an absolute screen lane.
+    // The old control waited for the cursor to cross the entire screen;
+    // at 50m/s the short corner could end before it registered release.
+    if(grindMode&&guardSide!==null&&
+      (guardLock==='locked-side'||guardLock==='locked-top')&&
+      guardSide*swipeDelta< -65){
+      guardReleaseSwipePx=Math.abs(swipeDelta);
+      releaseGuard();
+    }
     steer(e.clientX);
+    pointerLastX=e.clientX;
     if(pointerLastY!==null&&pointerLastY-e.clientY>52){
       flickForward();pointerLastY=e.clientY;
     }
   }
 });
-root.addEventListener('pointerup',()=>{pointerLastY=null;});
-root.addEventListener('pointercancel',()=>{pointerLastY=null;});
+root.addEventListener('pointerup',()=>{pointerLastY=null;pointerLastX=null;});
+root.addEventListener('pointercancel',()=>{pointerLastY=null;pointerLastX=null;});
 window.addEventListener('keydown',e=>{
   if(e.code==='Space'||e.code==='Enter'){e.preventDefault();restart();}
   if(e.code==='ArrowLeft'||e.code==='KeyA')targetX=clamp(targetX-.9,-3.3,3.3);
@@ -756,7 +771,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
       grindMode,guardLock,guardSide,guardLockEvents,guardTopEvents,
       guardSideEvents,guardReleaseEvents,guardReleaseByOppositeSwipe,
       guardLockSeconds,guardLockPeakSpeed,guardHoldFrames,guardCoolUntil,
-      guardLastTouch,
+      guardLastTouch,guardReleaseSwipePx,
       grindLock,grindEntries,grindExits,grindSeconds,
       grindBridgeFrames,grindSecretFrames,
       grindLastTopImpact,grindTopDeniedHeight,grindTopDeniedLateral,
