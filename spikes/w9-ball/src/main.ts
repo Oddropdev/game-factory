@@ -515,6 +515,7 @@ app.on('update',(dt:number)=>{
     // interpolates a fake ball position. Lateral damping is user-relative.
     if(speedMode){
       const progress=SPEED_START_Z-p.z,t=tangentAt(progress);
+      let recoveryProgress:number|null=null;
       const forward=v.x*t.x+v.z*t.z;
       const lateral=v.x*(-t.z)+v.z*t.x;
       const sideError=p.x-centerAt(progress)-targetX;
@@ -703,7 +704,7 @@ app.on('update',(dt:number)=>{
           body.teleport(tx,2.2,SPEED_START_Z-safe);
           body.linearVelocity=new Vec3(0,0,-10);
           body.angularVelocity=new Vec3(0,0,0);
-          targetX=0;previousProgress=safe;
+          targetX=0;recoveryProgress=safe;
           touchingGrindTop.clear();touchingRails.clear();
           grindLock='off';guardLock='free';guardSide=null;
           guardCoolUntil=elapsed+RELEASE_COOLDOWN;
@@ -746,7 +747,7 @@ app.on('update',(dt:number)=>{
         jumpAirtime+=tick;
         maxJumpHeight=Math.max(maxJumpHeight,p.y);
       }
-      previousProgress=Math.max(previousProgress,progress);
+      previousProgress=recoveryProgress??Math.max(previousProgress,progress);
       boostSurge=Math.max(0,boostSurge-tick*1.6);
       const planar=Math.hypot(v.x,v.z);
       if(planar>activeSpeedCap){
