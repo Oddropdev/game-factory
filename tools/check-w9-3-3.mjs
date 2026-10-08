@@ -25,6 +25,8 @@ if(!fs.existsSync(path.join(folder,'portrait-reward-juice.png')))
   missing.push('portrait-reward-juice.png');
 if(!fs.existsSync(path.join(folder,'portrait-confirmed-hit-juice.png')))
   missing.push('portrait-confirmed-hit-juice.png');
+if(!fs.existsSync(path.join(folder,'portrait-no-false-gate-reward.png')))
+  missing.push('portrait-no-false-gate-reward.png');
 const world=fs.readFileSync('spikes/w9-playcanvas/src/SoftWorld.ts','utf8');
 const main=fs.readFileSync('spikes/w9-playcanvas/src/main.ts','utf8');
 const errors=[];
@@ -47,8 +49,8 @@ const js=fs.existsSync(assets)?fs.readdirSync(assets)
 const marker=errors.length?'W9_3_3_SOFT_WORLD_CONTRACT_FAIL':'W9_3_3_SOFT_WORLD_CONTRACT_PASS';
 fs.mkdirSync(folder,{recursive:true});
 fs.writeFileSync(path.join(folder,'contract.json'),JSON.stringify({
-  marker,base,changed,screenshotCount:11-missing.length,js,errors
+  marker,base,changed,screenshotCount:12-missing.length,js,errors
 },null,2)+'\n');
-console.log(JSON.stringify({marker,changed,screenshotCount:11-missing.length,js,errors},null,2));
+console.log(JSON.stringify({marker,changed,screenshotCount:12-missing.length,js,errors},null,2));
 if(errors.length)throw new Error(errors.join('; '));
 console.log(marker);
