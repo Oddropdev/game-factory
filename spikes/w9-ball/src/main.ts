@@ -11,7 +11,7 @@ import { loadPrivateArt } from './LicensedArt';
 import { makeSpeedCourse, trackCenter, trackTangent, inSafetyArc, boostCrossed,
   SPEED_CAP, SPEED_CRUISE, SPEED_FINISH_DISTANCE, SPEED_START_Z } from './SpeedCourse';
 import { makeLongJumpCourse, longCenter, longTangent, inLongSafetyArc,
-  nextLongBoost, LONG_EXTRA_BOOSTS, LONG_SPEED_CAP, LONG_FINISH_DISTANCE,
+  nextLongBoost, LONG_SPEED_CAP, LONG_FINISH_DISTANCE,
   JUMP_LAUNCH_PROGRESS, JUMP_TARGET_Y_VELOCITY } from './LongJumpCourse';
 import './style.css';
 
@@ -59,7 +59,7 @@ const triggeredBoosts=new Set<number>();
 let pointerLastY:number|null=null;
 let launched=false,landed=false,jumpCount=0,landingCount=0;
 let jumpAirtime=0,maxJumpHeight=0,launchSpeed=0,landingSpeed=0;
-let jumpPending=false,landingContactEvents=0,airborneFrames=0;
+let landingContactEvents=0,airborneFrames=0;
 
 function message(text:string) {
   ui.message.textContent=text;
@@ -250,7 +250,7 @@ const checkpoint=()=>{ // a fall respawns without changing the authoritative phy
   body.angularVelocity=new Vec3(0,0,0);
   targetX=0;
   swipeStacks=0;boostSurge=0;previousProgress=0;triggeredBoosts.clear();
-  launched=false;landed=false;jumpPending=false;jumpAirtime=0;maxJumpHeight=0;
+  launched=false;landed=false;jumpAirtime=0;maxJumpHeight=0;
   gems.forEach(g=>{g.collected=false;g.node.enabled=true;});
   pickups=0;
   if(phase==='running')message('TRY AGAIN!');
@@ -269,7 +269,7 @@ function restart(){
   swipeCount=0;swipeStacks=0;boostCount=0;boostSurge=0;
   maxSpeedObserved=0;magnetActivations=0;previousProgress=0;
   triggeredBoosts.clear();pointerLastY=null;
-  launched=false;landed=false;jumpPending=false;jumpCount=0;landingCount=0;
+  launched=false;landed=false;jumpCount=0;landingCount=0;
   jumpAirtime=0;maxJumpHeight=0;launchSpeed=0;landingSpeed=0;
   airborneFrames=0;landingContactEvents=0;
   body.teleport(0,2.2,7);
@@ -390,7 +390,6 @@ app.on('update',(dt:number)=>{
         launchSpeed=Math.hypot(v.x,v.z);
         const dv=Math.max(0,JUMP_TARGET_Y_VELOCITY-v.y);
         body.applyImpulse(new Vec3(0,dv*1.4,0));
-        jumpPending=true;
         message('SKY JUMP!');
       }
       if(longJumpMode&&launched&&!landed){
