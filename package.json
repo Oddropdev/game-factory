@@ -24,7 +24,8 @@
     "test:create-game": "node tools/test-create-game.mjs",
     "check:w7-real-game": "node tools/check-w7-real-game.mjs",
     "check:w8-hero": "node tools/check-w8-hero.mjs",
-    "test:w8-feel": "playwright test --config=playwright.w8.config.ts"
+    "test:w8-feel": "playwright test --config=playwright.w8.config.ts",
+    "check:w8-sound": "node tools/check-w8-sound.mjs"
   },
   "dependencies": {
     "littlejsengine": "1.25.0"
