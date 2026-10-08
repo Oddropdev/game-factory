@@ -272,6 +272,8 @@ const present=()=>{
   }
   if(s.phase==='complete'||s.phase==='level-clear'||s.phase==='level-fail'){
     hud.dialog.classList.remove('hidden');
+    // Result copy is the only primary message: no stale reward praise beneath it.
+    hud.feedback.classList.remove('show');
     hud.title.innerHTML=s.phase==='complete'||s.phase==='level-clear'?'LEVEL <em>CLEAR!</em>':'NOT <em>ENOUGH.</em>';
     hud.description.textContent=s.phase==='complete'||s.phase==='level-clear'?'The first 3D hero slice is complete. Play again to compare the feel.':'Pick better gates and collect more coins to reach your target.';
     hud.button.textContent=s.phase==='complete'||s.phase==='level-clear'?'PLAY AGAIN →':'RETRY RUN →';
