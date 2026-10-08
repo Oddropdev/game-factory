@@ -1,0 +1,23 @@
+{
+  "id": "sunset-ribbon-2",
+  "version": 1,
+  "title": "SUNSET RIBBON",
+  "startProgress": 550,
+  "endProgress": 700,
+  "width": 12,
+  "plankStep": 2.5,
+  "theme": "coral-lilac",
+  "gatePositions": [
+    575,
+    610,
+    646,
+    684
+  ],
+  "gemPositions": [
+    564,
+    591,
+    626,
+    667,
+    691
+  ]
+}
