@@ -2,7 +2,7 @@
 // All licensed ITHappy originals stay private. Scene uses authored placeholder shapes.
 // Real rigidbody contacts govern movement and hazards; visuals never drive physics.
 import {
-  AppBase, AppOptions, CameraComponentSystem, CollisionComponentSystem,
+  AmmoPhysicsWorld, AppBase, AppOptions, CameraComponentSystem, CollisionComponentSystem,
   Color, Entity, FILLMODE_FILL_WINDOW, LightComponentSystem,
   RenderComponentSystem, RESOLUTION_AUTO, RigidBodyComponentSystem,
   StandardMaterial, Vec3, WasmModule, createGraphicsDevice
@@ -84,6 +84,9 @@ const device=await createGraphicsDevice(canvas);
 device.maxPixelRatio=Math.min(window.devicePixelRatio||1,1.6);
 const options=new AppOptions();
 options.graphicsDevice=device;
+// AppBase does not automatically guarantee a live backend from a WasmModule.
+// Explicitly install Bullet before entities/bodies are created.
+options.physicsWorld=new AmmoPhysicsWorld();
 options.componentSystems=[
   RenderComponentSystem,CameraComponentSystem,LightComponentSystem,
   CollisionComponentSystem,RigidBodyComponentSystem
@@ -93,7 +96,7 @@ app.init(options);
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);
 const physics=app.systems.rigidbody as RigidBodyComponentSystem;
-physics.gravity=new Vec3(0,-22,0);
+physics.gravity.set(0,-22,0);
 const camera=new Entity('follow-camera');
 camera.addComponent('camera',{fov:58,nearClip:.1,farClip:150,clearColor:new Color(.71,.90,.97)});
 camera.setPosition(0,8.4,21);
