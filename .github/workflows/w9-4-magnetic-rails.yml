@@ -41,6 +41,8 @@ jobs:
         run: npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-private-art.spec.mjs tests/ball/w9-4-sky-speed.spec.mjs tests/ball/w9-4-long-jump.spec.mjs --config=playwright.w9-4.config.mjs
       - name: Real rail collisions contact-only boost glow sparks and 440m run
         run: npx playwright test tests/ball/w9-4-magnetic-rails.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Repeat small Android actual-contact + sparks gate three times
+        run: npx playwright test tests/ball/w9-4-magnetic-rails.spec.mjs --config=playwright.w9-4.config.mjs --grep "small-android-360x800" --repeat-each=3
       - name: Strict source scope and seven real screenshot gate
         run: node tools/check-w9-4-5.mjs
       - name: Archive isolated build and browser evidence only
