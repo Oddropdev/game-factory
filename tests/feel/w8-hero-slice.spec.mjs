@@ -35,7 +35,7 @@ async function saveScreenshot(page, name) {
 async function captureHeroSlice(page, mode) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(
-    `/?game=mass-runner&platform=web&presentation=${mode}&autoplay=hero`
+    `/?game=mass-runner&platform=web&presentation=${mode}&autoplay=hero&audio=off`
   );
 
   await expect.poll(async () => (await state(page)).ready).toBe(true);
