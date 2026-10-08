@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - "spikes/w9-ball/src/**"
+      - "spikes/w9-ball/public/**"
+      - "tools/run-transit-preview.mjs"
+      - "Start_Transit_Preview.cmd"
       - "tests/ball/w9-4-7-*.spec.mjs"
       - "tests/unit/w9-4-7-*.test.ts"
       - ".github/workflows/w9-4-7-transit-tube.yml"
@@ -26,6 +29,18 @@ jobs:
           npm run lint
           npm run test
           npm run build:w9-4:ball
+      - name: One-click offline preview smoke (HTML, manifest, Ammo)
+        run: |
+          node --check tools/run-transit-preview.mjs
+          node tools/run-transit-preview.mjs &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          sleep 2
+          curl --fail --silent --show-error 'http://127.0.0.1:4177/ball/?mode=transit' --output /dev/null
+          curl --fail --silent --show-error 'http://127.0.0.1:4177/ball/levels/transit-next.json' | grep 'sky-islands-2'
+          curl --fail --silent --show-error --head 'http://127.0.0.1:4177/ball/ammo/ammo.wasm.wasm'
+          kill $pid
+          trap - EXIT
       - name: Real browser tube and inverted travel test
         run: npx playwright test tests/ball/w9-4-7-transit-tube.spec.mjs --config=playwright.w9-4.config.mjs
       - name: Frozen guard/grind/secret and original ball regressions
@@ -38,6 +53,8 @@ jobs:
         with:
           name: w9-4-7-magnetic-transit-preview
           path: |
+            Start_Transit_Preview.cmd
+            tools/run-transit-preview.mjs
             playtest-dist/ball/
             test-results/
             evidence/w9-4-6/
