@@ -144,7 +144,7 @@ const clone=(id:typeof assets[number],parent:Entity,pos:[number,number,number],s
   parent.addChild(e);
   return e;
 };
-const avatar=clone('character',player,[0,.06,0],.82);
+const avatar=clone('character',player,[0,.06,0],2.9);
 if(avatar){placeholder.enabled=false;avatar.setEulerAngles(0,180,0);}
 for(const [i,dec] of decorations.entries()){
   if(i%2===0)clone('tree',app.root,[(i%2===0?-1:1)*8.4,0,-(i/2)*8],1.9);
@@ -213,7 +213,15 @@ const present=()=>{
   player.setPosition((s.playerNormX-.5)*6.6,0,2.5);
   const stride=s.phase==='running'?1:0;
   const bounce=Math.abs(Math.sin(elapsed*12))*stride*.17;
-  if(avatar){avatar.setLocalPosition(0,.06+bounce,0);avatar.setEulerAngles(0,180,Math.sin(elapsed*9)*2.5*stride);}
+  if(avatar){
+    avatar.setLocalPosition(0,.06+bounce,0);
+    avatar.setEulerAngles(0,180,Math.sin(elapsed*9)*2.5*stride);
+    const step=Math.sin(elapsed*12)*22*stride;
+    avatar.findByName('leg-left')?.setLocalEulerAngles(step,0,0);
+    avatar.findByName('leg-right')?.setLocalEulerAngles(-step,0,0);
+    avatar.findByName('arm-left')?.setLocalEulerAngles(-step*.7,0,0);
+    avatar.findByName('arm-right')?.setLocalEulerAngles(step*.7,0,0);
+  }
   baseShadow.setPosition((s.playerNormX-.5)*6.6,.025,2.5);
   const growth=Math.min(1.32,.68+s.mass*.017);
   player.setLocalScale(growth,growth,growth);
