@@ -520,9 +520,12 @@ app.on('update',(dt:number)=>{
         const t=elapsed*33+i*2.4;
         const railNormal=contactGlow===null?1:
           magneticRails.sections[contactGlow]!.side;
-        spark.setPosition(pos.x+railNormal*(.52+.15*Math.sin(t*1.3)),
-          pos.y-.18+.35*Math.abs(Math.sin(t)),
-          pos.z+.35*Math.cos(t*1.15)-Math.min(.3,pSpeed*.006));
+        // Visibly radiate short golden-green streaks backwards from the
+        // TRUE rail-ball contact. Pooling keeps draw calls predictable.
+        spark.setPosition(pos.x+railNormal*(.53+.24*Math.sin(t*1.3)),
+          pos.y-.06+.42*Math.abs(Math.sin(t)),
+          pos.z-(i%4)*.32+.22*Math.cos(t*1.15)-Math.min(.45,pSpeed*.007));
+        spark.setEulerAngles(Math.sin(t)*28,Math.cos(t*.8)*32,t*7);
       }
     }
   }
