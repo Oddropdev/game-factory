@@ -63,7 +63,8 @@ function attachTemplate(template:Entity, anchor:Entity, spec:ArtSpec,
   installMesh(template.clone(),anchor,spec.size,spec.center,spec.target,yOffset,preserveRatio);
 }
 export async function loadPrivateArt(app:AppBase, targets:ArtTargets):Promise<ArtReport> {
-  const enabled=import.meta.env.VITE_ITHAPPY_ASSETS==='1';
+  const enabled=import.meta.env.VITE_ITHAPPY_ASSETS==='1' ||
+    new URL(window.location.href).searchParams.get('art')==='licensed';
   const report:ArtReport={mode:'placeholder',loaded:0,expected:artSpecs.length,
     activeMeshes:0,requiredMissing:[],dynamicBallStillPhysics:targets.ball.rigidbody?.type==='dynamic'};
   if(!enabled)return report;
