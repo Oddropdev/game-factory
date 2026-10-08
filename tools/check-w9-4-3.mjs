@@ -20,7 +20,7 @@ if(changed.some(p=>/\.(glb|fbx|zip|unitypackage)$/i.test(p)))
 const speed=fs.readFileSync('spikes/w9-ball/src/SpeedCourse.ts','utf8');
 const main=fs.readFileSync('spikes/w9-ball/src/main.ts','utf8');
 if(!speed.includes("SPEED_CAP=52")||!speed.includes('SPEED_SAFETY_ARCS')||
-  !speed.includes('trackCenter(progress)'))errors.push('Speed geometry or bounded cap missing');
+  !speed.includes('export function trackCenter(progress:number)'))errors.push('Speed geometry or bounded cap missing');
 if(!main.includes('body.applyImpulse(new Vec3')||!main.includes('magnetActivations++'))
   errors.push('Flick and magnetic safety must use physical forces/impulses');
 if(!main.includes("get('mode')==='speed'")||!main.includes('if(!speedMode)'))
