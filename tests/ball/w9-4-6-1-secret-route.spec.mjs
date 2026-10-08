@@ -22,7 +22,10 @@ test('W9.4-6.1 optional player-chosen secret top grind climbs + descends '+vp.na
   await page.goto('/ball/?mode=grind');
   await expect.poll(async()=>(await snap(page))?.physicsLoaded,{timeout:20_000}).toBe(true);
   await page.locator('#start').click();
-  await expect.poll(async()=>progress(await snap(page)),{timeout:25_000}).toBeGreaterThan(302);
+  // The player chooses a shortcut while approaching, not after the
+  // entrance is already under the ball. Browser frame timing varies by size:
+  // at 50m/s the old 302m polling gate could return at 335m (too late).
+  await expect.poll(async()=>progress(await snap(page)),{timeout:25_000}).toBeGreaterThan(265);
   // A real player steering choice; not a teleport or test-only body setter.
   await page.mouse.move(Math.round(vp.width*.123),Math.round(vp.height*.70));
   await page.mouse.down();
