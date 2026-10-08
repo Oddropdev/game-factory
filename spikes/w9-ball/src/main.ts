@@ -10,12 +10,21 @@ import {
 import { loadPrivateArt } from './LicensedArt';
 import { makeSpeedCourse, trackCenter, trackTangent, inSafetyArc, boostCrossed,
   SPEED_CAP, SPEED_CRUISE, SPEED_FINISH_DISTANCE, SPEED_START_Z } from './SpeedCourse';
+import { makeLongJumpCourse, longCenter, longTangent, inLongSafetyArc,
+  nextLongBoost, LONG_SPEED_CAP, LONG_FINISH_DISTANCE,
+  JUMP_LAUNCH_PROGRESS, JUMP_TARGET_Y_VELOCITY } from './LongJumpCourse';
 import './style.css';
 
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
-const speedMode=new URL(window.location.href).searchParams.get('mode')==='speed';
-const FINISH_Z = speedMode?SPEED_START_Z-SPEED_FINISH_DISTANCE:-97;
+const gameMode=new URL(window.location.href).searchParams.get('mode');
+const longJumpMode=gameMode==='jump';
+const speedMode=gameMode==='speed'||longJumpMode;
+const activeSpeedCap=longJumpMode?LONG_SPEED_CAP:SPEED_CAP;
+const finishDistance=longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE;
+const centerAt=(progress:number)=>longJumpMode?longCenter(progress):trackCenter(progress);
+const tangentAt=(progress:number)=>longJumpMode?longTangent(progress):trackTangent(progress);
+const FINISH_Z = speedMode?SPEED_START_Z-finishDistance:-97;
 const BALL_RADIUS = 0.62;
 const MAX_FORWARD_SPEED = 9.5;
 const MAX_SIDE_SPEED = 7.5;
@@ -48,6 +57,9 @@ let swipeCount=0,swipeStacks=0,boostCount=0,boostSurge=0;
 let maxSpeedObserved=0,magnetActivations=0,previousProgress=0;
 const triggeredBoosts=new Set<number>();
 let pointerLastY:number|null=null;
+let launched=false,landed=false,jumpCount=0,landingCount=0;
+let jumpAirtime=0,maxJumpHeight=0,launchSpeed=0,landingSpeed=0;
+let landingContactEvents=0,airborneFrames=0;
 
 function message(text:string) {
   ui.message.textContent=text;
@@ -121,10 +133,10 @@ app.scene.ambientLight=new Color(.63,.72,.84);
 
 type Point=[number,number,number];
 function shape(name:string,type:'box'|'sphere'|'cylinder',pos:Point,scale:Point,
-  surface:StandardMaterial,solid:'static'|'dynamic'|false=false,yaw=0):Entity {
+  surface:StandardMaterial,solid:'static'|'dynamic'|false=false,yaw=0,pitch=0):Entity {
   const e=new Entity(name);
   e.setPosition(...pos);
-  if(yaw)e.setEulerAngles(0,yaw,0);
+  if(yaw||pitch)e.setEulerAngles(pitch,yaw,0);
   // World-space collision proxies stay at unit entity scale. Only the render
   // child is scaled. Never rely on a scaled rigidbody parent to resize Bullet.
   const visual=new Entity(name+'-visual');
@@ -185,6 +197,7 @@ for(let i=0;i<(speedMode?9:5);i++){
     [speedMode?8:5,2.2,speedMode?5:3.3],surfaces.cloud);
 }
 const speedWorld=speedMode?makeSpeedCourse(shape,surfaces):null;
+const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces):null;
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -194,6 +207,15 @@ band.setLocalPosition(0,.44,0);
 band.setLocalScale(.85,.17,.85);
 ball.addChild(band);
 const body=ball.rigidbody!;
+if(longJumpMode){
+  ball.collision!.on('collisionstart',(event:{other:Entity})=>{
+    if(event.other.name==='long-landing-deck'&&launched&&!landed&&phase==='running'){
+      landed=true;landingCount++;landingContactEvents++;
+      landingSpeed=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
+      message('CLEAN LANDING!');
+    }
+  });
+}
 let lastImpact=-100;
 ball.collision!.on('collisionstart',(event:{other:Entity})=>{
   if(event.other.name.startsWith('hazard-') && elapsed-lastImpact>.3){
@@ -205,14 +227,14 @@ ball.collision!.on('collisionstart',(event:{other:Entity})=>{
 const gems:{node:Entity;collected:boolean}[]=[];
 for(let i=0;i<6;i++){
   const z=-6-i*15.2;
-  const x=speedMode?trackCenter(SPEED_START_Z-z):[-2.5,2.5,0,-2.2,2.4,0][i]!;
+  const x=speedMode?centerAt(SPEED_START_Z-z):[-2.5,2.5,0,-2.2,2.4,0][i]!;
   const e=shape('gem-'+i,'sphere',[x,1,z],[.88,.88,.88],surfaces.jewel);
   // Explicit pickup radius is presentation/game logic; dynamic ball physics
   // remains responsible for the ball's actual position and velocity.
   gems.push({node:e,collected:false});
 }
 const finish=shape('finish-line','box',
-  [speedMode?trackCenter(SPEED_FINISH_DISTANCE):0,.045,FINISH_Z-1],
+  [speedMode?centerAt(finishDistance):0,.045,FINISH_Z-1],
   [8,.1,.65],surfaces.teal);
 // Licensed GLB art overlays are opt-in and never alter the unit-scale
 // Bullet rigidbodies or authored course. CI without private packs is unchanged.
@@ -228,6 +250,7 @@ const checkpoint=()=>{ // a fall respawns without changing the authoritative phy
   body.angularVelocity=new Vec3(0,0,0);
   targetX=0;
   swipeStacks=0;boostSurge=0;previousProgress=0;triggeredBoosts.clear();
+  launched=false;landed=false;jumpAirtime=0;maxJumpHeight=0;
   gems.forEach(g=>{g.collected=false;g.node.enabled=true;});
   pickups=0;
   if(phase==='running')message('TRY AGAIN!');
@@ -246,6 +269,9 @@ function restart(){
   swipeCount=0;swipeStacks=0;boostCount=0;boostSurge=0;
   maxSpeedObserved=0;magnetActivations=0;previousProgress=0;
   triggeredBoosts.clear();pointerLastY=null;
+  launched=false;landed=false;jumpCount=0;landingCount=0;
+  jumpAirtime=0;maxJumpHeight=0;launchSpeed=0;landingSpeed=0;
+  airborneFrames=0;landingContactEvents=0;
   body.teleport(0,2.2,7);
   body.linearVelocity=new Vec3(0,0,0);
   body.angularVelocity=new Vec3(0,0,0);
@@ -258,23 +284,25 @@ if(!speedMode)ui.start.textContent='START ROLL →';
 ui.status.textContent='AMMO PHYSICS READY';
 if(speedMode){
   ui.title.innerHTML='SKY <em>SPEED.</em>';
-  ui.description.textContent='Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
+  ui.description.textContent=longJumpMode?
+    'Flick UP to build speed. Hit the ramp, fly across the open sky and catch the wide magnetic landing platform.':
+    'Flick UP to accelerate. Drag sideways to carve sky curves. Hit magnetic boost pads and ride the safety arcs.';
   document.querySelector('.hint')!.textContent='↑ FLICK TO ACCELERATE · ↔ STEER';
-  ui.start.textContent='START SKY ROLL →';
+  ui.start.textContent=longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
 }
 ui.start.addEventListener('click',e=>{e.preventDefault();restart();});
 const steer=(clientX:number)=>{targetX=clamp(((clientX/window.innerWidth)-.5)*7,-3.3,3.3);};
 const flickForward=()=>{
   if(!speedMode||phase!=='running')return;
   const p=ball.getPosition(),v=body.linearVelocity;
-  const tangent=trackTangent(SPEED_START_Z-p.z);
+  const tangent=tangentAt(SPEED_START_Z-p.z);
   const current=v.x*tangent.x+v.z*tangent.z;
-  if(current>=SPEED_CAP-.4)return;
+  if(current>=activeSpeedCap-.4)return;
   swipeStacks=Math.min(6,swipeStacks+1);
   swipeCount++;
   // Mass * target delta-velocity is a real Bullet impulse, not an animated
   // speed display. Do not overshoot the measured safe speed ceiling.
-  const delta=Math.min(6.8,SPEED_CAP-current);
+  const delta=Math.min(6.8,activeSpeedCap-current);
   body.applyImpulse(new Vec3(tangent.x*delta*1.4,0,tangent.z*delta*1.4));
   message('FLICK + SPEED!');
 };
@@ -318,18 +346,19 @@ app.on('update',(dt:number)=>{
     // Input forces and actual rigidbody velocity feed Bullet. No animation
     // interpolates a fake ball position. Lateral damping is user-relative.
     if(speedMode){
-      const progress=SPEED_START_Z-p.z,t=trackTangent(progress);
+      const progress=SPEED_START_Z-p.z,t=tangentAt(progress);
       const forward=v.x*t.x+v.z*t.z;
       const lateral=v.x*(-t.z)+v.z*t.x;
-      const sideError=p.x-trackCenter(progress)-targetX;
+      const sideError=p.x-centerAt(progress)-targetX;
       const sideForce=clamp(-sideError*76-(lateral)*13,-270,270);
-      const requested=Math.min(SPEED_CAP,SPEED_CRUISE+swipeStacks*6+boostSurge);
+      const requested=Math.min(activeSpeedCap,
+        (longJumpMode?20:SPEED_CRUISE)+swipeStacks*6+boostSurge);
       const drive=clamp((requested-forward)*24,-130,240);
       body.applyForce(new Vec3(t.x*drive+(-t.z)*sideForce,0,
         t.z*drive+t.x*sideForce));
       body.applyTorque(new Vec3(-7*t.z,0,7*t.x));
-      const edgeOffset=p.x-trackCenter(progress);
-      if(inSafetyArc(progress)&&Math.abs(edgeOffset)>2.8){
+      const edgeOffset=p.x-centerAt(progress);
+      if((inSafetyArc(progress)||longJumpMode&&inLongSafetyArc(progress))&&Math.abs(edgeOffset)>2.8){
         // Limited physical spring assist (not forced teleport or autopilot).
         const inward=-Math.sign(edgeOffset)*Math.min(260,
           (Math.abs(edgeOffset)-2.8)*150+Math.max(0,Math.sign(edgeOffset)*lateral)*18);
@@ -337,21 +366,45 @@ app.on('update',(dt:number)=>{
         magnetActivations++;
       }
       const crossed=boostCrossed(previousProgress,progress,triggeredBoosts);
+      const extra=longJumpMode?nextLongBoost(previousProgress,progress,triggeredBoosts):null;
       if(crossed!==null){
         triggeredBoosts.add(crossed);boostCount++;
         boostSurge=Math.min(22,boostSurge+13);
-        const impulse=Math.max(0,Math.min(12,SPEED_CAP-forward));
+        const impulse=Math.max(0,Math.min(12,activeSpeedCap-forward));
         body.applyImpulse(new Vec3(t.x*impulse*1.4,0,t.z*impulse*1.4));
         message('MAGNETIC BOOST!');
+      }
+      if(extra!==null){
+        const id=3+extra;
+        triggeredBoosts.add(id);boostCount++;
+        boostSurge=Math.min(24,boostSurge+16);
+        const delta=Math.max(0,Math.min(13,activeSpeedCap-forward));
+        body.applyImpulse(new Vec3(t.x*delta*1.4,0,t.z*delta*1.4));
+        message('LONG BOOST!');
+      }
+      if(longJumpMode&&!launched&&previousProgress<JUMP_LAUNCH_PROGRESS&&
+        progress>=JUMP_LAUNCH_PROGRESS){
+        // Physically increase only the vertical velocity at the lip of a
+        // genuinely inclined Bullet ramp. Never teleport across the gap.
+        launched=true;jumpCount++;
+        launchSpeed=Math.hypot(v.x,v.z);
+        const dv=Math.max(0,JUMP_TARGET_Y_VELOCITY-v.y);
+        body.applyImpulse(new Vec3(0,dv*1.4,0));
+        message('SKY JUMP!');
+      }
+      if(longJumpMode&&launched&&!landed){
+        airborneFrames++;
+        jumpAirtime+=tick;
+        maxJumpHeight=Math.max(maxJumpHeight,p.y);
       }
       previousProgress=Math.max(previousProgress,progress);
       boostSurge=Math.max(0,boostSurge-tick*1.6);
       const planar=Math.hypot(v.x,v.z);
-      if(planar>SPEED_CAP){
-        const ratio=SPEED_CAP/planar;
+      if(planar>activeSpeedCap){
+        const ratio=activeSpeedCap/planar;
         body.linearVelocity=new Vec3(v.x*ratio,v.y,v.z*ratio);
       }
-      maxSpeedObserved=Math.max(maxSpeedObserved,Math.min(planar,SPEED_CAP));
+      maxSpeedObserved=Math.max(maxSpeedObserved,Math.min(planar,activeSpeedCap));
     }else{
       const sideForce=clamp((targetX-p.x)*36-v.x*11,-95,95);
       const drive=clamp((-MAX_FORWARD_SPEED-v.z)*13,-60,100);
@@ -371,7 +424,7 @@ app.on('update',(dt:number)=>{
         g.collected=true;g.node.enabled=false;pickups++;message('+ GEM!');
       }
     }
-    if(p.y< -3 || (speedMode?Math.abs(p.x-trackCenter(SPEED_START_Z-p.z))>9.5:Math.abs(p.x)>9.5))checkpoint();
+    if(p.y< -5 || (speedMode?Math.abs(p.x-centerAt(SPEED_START_Z-p.z))>(longJumpMode?12:9.5):Math.abs(p.x)>9.5))checkpoint();
     if(p.z<=FINISH_Z){
       phase='complete';
       ui.dialog.classList.remove('hidden');
@@ -383,11 +436,13 @@ app.on('update',(dt:number)=>{
   const pos=ball.getPosition();
   // Camera composition follows physical position, never controls it.
   if(speedMode){
-    const forward=trackTangent(SPEED_START_Z-pos.z);
+    const forward=tangentAt(SPEED_START_Z-pos.z);
     const speed=Math.hypot(body.linearVelocity.x,body.linearVelocity.z);
-    const chase=15+clamp(speed/SPEED_CAP,0,1)*5.5;
-    camera.setPosition(pos.x-forward.x*chase*.48,8.8,pos.z+chase);
-    camera.lookAt(pos.x+forward.x*21,.5,pos.z-22);
+    const chase=15+clamp(speed/activeSpeedCap,0,1)*5.5;
+    camera.setPosition(pos.x-forward.x*chase*.48,
+      8.8+(longJumpMode?Math.max(0,pos.y-1)*.45:0),pos.z+chase);
+    camera.lookAt(pos.x+forward.x*21,
+      longJumpMode?Math.max(.5,pos.y*.75):.5,pos.z-22);
     camera.camera!.fov=clamp((window.innerWidth/window.innerHeight<.78?68:58)+speed*.29,58,84);
   }else{
     camera.setPosition(pos.x*.24,8.1,pos.z+14.8);
@@ -412,16 +467,22 @@ Object.assign(window,{__W9_BALL_TEST__:{
       linearVelocity:[v.x,v.y,v.z],angularVelocity:[w.x,w.y,w.z],
       targetX,fallCount:falls,bumpCount:bumpers,gemCount:pickups,
       attempts,elapsed,finishZ:FINISH_Z,lastFallReason,
-      coursePlanks:speedMode?speedWorld!.segmentCount:tracks.length,
+      coursePlanks:speedMode?(speedWorld!.segmentCount+(jumpWorld?.segmentCount??0)):tracks.length,
       physicalBumpers:hazardNodes.length,
-      speedMode,skyKind:speedWorld?.skyKind??'classic',
+      speedMode,longJumpMode,skyKind:speedWorld?.skyKind??'classic',
       curveDegrees:speedWorld?.curveDegrees??0,
       magneticSafetyArcs:speedMode?2:0,
-      boostPads:speedWorld?.boostCount??0, boostCount, swipeCount,swipeStacks,
+      boostPads:(speedWorld?.boostCount??0)+(jumpWorld?.extraBoosts??0),
+      boostCount, swipeCount,swipeStacks,
+      jumpCount,landingCount,landed,jumpAirtime,maxJumpHeight,
+      launchSpeed,landingSpeed,airborneFrames,landingContactEvents,
+      gapMeters:jumpWorld?.gapMeters??0,
+      landingWidth:jumpWorld?.landingWidth??0,
+      courseLength:longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE,
       magneticAssistEvents:magnetActivations,
-      speedCap:speedMode?SPEED_CAP:MAX_FORWARD_SPEED,
+      speedCap:speedMode?activeSpeedCap:MAX_FORWARD_SPEED,
       planarSpeed:Math.hypot(v.x,v.z),maxSpeedObserved,
-      centerlineX:speedMode?trackCenter(SPEED_START_Z-p.z):0,
+      centerlineX:speedMode?centerAt(SPEED_START_Z-p.z):0,
       treeCount:speedMode?0:treeCrowns.length,
       artMode:licensedArt.mode,licensedModels:licensedArt.loaded,
       licensedMeshes:licensedArt.activeMeshes,
