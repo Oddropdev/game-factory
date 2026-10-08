@@ -89,6 +89,7 @@ let grindLock:GrindLock='off',grindEntries=0,grindExits=0;
 let grindSeconds=0,grindBoostFrames=0,grindTopContactEvents=0;
 let grindSideContactEvents=0,grindFalseSideRewards=0,grindPeakSpeed=0;
 let grindLastTopTouch=-100,grindBridgeFrames=0,grindSecretFrames=0;
+let grindVoidEarlyFrames=0,grindVoidLateFrames=0;
 let grindLastTopImpact:[number,number,number,number]|null=null;
 let grindTopDeniedHeight=0,grindTopDeniedLateral=0;
 const touchingGrindTop=new Set<string>();
@@ -387,6 +388,7 @@ function restart(){
   grindBoostFrames=0;grindTopContactEvents=0;
   grindSideContactEvents=0;grindFalseSideRewards=0;grindPeakSpeed=0;
   grindLastTopTouch=-100;grindBridgeFrames=0;grindSecretFrames=0;
+  grindVoidEarlyFrames=0;grindVoidLateFrames=0;
   grindLastTopImpact=null;grindTopDeniedHeight=0;grindTopDeniedLateral=0;
   touchingGrindTop.clear();
   body.teleport(0,2.2,7);
@@ -625,7 +627,15 @@ app.on('update',(dt:number)=>{
             body.applyForce(new Vec3(t.x*force,0,t.z*force));
             grindBoostFrames++;
           }
-          if(route==='bridge')grindBridgeFrames++;
+          if(route==='bridge'){
+            grindBridgeFrames++;
+            // Proof of true supported riding INSIDE the floorless 19m gap,
+            // not a ramp-launched flight that happens to touch rail at exit.
+            if(progress>=GRIND_VOID_FROM+1&&progress<GRIND_VOID_FROM+9)
+              grindVoidEarlyFrames++;
+            if(progress>=GRIND_VOID_FROM+11&&progress<=GRIND_VOID_TO-1)
+              grindVoidLateFrames++;
+          }
           if(route==='secret')grindSecretFrames++;
           grindSeconds+=tick;
           grindPeakSpeed=Math.max(grindPeakSpeed,Math.hypot(v.x,v.z));
@@ -774,6 +784,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
       guardLastTouch,guardReleaseSwipePx,
       grindLock,grindEntries,grindExits,grindSeconds,
       grindBridgeFrames,grindSecretFrames,
+      grindVoidEarlyFrames,grindVoidLateFrames,
       grindLastTopImpact,grindTopDeniedHeight,grindTopDeniedLateral,
       grindBoostFrames,grindTopContactEvents,grindSideContactEvents,
       grindFalseSideRewards,grindPeakSpeed,
