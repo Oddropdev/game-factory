@@ -28,11 +28,15 @@ export function buildGrindTrack(shape:Shape) {
       const behind=grindPath(d-.25,longCenter(d-.25),kind);
       const incline=Math.atan((ahead.y-behind.y)/.5)*180/Math.PI;
       const tangent=longTangent(d);
-      const entityName=kind==='bridge'?'grind-top-bridge-':'grind-top-secret-';
+      const entityName=kind==='bridge'?'grind-deck-bridge-':'grind-top-secret-';
+      // On the fast straight bridge these are render-only panels. The
+      // separate single long STATIC collider below is the contact authority
+      // and eliminates frame-dependent jumps at adjacent Bullet seams.
+      // The curved rising secret keeps genuine individual sloped colliders.
       shape(entityName+(kind==='bridge'?bridgeTops:secretTops),
         'box',[p.x,p.y-.12,SPEED_START_Z-d],
         [GRIND_HALF_WIDTH*2,.24,SPEED_SEGMENT_STEP+.48],
-        steel,'static',tangent.yaw,incline);
+        steel,kind==='bridge'?false:'static',tangent.yaw,incline);
       if(kind==='bridge')bridgeTops++;else secretTops++;
       // Separate steel SIDE colliders to test forbidden side attachment.
       for(const sign of [-1,1]){
@@ -55,6 +59,14 @@ export function buildGrindTrack(shape:Shape) {
   shape('real-grind-entry-ramp','box',
     [longCenter(mid),.51,SPEED_START_Z-mid],
     [2.8,.24,entryLength],stripe,'static',longTangent(mid).yaw,2.05);
+  // One uninterrupted static Bullet rail carries the ball over the void.
+  // This remains a TOP collider: side objects keep different names and
+  // never satisfy the strict top-only grind reward predicate.
+  const bridgeMid=(GRIND_START+GRIND_END)/2;
+  shape('grind-top-bridge-continuous','box',
+    [longCenter(bridgeMid),GRIND_TOP_Y-.12,SPEED_START_Z-bridgeMid],
+    [GRIND_HALF_WIDTH*2,.24,GRIND_END-GRIND_START+1.8],
+    steel,'static',longTangent(bridgeMid).yaw);
   route('bridge',GRIND_START,GRIND_END);
   // Optional left-lane entry: actual inclined Bullet slope from the broad
   // 0m deck toward the secret TOP (1.12m); NOT an invisible auto-snap.
