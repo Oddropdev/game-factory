@@ -22,7 +22,7 @@ test('W9.4-2 default build preserves Bullet play even without paid assets',async
 });
 
 test('W9.4-2 owner-installed GLBs load without changing Bullet physics',async({page})=>{
-  test.skip(process.env.W9_4_2_LICENSED_ART!=='1',
+  test.skip(globalThis.process.env.W9_4_2_LICENSED_ART!=='1',
     'Owner-licensed GLBs are intentionally absent from public GitHub Actions');
   test.setTimeout(40_000);
   const errors=[];
