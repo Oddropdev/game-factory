@@ -12,6 +12,8 @@ export type FoundationGameState = {
 };
 
 export interface GameModule {
+  // Optional; only games with audio consume the accepted platform mute state.
+  setAudioEnabled?(enabled: boolean): void;
   init(): void;
   update(input: GameInputFrame): void;
   render(): void;
