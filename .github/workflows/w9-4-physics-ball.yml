@@ -1,0 +1,58 @@
+name: W9.4-1 Physics Ball Hero Slice
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/**"
+      - "tools/fetch-w9-4-ammo.mjs"
+      - "playwright.w9-4.config.mjs"
+      - "tests/ball/**"
+      - "docs/evidence/W9.4-1*"
+      - "package.json"
+      - ".github/workflows/w9-4-physics-ball.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  ball-prototype:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-4-1-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies (same workflow as accepted W9)
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Accepted model and Factory unit tests
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Preserve accepted default playtest package
+        run: |
+          npm run build
+          npm run package:distributions
+          npm run package:playtest
+      - name: Download self-hosted Ammo WASM + build isolated physics ball
+        run: npm run build:w9-4:ball
+      - name: Real browser physics, touch steering and device screenshots
+        run: npm run test:w9-4:ball
+      - name: Run ball physics touch test three more times
+        run: npx playwright test tests/ball/w9-4-physics.spec.mjs --config=playwright.w9-4.config.mjs --grep "finger drag" --repeat-each=3
+      - name: Artifact includes only isolated /ball, no Pages deployment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-1-physics-ball-evidence
+          path: |
+            playtest-dist/ball/
+            evidence/w9-4-1/
+            test-results/
+          if-no-files-found: warn

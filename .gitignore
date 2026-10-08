@@ -13,3 +13,8 @@ mass-runner-w9-html5.zip
 
 # W9.2D pinned CC0 assets fetched at build time; binary GLB not checked in
 spikes/w9-playcanvas/public/models/
+
+# W9.4 locally fetched official physics and optional licensed art must stay untracked
+spikes/w9-ball/public/ammo/
+spikes/w9-ball/public/licensed/
+spikes/w9-ball/public/private/
