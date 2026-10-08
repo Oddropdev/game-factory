@@ -20,10 +20,10 @@ async function openVariant(page, variant) {
 async function visible3DContent(page, screenshot) {
   const base64 = screenshot.toString('base64');
   return page.evaluate(async data => {
-    const image = new Image();
+    const image = new globalThis.Image();
     image.src = 'data:image/png;base64,' + data;
     await image.decode();
-    const canvas = document.createElement('canvas');
+    const canvas = globalThis.document.createElement('canvas');
     canvas.width = image.naturalWidth;
     canvas.height = image.naturalHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
