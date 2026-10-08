@@ -43,6 +43,8 @@ for(const viewport of sizes){
     expect(newWorld.nextLevelId).toBe('sunset-ribbon-2');
     expect(newWorld.nextLevelLoadState).toBe('ready');
     expect(newWorld.level2GateCount).toBe(4);
+    expect(newWorld.level2RibbonMeshes).toBe(3);
+    expect(newWorld.level2RibbonSamples).toBeGreaterThan(290);
     expect(newWorld.level2Active).toBe(true);
     expect(newWorld.level2Title).toBe('SUNSET RIBBON');
     expect(await page.locator('#level-name').innerText()).toContain('LEVEL 2');
