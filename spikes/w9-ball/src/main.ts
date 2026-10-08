@@ -412,7 +412,7 @@ const preloadNextLevel=()=>{
       const manifest=await response.json();
       if(twoLevelMode){
         secondLevel=stageSecondLevel(parseSecondLevelManifest(manifest),
-          shape,level2Palette);
+          shape,device,app.root,level2Palette);
         nextLevelStaged=secondLevel;
       }else{
         nextLevelStaged=stageTransitLevel(parseTransitManifest(manifest),
@@ -1104,6 +1104,8 @@ Object.assign(window,{__W9_BALL_TEST__:{
       levelTwoComplete,levelTransitionEvents,level2Frames,
       level2GemsCollected,level2RoadContactEvents,
       level2GateCount:secondLevel?.gateCount??0,
+      level2RibbonMeshes:secondLevel?.ribbonMeshCount??0,
+      level2RibbonSamples:secondLevel?.ribbonSamples??0,
       level2Active:secondLevel?.active??false,
       level2Title:secondLevel?.title??'',
       tubeState,tubeEntries,tubeExits,tubeLockFrames,
