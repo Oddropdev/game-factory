@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      W9_2B_BASE_SHA: e5fd4f8c5972a006c0b937eabb8df10a82e0b5cc
+      W9_2B_BASE_SHA: 3aa74536689b109764377b5477c3f10db67adf47
     steps:
       - uses: actions/checkout@v4
         with:
