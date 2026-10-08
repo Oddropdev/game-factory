@@ -94,6 +94,8 @@ export class MassRunnerWebAudioOutput implements MassRunnerSoundOutput {
   private master: GainNode | null = null;
   private readonly voices = new Set<OscillatorNode>();
 
+  constructor(private readonly masterLevel = 0.5) {}
+
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
 
@@ -111,7 +113,7 @@ export class MassRunnerWebAudioOutput implements MassRunnerSoundOutput {
       }
       // Kill output immediately on platform mute, including already scheduled tails.
       this.master.gain.setValueAtTime(
-        enabled ? 0.5 : 0,
+        enabled ? this.masterLevel : 0,
         this.context.currentTime
       );
       if (!enabled && this.context.state === 'running') {
@@ -131,7 +133,7 @@ export class MassRunnerWebAudioOutput implements MassRunnerSoundOutput {
       try {
         const context = new AudioContext({ latencyHint: 'interactive' });
         const master = context.createGain();
-        master.gain.value = 0.5;
+        master.gain.value = this.masterLevel;
         master.connect(context.destination);
         this.context = context;
         this.master = master;
