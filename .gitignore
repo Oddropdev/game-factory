@@ -10,3 +10,6 @@ research/generated/
 playtest-dist/
 playtest-manifest.json
 mass-runner-w9-html5.zip
+
+# W9.2D pinned CC0 assets fetched at build time; binary GLB not checked in
+spikes/w9-playcanvas/public/models/
