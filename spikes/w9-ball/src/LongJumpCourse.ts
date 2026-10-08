@@ -41,7 +41,7 @@ export function nextLongBoost(from:number,to:number,used:Set<number>):
   number|null {
   for(let i=0;i<LONG_EXTRA_BOOSTS.length;i++){
     const p=LONG_EXTRA_BOOSTS[i]!;
-    if(from<p&&to>=p&&!used.has(i))return i;
+    if(from<p&&to>=p&&!used.has(3+i))return i;
   }
   return null;
 }
