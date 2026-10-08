@@ -3,3 +3,28 @@
    mask an approaching + / × choice in the centre of the 3D view. */
 .world-gate-label{min-width:68px;text-align:center;border:2px solid #fffdf3d9;white-space:nowrap;line-height:1.05;filter:drop-shadow(0 2px 3px #1e355663)}
 @media(max-height:520px){.feedback{bottom:8%;font-size:22px}}
+
+/* W9.3-3 — brighter toy-world typography; all overlays stay pointer-transparent.
+   The real portal values remain anchored by worldToScreen in main.ts. */
+.brand small{font-size:10px;letter-spacing:.12em;color:#e9fff9;opacity:1}
+.brand strong{font-style:normal;font-size:clamp(20px,5.2vw,29px);letter-spacing:-.05em}
+.level-pill{background:#304369dc;border-color:#fff0c9c9;border-radius:19px}
+.mass-box strong{color:#ffe177;text-shadow:0 3px 0 #304369,0 6px 15px #30436977}
+.top-progress{margin-top:11px;background:#30436977}
+.top-progress>div{background:linear-gradient(90deg,#83e3ba,#ffe177,#ff7994)}
+.world-gate-label{font-size:clamp(20px,6.4vw,30px)!important;border-radius:16px!important;outline:1px solid #30436933}
+.feedback{color:#fff0c9;pointer-events:none;bottom:13%;text-shadow:0 3px 0 #304369,0 8px 20px #30436988}
+.dialog{border-color:#fff0c9cf}
+.dialog button{min-height:48px}
+#steer-hint{color:#fff0c9;font-size:clamp(12px,3.3vw,15px)}
+@media(max-width:375px){
+  #hud{padding-left:calc(env(safe-area-inset-left) + 13px);padding-right:calc(env(safe-area-inset-right) + 13px)}
+  .level-pill{padding:9px 10px}
+  .numbers{padding-top:9px}
+}
+@media(max-height:520px){
+  .brand small{font-size:9px}
+  .top-progress{margin-top:5px;height:6px}
+  .world-gate-label{font-size:20px!important}
+  .feedback{bottom:8%}
+}
