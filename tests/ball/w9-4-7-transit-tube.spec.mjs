@@ -1,3 +1,5 @@
+import {setTimeout as sleep} from 'node:timers/promises';
+import {stdout} from 'node:process';
 import {test,expect} from '@playwright/test';
 const read=page=>page.evaluate(()=>globalThis.__W9_BALL_TEST__?.snapshot());
 test('W9.4-7 smooth geometric tube exists only in dedicated mode',async({page})=>{
@@ -80,7 +82,7 @@ test('W9.4-7 preloading reduces measured exit hold versus loading at the mouth',
     await page.route('**/levels/transit-next.json',async route=>{
       // Identical network delay with early and late requests; actual
       // fetch/scene build, no production-time artificial delay.
-      await new Promise(resolve=>setTimeout(resolve,1250));
+      await sleep(1250);
       await route.continue();
     });
     await page.goto('/ball/?mode=transit'+suffix);
@@ -96,5 +98,5 @@ test('W9.4-7 preloading reduces measured exit hold versus loading at the mouth',
     await context.close();
   }
   expect(holds.late).toBeGreaterThan(holds.early+.55);
-  console.log('W9_4_7_PRELOAD_CAUSAL_HOLD '+JSON.stringify(holds));
+  stdout.write('W9_4_7_PRELOAD_CAUSAL_HOLD '+JSON.stringify(holds)+'\n');
 });
