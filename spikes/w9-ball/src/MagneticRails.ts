@@ -35,9 +35,9 @@ function railFinishMaterial():StandardMaterial{
 }
 function sparkFinishMaterial():StandardMaterial{
   const mat=new StandardMaterial();
-  mat.diffuse=new Color(.53,1,.67);
-  mat.emissive=new Color(.35,1,.48);
-  mat.emissiveIntensity=3;
+  mat.diffuse=new Color(.92,1,.40);
+  mat.emissive=new Color(.72,1,.22);
+  mat.emissiveIntensity=5;
   mat.update();
   return mat;
 }
@@ -91,8 +91,8 @@ export function buildCurveRails(shape:Shape):RailVisuals{
   }
   const sparkleMaterial=sparkFinishMaterial();
   const sparklings=Array.from({length:16},(_,i)=>{
-    const particle=shape('rail-spark-'+i,'sphere',[0,-20,0],
-      [.13,.13,.13],sparkleMaterial);
+    const particle=shape('rail-spark-'+i,'box',[0,-20,0],
+      [.19,.17,.82],sparkleMaterial);
     particle.enabled=false;
     return particle;
   });
