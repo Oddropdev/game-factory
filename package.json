@@ -29,7 +29,9 @@
     "check:w8-3-polish": "node tools/check-w8-3-polish.mjs",
     "package:playtest": "node tools/build-w9-playtest.mjs",
     "check:w9-release": "node tools/check-w9-release.mjs",
-    "test:w9-playtest": "playwright test --config=playwright.w9.config.mjs"
+    "test:w9-playtest": "playwright test --config=playwright.w9.config.mjs",
+    "test:w9-2b": "playwright test --config=playwright.w9-2b.config.mjs",
+    "check:w9-2b": "node tools/check-w9-2b.mjs"
   },
   "dependencies": {
     "littlejsengine": "1.25.0"

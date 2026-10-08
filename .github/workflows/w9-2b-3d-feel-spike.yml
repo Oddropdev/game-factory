@@ -1,0 +1,72 @@
+name: W9.2B 3D Feel Spike A-B-C
+
+on:
+  pull_request:
+    paths:
+      - "src/games/mass-runner/**"
+      - "tests/unit/massRunnerExperiment.test.ts"
+      - "tests/spike/**"
+      - "playwright.w9-2b.config.mjs"
+      - "tools/check-w9-2b.mjs"
+      - "package.json"
+      - "docs/playtest/W9.2B*"
+      - "docs/evidence/W9.2B*"
+      - ".github/workflows/w9-2b-3d-feel-spike.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-2b-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      W9_2B_BASE_SHA: e5fd4f8c5972a006c0b937eabb8df10a82e0b5cc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify complete accepted game-factory baseline
+        run: npm run verify
+
+      - name: Verify frozen W8 visuals sound and full session
+        run: npm run test:w8-feel
+
+      - name: Rebuild W9 release artifact with opt-in variants
+        run: npm run package:playtest
+
+      - name: Confirm W9 release regression still passes
+        run: npm run test:w9-playtest
+
+      - name: Capture A original B fluid-2D C real-WebGL2
+        run: npm run test:w9-2b
+
+      - name: Enforce no factory churn and complete A-B-C evidence
+        run: npm run check:w9-2b
+
+      - name: Attach screenshots and optional opt-in testable bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-2b-abc-feel-spike
+          path: |
+            playtest-dist/
+            evidence/w9-2b/
+            evidence/w8/
+            evidence/w8-3/
+            test-results/
+          if-no-files-found: warn

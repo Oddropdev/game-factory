@@ -1,3 +1,4 @@
+import { fluidSteeringStep } from './MassRunnerExperiment';
 import {
   applyMassOperation,
   MASS_RUNNER_LEVELS,
@@ -44,6 +45,7 @@ export class MassRunnerModel {
   private phase: MassRunnerPhase = 'ready';
   private levelIndex = 0;
   private distance = 0;
+  private steeringVelocity = 0;
   private playerNormX = 0.5;
   private mass = 1;
   private totalScore = 0;
@@ -96,7 +98,7 @@ export class MassRunnerModel {
     this.phase = 'ready';
   }
 
-  step(targetNormX: number): void {
+  step(targetNormX: number, steering: 'original' | 'fluid' = 'original'): void {
     if (this.phase !== 'running') {
       return;
     }
@@ -107,9 +109,13 @@ export class MassRunnerModel {
       Math.max(-STEER_PER_TICK, target - this.playerNormX)
     );
 
-    this.playerNormX = clamp01(
-      this.playerNormX + steeringDelta
-    );
+    if (steering === 'fluid') {
+      const next = fluidSteeringStep(this.playerNormX, this.steeringVelocity, target);
+      this.playerNormX = next.position;
+      this.steeringVelocity = next.velocity;
+    } else {
+      this.playerNormX = clamp01(this.playerNormX + steeringDelta);
+    }
 
     const level = this.currentLevel();
     const previousDistance = this.distance;
@@ -185,6 +191,7 @@ export class MassRunnerModel {
     const level = this.currentLevel();
     this.distance = 0;
     this.playerNormX = 0.5;
+    this.steeringVelocity = 0;
     this.mass = level.startMass;
     this.pickups = 0;
     this.hits = 0;
