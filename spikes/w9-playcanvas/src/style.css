@@ -3,3 +3,17 @@
    mask an approaching + / × choice in the centre of the 3D view. */
 .world-gate-label{min-width:68px;text-align:center;border:2px solid #fffdf3d9;white-space:nowrap;line-height:1.05;filter:drop-shadow(0 2px 3px #1e355663)}
 @media(max-height:520px){.feedback{bottom:8%;font-size:22px}}
+
+/* W9.3-3: short, low-screen celebration, not an overlay over arithmetic. */
+.feedback[data-kind='gate']{color:#FFF2BE;text-shadow:0 3px 0 #C28756,0 8px 16px #263E6780}
+.feedback[data-kind='orb']{color:#D7FFE3;text-shadow:0 3px 0 #3B9E8A,0 8px 16px #263E6780}
+.feedback[data-kind='hazard']{color:#FFE0E9;text-shadow:0 3px 0 #CB668E,0 8px 16px #263E6780}
+.feedback.show{animation:w9-toy-juice-pop .34s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes w9-toy-juice-pop{
+  0%{opacity:0;transform:translate(-50%,10px) scale(.68)}
+  70%{opacity:1;transform:translate(-50%,-5px) scale(1.10)}
+  100%{opacity:1;transform:translate(-50%,0) scale(1)}
+}
+@media(prefers-reduced-motion:reduce){
+  .feedback.show{animation:none}
+}
