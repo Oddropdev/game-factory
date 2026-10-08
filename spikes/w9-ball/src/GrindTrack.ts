@@ -56,8 +56,18 @@ export function buildGrindTrack(shape:Shape) {
     [longCenter(mid),.51,SPEED_START_Z-mid],
     [2.8,.24,entryLength],stripe,'static',longTangent(mid).yaw,2.05);
   route('bridge',GRIND_START,GRIND_END);
-  // Elevated secret rail: rises ABOVE the road, bends outward and returns.
-  // Road remains underneath, so top-only riders have a genuine high path.
+  // Optional left-lane entry: actual inclined Bullet slope from the broad
+  // 0m deck toward the secret TOP (1.12m); NOT an invisible auto-snap.
+  // The 32m lead-in is gentle enough to be approached at racing speed.
+  const secretEntry=SECRET_START-31;
+  const secretLength=SECRET_START+1-secretEntry;
+  const secretMid=secretEntry+secretLength/2;
+  const secretApproach=grindPath(secretMid,longCenter(secretMid),'secret');
+  shape('real-secret-rail-entry-ramp','box',
+    [secretApproach.x,.49,SPEED_START_Z-secretMid],
+    [2.4,.24,secretLength],stripe,'static',
+    longTangent(secretMid).yaw,2.05);
+  // Separated LEFT elevated side branch, never crosses centerline/right guard.
   route('secret',SECRET_START,SECRET_END);
   return {bridgeTops,secretTops,topCount:bridgeTops+secretTops,
     sideCount,bridge:[GRIND_START,GRIND_END] as const,
