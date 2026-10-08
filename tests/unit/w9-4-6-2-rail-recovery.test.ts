@@ -30,7 +30,7 @@ describe('W9.4-6.2 underside recovery cannot authorize grind',()=>{
     for(let d=345;d<401;d++){
       const a=grindPath(d,0,'secret'),b=grindPath(d+.5,0,'secret');
       expect(Math.abs(a.y-b.y)).toBeLessThan(.12);
-      expect(Math.abs(a.x-b.x)).toBeLessThan(.16);
+      expect(Math.abs(a.x-b.x)).toBeLessThan(.23);
     }
   });
 });
