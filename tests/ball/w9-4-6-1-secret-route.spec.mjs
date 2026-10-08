@@ -62,7 +62,7 @@ test('W9.4-6.1 optional player-chosen secret top grind climbs + descends '+vp.na
   }
   await page.mouse.up();
   const end=await snap(page);
-  console.log('W9461_SECRET_TRACE',JSON.stringify({samples,rode,climbed,descended,
+  globalThis.console.log('W9461_SECRET_TRACE',JSON.stringify({samples,rode,climbed,descended,
     peak,end:{phase:end.phase,position:end.position,falls:end.fallCount,
     secret:end.grindSecretFrames,entries:end.grindEntries,
     top:end.grindTopContactEvents,side:end.grindSideContactEvents}}));
@@ -85,7 +85,7 @@ test('W9.4-6.1 center-lane baseline may bypass secret without free TOP reward',a
   await page.locator('#start').click();
   await expect.poll(async()=>progress(await snap(page)),{timeout:27_000}).toBeGreaterThan(411);
   const end=await snap(page);
-  console.log('W9461_CENTER_TRACE',JSON.stringify({pos:end.position,secret:end.grindSecretFrames,fallCount:end.fallCount}));
+  globalThis.console.log('W9461_CENTER_TRACE',JSON.stringify({pos:end.position,secret:end.grindSecretFrames,fallCount:end.fallCount}));
   expect(end.fallCount).toBe(0);
   expect(end.grindSecretFrames).toBe(0);
 });
