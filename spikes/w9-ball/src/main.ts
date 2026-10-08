@@ -756,6 +756,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
       grindMode,guardLock,guardSide,guardLockEvents,guardTopEvents,
       guardSideEvents,guardReleaseEvents,guardReleaseByOppositeSwipe,
       guardLockSeconds,guardLockPeakSpeed,guardHoldFrames,guardCoolUntil,
+      guardLastTouch,
       grindLock,grindEntries,grindExits,grindSeconds,
       grindBridgeFrames,grindSecretFrames,
       grindLastTopImpact,grindTopDeniedHeight,grindTopDeniedLateral,
