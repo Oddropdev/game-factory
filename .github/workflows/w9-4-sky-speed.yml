@@ -1,0 +1,58 @@
+name: W9.4-3 Sky Speed Physics Hero
+on:
+  pull_request:
+    paths:
+      - "spikes/w9-ball/src/main.ts"
+      - "spikes/w9-ball/src/SpeedCourse.ts"
+      - "spikes/w9-ball/index.html"
+      - "spikes/w9-ball/src/style.css"
+      - "tests/ball/w9-4-sky-speed.spec.mjs"
+      - "tools/check-w9-4-3.mjs"
+      - "docs/evidence/W9.4-3*"
+      - ".github/workflows/w9-4-sky-speed.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  physics-hero:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'w9-4-3-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      W9_4_3_BASE_SHA: f40f496da137a3ea43e1e5e3c29ca346edde7bf8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Original Factory typecheck, lint and test
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Isolated Physics Ball build with no licensed asset upload
+        run: npm run build:w9-4:ball
+      - name: Previously accepted classic physics and private art fallback
+        run: npx playwright test tests/ball/w9-4-physics.spec.mjs tests/ball/w9-4-private-art.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Sky-speed real physics swipe, arcs and three device screenshots
+        run: npx playwright test tests/ball/w9-4-sky-speed.spec.mjs --config=playwright.w9-4.config.mjs
+      - name: Strict source scope, screenshots and bounded speed contract
+        run: node tools/check-w9-4-3.mjs
+      - name: Archive actual screenshots and local-only /ball
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-4-3-sky-speed-evidence
+          path: |
+            evidence/w9-4-3/
+            playtest-dist/ball/
+            test-results/
+          if-no-files-found: warn
