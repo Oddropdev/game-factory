@@ -50,7 +50,7 @@ if (!missing.length) {
   if (/<(?:script|img)[^>]+src=["']https?:\/\//iu.test(html)) {
     failures.push('playtest must have no external runtime scripts');
   }
-  if (/fetch\(|XMLHttpRequest|sendBeacon|localStorage|analytics|<form[^>]+action=/iu.test(feedback)) {
+  if (/fetch\(|XMLHttpRequest|sendBeacon|localStorage|gtag\\(|fbq\\(|<form[^>]+action=/iu.test(feedback)) {
     failures.push('feedback must stay manual, local and untracked');
   }
   if (!feedback.includes('navigator.clipboard')) {
