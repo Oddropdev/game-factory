@@ -4,19 +4,21 @@
 // noisy random angle changes or introduce unmodelled gaps.
 import {generateSpiralRoad,spiralSpec,type SpiralPoint,type SpiralSpec} from './SpiralCourse';
 export type MacroKind='grand-helix'|'double-helix'|'mega-slalom'|
- 'figure-eight'|'sky-switchback'|'crest-dive';
+ 'figure-eight'|'sky-switchback'|'crest-dive'|'deep-canyon'|'downhill-switchbacks';
 export type MacroCourse={kind:MacroKind;motifs:string[];index:number;seed:number;
  start:number;end:number;road:SpiralPoint[];spec:SpiralSpec;signature:string};
 const TYPES:MacroKind[]=['grand-helix','double-helix','mega-slalom',
  'figure-eight','sky-switchback','crest-dive'];
+const EXTREME:MacroKind[]=[...TYPES,'deep-canyon','downhill-switchbacks'];
 const clamp=(x:number,a:number,b:number)=>Math.max(a,Math.min(b,x));
 const smooth=(t:number)=>{const u=clamp(t,0,1);return u*u*(3-2*u)};
 function random(seed:number){let x=seed>>>0;return ()=>{x+=0x6d2b79f5;let t=x;t=Math.imul(t^(t>>>15),t|1);
  t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296};}
-function chosen(index:number,seed:number):MacroKind{
+function chosen(index:number,seed:number,extreme=false):MacroKind{
  if(index===3)return 'grand-helix'; // Keep approved first 360-degree test unchanged.
- const cycle=Math.floor((index-4)/TYPES.length),step=(index-4)%TYPES.length;
- const r=random((seed^Math.imul(cycle+1,0x517cc1b7))>>>0),order=[...TYPES];
+ const types=extreme?EXTREME:TYPES;
+ const cycle=Math.floor((index-4)/types.length),step=(index-4)%types.length;
+ const r=random((seed^Math.imul(cycle+1,0x517cc1b7))>>>0),order=[...types];
  for(let k=order.length-1;k>0;k--){const p=Math.floor(r()*(k+1));[order[k],order[p]]=[order[p]!,order[k]!];}
  return order[step]!;
 }
@@ -29,6 +31,16 @@ function bendPos(kind:MacroKind,p:SpiralPoint,start:number,end:number,
  // boundaries. No razor-sharp seam joints from adjacent noisy motifs.
  let x=0,y=0,z=0,bank=0;
  switch(kind){
+ case 'deep-canyon':
+  x=hand*amplitude*.94*Math.sin(phase*1.15)*w;
+  z=amplitude*.48*Math.sin(phase)*w;
+  y=-rise*1.38*w*(.73+.27*Math.cos(phase)**2);
+  bank=hand*21*w*Math.sin(phase);break;
+ case 'downhill-switchbacks':
+  x=hand*amplitude*1.35*Math.sin(phase*1.5)*w;
+  z=amplitude*.66*Math.cos(phase)*w;
+  y=-rise*1.18*w*(.70+.30*Math.sin(phase*1.5)**2);
+  bank=hand*26*w*Math.sin(phase*1.5);break;
  case 'mega-slalom':
   x=hand*amplitude*Math.sin(phase)*w*1.4;
   z=amplitude*.62*Math.sin(phase)*w;
@@ -53,8 +65,9 @@ function bendPos(kind:MacroKind,p:SpiralPoint,start:number,end:number,
  }
  return {...p,x:p.x+x,y:p.y+y,z:(p.z??7-p.d)+z,bank};
 }
-export function buildMacroCourse(index:number,seed:number,start:number,end:number,axis:number):MacroCourse{
- const spec=spiralSpec(index,seed,start,end,axis),kind=chosen(index,seed);
+export function buildMacroCourse(index:number,seed:number,start:number,end:number,axis:number,
+ profile:'classic'|'extreme'='classic'):MacroCourse{
+ const spec=spiralSpec(index,seed,start,end,axis),kind=chosen(index,seed,profile==='extreme');
  const rand=random((seed^Math.imul(index+1,0x7feb352d)^0x4accd12d)>>>0);
  const amplitude=45+rand()*31,rise=48+rand()*36;
  const hand=rand()>.5?1 as const:-1 as const;
@@ -87,7 +100,9 @@ export function buildMacroCourse(index:number,seed:number,start:number,end:numbe
    const flat={...p,x:axis,y:0,z:7-p.d,bank:0,width:p.width};
    return bendPos(kind,flat,start,end,amplitude,rise,hand);
   });
-  motifs=kind==='mega-slalom'?['giant-s-bend','elevated-sweep','long-dive']:
+  motifs=kind==='deep-canyon'?['mega-downhill-plunge','valley-sweep','climb-out']:
+   kind==='downhill-switchbacks'?['downward-hairpin','canyon-switchback','return-climb']:
+   kind==='mega-slalom'?['giant-s-bend','elevated-sweep','long-dive']:
    kind==='figure-eight'?['wide-figure-eight','elevated-crossing','exit-roll']:
    kind==='sky-switchback'?['reverse-heading-bend','sky-crest','canyon-descend']:
    ['mountain-climb','double-crest','steep-dive'];
@@ -98,14 +113,14 @@ export function buildMacroCourse(index:number,seed:number,start:number,end:numbe
 }
 export function validateMacroCourse(c:MacroCourse){
  const {road,start,end,spec}=c;let minGap=Infinity,maxStep=0,maxTurn=0,maxPitch=0;
- let length=0,reverseZ=0,peak=0,rangeX=[Infinity,-Infinity];
+ let length=0,reverseZ=0,peak=0,valley=0,rangeX=[Infinity,-Infinity];
  for(let i=1;i<road.length;i++){
   const a=road[i-1]!,b=road[i]!,dx=b.x-a.x,dy=b.y-a.y,dz=(b.z??7-b.d)-(a.z??7-a.d);
   const step=Math.hypot(dx,dy,dz);
   maxStep=Math.max(maxStep,step);length+=step;
   maxPitch=Math.max(maxPitch,Math.abs(Math.atan2(dy,Math.hypot(dx,dz))));
   if(dz>.02)reverseZ++;
-  peak=Math.max(peak,b.y);rangeX=[Math.min(rangeX[0]!,b.x),Math.max(rangeX[1]!,b.x)];
+  peak=Math.max(peak,b.y);valley=Math.min(valley,b.y);rangeX=[Math.min(rangeX[0]!,b.x),Math.max(rangeX[1]!,b.x)];
   minGap=Math.min(minGap,step);
   if(i>1){const p=road[i-2]!,ux=a.x-p.x,uy=a.y-p.y,
    uz=(a.z??7-a.d)-(p.z??7-p.d);
@@ -118,7 +133,7 @@ export function validateMacroCourse(c:MacroCourse){
  const distinct=rangeX[1]!-rangeX[0]!;
  const valid=Number.isFinite(length)&&ports<.001&&road.length===537&&
   maxTurn<.20&&maxPitch<1.24&&maxStep<8&&minGap>.02&&
-  length>500&&peak>26&&distinct>15&&c.motifs.length>=3;
+  length>500&&(peak>26||valley< -26)&&distinct>15&&c.motifs.length>=3;
  return {valid,ports,length,maxTurn,maxPitch,maxStep,minGap,reverseZ,
-  peak,spanX:distinct,kind:c.kind,motifs:c.motifs,signature:c.signature};
+  peak,valley,spanX:distinct,kind:c.kind,motifs:c.motifs,signature:c.signature};
 }
