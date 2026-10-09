@@ -14,6 +14,10 @@ test('extreme rollercoaster enters World 4 with real generated guard/grind physi
  await expect.poll(async()=>(await read(page))?.trilogy.worldContacts[3],{timeout:22000}).toBeGreaterThan(0);
  state=await read(page);
  expect(state.phase).toBe('running');
+ expect(state.trilogy.retired[1].guardBodies).toBeGreaterThan(20);
+ expect(state.trilogy.retired[1].grindTops).toBeGreaterThan(15);
+ expect(state.trilogy.retired[2].guardBodies).toBeGreaterThan(20);
+ expect(state.trilogy.retired[2].grindTops).toBeGreaterThan(15);
  expect(state.trilogy.active.guardBodies).toBeGreaterThan(20);
  expect(state.trilogy.active.grindTops).toBeGreaterThan(15);
  expect(state.trilogy.active.grindSides).toBeGreaterThan(20);
