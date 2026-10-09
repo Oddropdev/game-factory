@@ -129,7 +129,10 @@ export class TrilogyWorld{
    // Guard only genuinely dangerous 360-degree climbing spiral.
    if(a.d<from-5||a.d>to+5||i%2!==0)continue;
    for(const side of [-1,1]){
-    const rx=dz/horizontal,rz=-dx/horizontal;
+    // Same signed road-right basis as the rendered ribbon and input path.
+    // W10 used the OPPOSITE sign here, putting Bullet guard bodies across
+    // from their visible guard and making side-contact magnets misregister.
+    const rx=-dz/horizontal,rz=dx/horizontal;
     const edge=new Entity('w10-physical-guard-'+side+'-'+i);
     const width=a.width/2-.18;
     edge.setPosition((a.x+b.x)/2+side*rx*width,(a.y+b.y)/2+.85,
