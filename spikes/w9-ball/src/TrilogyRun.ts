@@ -36,7 +36,7 @@ export class TrilogyRun{
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
  readonly macroMode:boolean;readonly jumpMode:boolean;
  jumpAirFrames=0;jumpLaunchFrames=0;jumpLandings=0;
- private airborneJump=false;
+ jumpTakeoffs=0;private takeoffDone=false;private airborneJump=false;
  macroKind='';macroMotifs:string[]=[];macroSignature='';
  exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
@@ -477,7 +477,7 @@ export class TrilogyRun{
        this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
       }
       this.lastSpiralPosition=null;this.touchDrive.cancel();this.driveKeys.clear();
-   this.airborneJump=false;
+   this.airborneJump=false;this.takeoffDone=false;
       const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
       this.spiralMetric=this.macroMode&&this.worldIndex>3?null:
        spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
@@ -593,6 +593,14 @@ export class TrilogyRun{
    proj.surfaceGap>-.9&&proj.surfaceGap<3.4);
   if(this.jumpMode&&jump){
    if(proj.d>=jump.rampStart&&proj.d<jump.gapStart&&onDeck)this.jumpLaunchFrames++;
+   if(!this.takeoffDone&&onDeck&&proj.d>=jump.gapStart-2.5&&
+     proj.d<jump.gapStart&&forward>=jump.minSafeSpeed){
+    // Ballistic release from a real uphill lip; a single bounded physics
+    // impulse, never kinematic flight or an invisible supported gap.
+    const lift=clamp(8.5-v.y,0,10);
+    if(lift>0)this.body.applyImpulse(new Vec3(0,this.body.mass*lift,0));
+    this.takeoffDone=true;this.jumpTakeoffs++;
+   }
    if(inGap){this.jumpAirFrames++;this.airborneJump=true;}
    if(this.airborneJump&&proj.d>jump.gapEnd&&onDeck&&
       (surface?.clearance??proj.surfaceGap)<1.4){
@@ -941,6 +949,7 @@ export class TrilogyRun{
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
   macroMode:this.macroMode,jumpMode:this.jumpMode,
   jumpAirFrames:this.jumpAirFrames,jumpLaunchFrames:this.jumpLaunchFrames,
+  jumpTakeoffs:this.jumpTakeoffs,
   jumpLandings:this.jumpLandings,
   macroKind:this.macroKind,macroMotifs:this.macroMotifs,
   macroSignature:this.macroSignature,
