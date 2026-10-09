@@ -8,20 +8,22 @@ export class TrilogyWorld{
  readonly root:Entity;readonly assets:WorldAssets;
  materials:StandardMaterial[]=[];gems:Gem[]=[];roadBodies=0;hazardBodies=0;
  disposed=false;active=false;meshCount=0;islandCount=0;trackQuads=0;privateMeshes=0;
- guardBodies=0;grindTops=0;grindSides=0;
+ guardBodies=0;grindTops=0;grindSides=0;boxObstacles=0;
  constructor(readonly app:AppBase,readonly manifest:WorldManifest,readonly road:RoadSample[],
-  root?:Entity,readonly rich=false){
+  root?:Entity,readonly rich=false,readonly minimalist=false){
   this.root=root??new Entity('world-'+manifest.id);this.root.enabled=false;
   if(!this.root.parent)app.root.addChild(this.root);this.assets=new WorldAssets(app);
  }
  async prepare(device:GraphicsDevice,legacy=false){
   const m=this.manifest;
-  const art=buildWorldArt(device,this.root,m,this.road);
+  const art=buildWorldArt(device,this.root,m,this.road,this.minimalist);
   this.materials=art.materials;this.meshCount=art.meshCount;this.islandCount=art.islandCount;this.trackQuads=art.trackQuads;
   if(!legacy)for(let i=0;i<this.road.length;i+=2){
    const p=this.road[i]!,t=trilogyTangent(p.d),bank=p.bank;
    const e=new Entity('trilogy-road-'+m.id+'-'+i);this.root.addChild(e);
-   e.setPosition(p.x,p.y-.30,7-p.d);e.setEulerAngles(0,t.yaw,bank);
+   const prev=this.road[Math.max(0,i-1)]!,next=this.road[Math.min(this.road.length-1,i+1)]!;
+   const pitch=this.minimalist?Math.atan2(next.y-prev.y,next.d-prev.d)*180/Math.PI:0;
+   e.setPosition(p.x,p.y-.30,7-p.d);e.setEulerAngles(pitch,t.yaw,bank);
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(p.width/2,.30,1.2)});
    e.addComponent('rigidbody',{type:'static',friction:.85,restitution:0});this.roadBodies++;
   }
@@ -30,19 +32,34 @@ export class TrilogyWorld{
    this.materials.push(guard,grind,side);this.prepareRails(m,guard,grind,side);
   }
   for(const [i,d] of m.gems.entries()){
-   const e=new Entity('trilogy-gem-'+i);this.root.addChild(e);e.setPosition(trilogyCenter(d),1.25,7-d);
+   const e=new Entity('trilogy-gem-'+i);this.root.addChild(e);
+   e.setPosition(trilogyCenter(d),(this.minimalist?this.roadHeight(d):0)+1.25,7-d);
    e.addComponent('render',{meshInstances:[coinMesh(device,art.mats.gold)],castShadows:true});
    this.gems.push({node:e,collected:false,d});
   }
   // Physical hazards sit in optional outer lanes; center route stays readable.
   const hazardAnchors:Entity[]=[];
   for(const [i,d] of m.hazards.entries()){
-   const e=new Entity('hazard-'+m.id+'-'+i),side=i%2?1:-1;this.root.addChild(e);
-   e.setPosition(trilogyCenter(d)+side*3.1,.75,7-d);
-   e.addComponent('collision',{type:'sphere',radius:.72});e.addComponent('rigidbody',{type:'static',restitution:.65});
-   const visual=new Entity('placeholder');visual.setLocalScale(1.44,1.44,1.44);visual.addComponent('render',{type:'sphere',material:art.mats.road[i%art.mats.road.length],castShadows:true});e.addChild(visual);
-   hazardAnchors.push(e);this.hazardBodies++;
+   const side=i%3===0?-2.6:i%3===1?2.6:0;
+   const e=new Entity((this.minimalist?'w98-crate-':'hazard-')+m.id+'-'+i);this.root.addChild(e);
+   const y=(this.minimalist?this.roadHeight(d):0)+.82;
+   e.setPosition(trilogyCenter(d)+side,y,7-d);
+   if(this.minimalist){
+    // Just one low-poly BOX mesh and one light Bullet body per obstacle.
+    // A hit can knock it away; no decorative islands outside the road.
+    e.addComponent('collision',{type:'box',halfExtents:new Vec3(.70,.70,.70)});
+    e.addComponent('rigidbody',{type:'dynamic',mass:.55,friction:.54,restitution:.13});
+    this.boxObstacles++;
+   }else{
+    e.addComponent('collision',{type:'sphere',radius:.72});
+    e.addComponent('rigidbody',{type:'static',restitution:.65});
+   }
+   const visual=new Entity('placeholder');visual.setLocalScale(1.4,1.4,1.4);
+   visual.addComponent('render',{type:this.minimalist?'box':'sphere',
+     material:art.mats.road[i%art.mats.road.length],castShadows:!this.minimalist});
+   e.addChild(visual);hazardAnchors.push(e);this.hazardBodies++;
   }
+  if(this.minimalist)return; // W9.8 has no owner-only environmental models.
   await this.assets.load(m.privateModels); 
   if(this.disposed)return;
   hazardAnchors.forEach(e=>{if(this.assets.attach(m.id==='candy'?'roller':'bumper',e,new Vec3(1.44,1.44,1.44))){e.findByName('placeholder')!.enabled=false;this.privateMeshes++;}});
@@ -57,12 +74,22 @@ export class TrilogyWorld{
   const gate=new Entity('licensed-checkpoint');this.root.addChild(gate);gate.setPosition(trilogyCenter(m.end-6),0,13-m.end);
   if(this.assets.attach(m.id==='candy'?'arch':'checkpoint',gate,new Vec3(10,7,3),true))this.privateMeshes++;
  }
+ roadHeight(d:number){
+  const first=this.road[0]!,last=this.road[this.road.length-1]!;
+  const t=Math.max(first.d,Math.min(last.d,d));
+  const idx=Math.min(this.road.length-2,Math.max(0,Math.floor(t-first.d)));
+  const a=this.road[idx]!,b=this.road[idx+1]!;
+  return a.y+(b.y-a.y)*Math.max(0,Math.min(1,(t-a.d)/(b.d-a.d||1)));
+ }
  private prepareRails(m:WorldManifest,guardMat:StandardMaterial,grindMat:StandardMaterial,sideMat:StandardMaterial){
   const features=m.features!;
   const segment=(name:string,d:number,side:-1|1,offset:number,y:number,
    width:number,height:number,depth:number,material:StandardMaterial)=>{
    const t=trilogyTangent(d),x=trilogyCenter(d)+side*(-t.z)*offset,z=7-d+side*t.x*offset;
-   const e=new Entity(name);this.root.addChild(e);e.setPosition(x,y,z);e.setEulerAngles(0,t.yaw,0);
+   const e=new Entity(name);this.root.addChild(e);
+   const slope=this.minimalist?Math.atan2(this.roadHeight(d+1)-this.roadHeight(d-1),2)*180/Math.PI:0;
+   e.setPosition(x,y+(this.minimalist?this.roadHeight(d):0),z);
+   e.setEulerAngles(slope,t.yaw,0);
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(width/2,height/2,depth/2)});
    e.addComponent('rigidbody',{type:'static',friction:.9,restitution:0});
    const visual=new Entity(name+'-visual');visual.setLocalScale(width,height,depth);
@@ -98,7 +125,9 @@ export class TrilogyWorld{
   this.materials=[];this.gems=[];this.active=false;this.disposed=true;}
  snapshot(){return {id:this.manifest.id,active:this.active,disposed:this.disposed,roadBodies:this.roadBodies,
   hazardBodies:this.hazardBodies,guardBodies:this.guardBodies,grindTops:this.grindTops,
-  grindSides:this.grindSides,meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
+  grindSides:this.grindSides,boxObstacles:this.boxObstacles,minimalist:this.minimalist,
+  maxElevation:Math.max(...this.road.map(p=>p.y)),
+  meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
   liveBodies:this.disposed?0:this.root.findComponents('rigidbody').length,
   privateMeshes:this.privateMeshes,missing:this.assets.missing};}
 }
