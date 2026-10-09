@@ -150,24 +150,57 @@ export class TrilogyRun{
   }
   const t=new Texture(this.device,{name:'original-prism-ball',mipmaps:true});t.setSource(c);return t;
  }
+ private prepareMacroRoad(index:number,content:ReturnType<typeof generateEndlessWorld>){
+  const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
+  const macro=buildMacroCourse(index,this.seed,content.manifest.start,
+   content.manifest.end,axis);
+  const verdict=validateMacroCourse(macro);
+  if(!verdict.valid)throw Error('W104_UNSAFE_MACRO_'+index+'_'+macro.kind+
+   '_turn_'+verdict.maxTurn.toFixed(3)+'_pitch_'+verdict.maxPitch.toFixed(3));
+  content.manifest.geometry='spiral';
+  content.manifest.spiralCoilStart=index===3?macro.spec.coilStart:
+   content.manifest.start+85;
+  content.manifest.spiralCoilEnd=index===3?macro.spec.coilEnd:
+   content.manifest.end-74;
+  content.manifest.macroKind=macro.kind;
+  content.manifest.macroMotifs=macro.motifs;
+  content.manifest.macroSignature=macro.signature;
+  if(index>3)content.manifest.title=macro.kind.replace(/-/g,' ').toUpperCase();
+  return macro.road;
+ }
+ private noteMacro(){
+  this.macroKind=this.current.manifest.macroKind??'';
+  this.macroMotifs=this.current.manifest.macroMotifs??[];
+  this.macroSignature=this.current.manifest.macroSignature??'';
+ }
  async initialize(root:Entity){
   const {manifest,road}=await fetchWorld(0);
   await this.persistentAssets.load(['ball']);
   if(this.persistentAssets.attach('ball',this.ball,new Vec3(1.24,1.24,1.24))){
    this.ball.findByName(this.ball.name+'-visual')!.enabled=false;this.privateCount++;
   }
-  if(this.spiralMode&&new URL(location.href).searchParams.get('start')==='spiral'){
-   const index=3,content=generateEndlessWorld(index,this.seed,true);
+  const params=new URL(location.href).searchParams;
+  const directMode=params.get('start');
+  if(this.spiralMode&&(directMode==='spiral'||this.macroMode&&directMode==='macro')){
+   const requested=Number(params.get('world')),world=this.macroMode&&
+    params.has('world')&&Number.isSafeInteger(requested)?
+     clamp(requested,4,100):4;
+   const index=world-1,content=generateEndlessWorld(index,this.seed,true);
    const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
    const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
-   content.manifest.geometry='spiral';
-   content.manifest.spiralCoilStart=spec.coilStart;
-   content.manifest.spiralCoilEnd=spec.coilEnd;
-   this.spiralMetric=spiralMetrics(spec);
+   const directRoad=this.macroMode?this.prepareMacroRoad(index,content):
+    generateSpiralRoad(spec);
+   if(!this.macroMode){
+    content.manifest.geometry='spiral';
+    content.manifest.spiralCoilStart=spec.coilStart;
+    content.manifest.spiralCoilEnd=spec.coilEnd;
+   }
+   this.spiralMetric=this.macroMode&&index>3?null:spiralMetrics(spec);
    this.worldIndex=index;root.enabled=false;
-   this.current=new TrilogyWorld(this.app,content.manifest,generateSpiralRoad(spec),
+   this.current=new TrilogyWorld(this.app,content.manifest,directRoad,
     undefined,this.richMode,true,false,true,this.touchDriveMode,this.alignedSurfaceMode);
    await this.current.prepare(this.device);this.current.activate();
+   if(this.macroMode)this.noteMacro();
    const start=this.spiralSpawnProgress();
    const entry=this.current.roadPoint(start);
    const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
@@ -235,11 +268,14 @@ export class TrilogyRun{
      }
      if(this.spiralMode&&index>=3){
       const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
-      const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
-      stagedRoad=generateSpiralRoad(spec);
-      content.manifest.geometry='spiral';
-      content.manifest.spiralCoilStart=spec.coilStart;
-      content.manifest.spiralCoilEnd=spec.coilEnd;
+      if(this.macroMode)stagedRoad=this.prepareMacroRoad(index,content);
+      else{
+       const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
+       stagedRoad=generateSpiralRoad(spec);
+       content.manifest.geometry='spiral';
+       content.manifest.spiralCoilStart=spec.coilStart;
+       content.manifest.spiralCoilEnd=spec.coilEnd;
+      }
      }
      staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,
       this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3,
