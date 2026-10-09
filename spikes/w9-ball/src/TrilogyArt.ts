@@ -61,7 +61,7 @@ const sphere=(()=>{
   if(y<12&&x<20){const a=y*21+x;i.push(a,a+1,a+21,a+1,a+22,a+21);}
  }return {p,n,i};
 })();
-export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,road:RoadSample[]){
+export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,road:RoadSample[],minimalist=false){
  const biome=m.biome??m.id;
  const crystalStyle=biome==='crystal'||/Aurora|Frost|Storm/.test(biome);
  const candyStyle=biome==='candy'||/Coral|Neon|Solar/.test(biome);
@@ -87,6 +87,9 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
    batch.add(mat,p,n,[0,1,2,1,3,2]);trackQuads++;
   };
   const w=a.width/2;quad(-w,w,.02,roadMat);quad(-w,-w+.22,.055,mats.trim);quad(w-.22,w,.055,mats.trim);
+  // Track-first production profile draws only the road and two fine
+  // edge strips; suppress costly rounded undersides and silhouettes.
+  if(minimalist)continue;
   // Rounded outer lips and substantial visible undersides along the exact curve.
   for(const side of [-1,1]){
    for(let j=0;j<4;j++){
@@ -99,8 +102,14 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
     [side,0,0,side,0,0,side,0,0,side,0,0],side<0?[0,1,2,1,3,2]:[0,2,1,1,2,3]);
   }
  }
- // A water plane, island reflections and layered islands make depth readable from the chase camera.
+ // W9.8: zero islands, zero clouds, zero environment rings, zero water
+ // meshes. Only physically relevant course geometry survives this branch.
  const middle=(m.start+m.end)/2;
+ if(minimalist){
+  const meshes=batch.flush(device,root);
+  return {materials:all,mats,meshCount:meshes,trackQuads,islandCount:0,middle};
+ }
+ // A water plane, island reflections and layered islands make depth readable from the chase camera.
  batch.add(mats.water,[-240,-12,70-m.start,240,-12,70-m.start,-240,-12,-m.end-190,240,-12,-m.end-190],
   [0,1,0,0,1,0,0,1,0,0,1,0],[0,1,2,1,3,2]);
  let islandCount=0;

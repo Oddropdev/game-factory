@@ -1,8 +1,8 @@
-import {Entity,Vec3,Quat,Texture,type AppBase,type GraphicsDevice,type RigidBodyComponent,type StandardMaterial} from 'playcanvas';
+import {Entity,Vec3,Quat,Texture,Color,type AppBase,type GraphicsDevice,type RigidBodyComponent,type StandardMaterial} from 'playcanvas';
 import {WorldAssets} from './TrilogyAssets';
 import {TrilogyWorld,fetchWorld} from './TrilogyWorld';
 import {WORLD_BOUNDS,trilogyCenter,trilogyTangent,setRichEndlessRoute} from './TrilogyManifest';
-import {endlessBounds,generateEndlessWorld,generateWorldFeatures} from './EndlessWorlds';
+import {endlessBounds,generateEndlessWorld,generateWorldFeatures,setLongCoasterProfile} from './EndlessWorlds';
 import {generateTransit,generateSpectacleTransit,generateExtremeTransit,type SeededTransit} from './SeededTransit';
 import {buildTubeMesh,TUBE_OFFSET} from './TubeTransit';
 import {polished,tint} from './TrilogyArt';
@@ -23,7 +23,10 @@ export class TrilogyRun{
  private lastCameraRotation=new Quat();private wasConstrained=false;
  maxCameraTurn=0;cameraFinite=true;cameraMinClearance=Infinity;
  private inputLocked=false;private retryAt=0;private introUntil=2;private lastWorld=-1;
- readonly richMode:boolean;readonly extremeCoasters:boolean;
+ readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
+ themeFade=0;
+ private fadeFrom:{sky:Color;fog:Color;ambient:Color}|null=null;
+ private fadeTo:{sky:Color;fog:Color;ambient:Color}|null=null;
  private guardContacts=new Set<string>();private grindTopContacts=new Set<string>();
  private grindSideContacts=new Set<string>();private guardCooldownUntil=0;
  guardBoostFrames=0;grindBoostFrames=0;guardReleases=0;
@@ -34,9 +37,10 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.richMode=this.endless&&p.get('edition')==='w97';
+  this.trackFirstMode=this.endless&&p.get('edition')==='w98';
+  this.richMode=this.endless&&(p.get('edition')==='w97'||this.trackFirstMode);
   this.extremeCoasters=this.richMode&&p.get('coaster')==='extreme';
-  setRichEndlessRoute(this.richMode);
+  setRichEndlessRoute(this.richMode);setLongCoasterProfile(this.trackFirstMode);
   this.seed=p.has('seed')&&Number.isSafeInteger(requested)?requested>>>0:crypto.getRandomValues(new Uint32Array(1))[0]!;
   this.runSeed=this.seed;this.body=ball.rigidbody!;this.persistentAssets=new WorldAssets(app);
   this.ballTexture=this.makeBallTexture();this.ballMaterial.diffuseMap=this.ballTexture;
@@ -78,7 +82,7 @@ export class TrilogyRun{
   if(this.persistentAssets.attach('ball',this.ball,new Vec3(1.24,1.24,1.24))){
    this.ball.findByName(this.ball.name+'-visual')!.enabled=false;this.privateCount++;
   }
-  this.current=new TrilogyWorld(this.app,manifest,road,root);await this.current.prepare(this.device,true);this.current.activate();
+  this.current=new TrilogyWorld(this.app,manifest,road,root,this.richMode,this.trackFirstMode);await this.current.prepare(this.device,true);this.current.activate();
   this.privateCount+=this.current.privateMeshes;this.history.push({event:'activated',world:0,at:0});this.applyTheme();this.prepareTube();
  }
  private prepareTube(){
@@ -109,7 +113,26 @@ export class TrilogyRun{
     const content=this.endless&&index>=3?generateEndlessWorld(index,this.seed,this.richMode):await fetchWorld(index,controller.signal);
     if(this.richMode&&index<3)
      content.manifest.features=generateWorldFeatures(index,content.manifest.start,content.manifest.end,this.seed);
-    staged=new TrilogyWorld(this.app,content.manifest,content.road,undefined,this.richMode);await staged.prepare(this.device);
+    let stagedRoad=content.road;
+     if(this.trackFirstMode&&index<3){
+      // Render and collide the incoming track under the last 12m of tube.
+      // From that aligned narrow lip, it widens gently to its full width.
+      const start=content.manifest.start;
+      const taper=(d:number)=>{const u=clamp((d-(start-12))/36,0,1);
+       return 3.1+7.9*u*u*(3-2*u);};
+      const lip=Array.from({length:10},(_,i)=>({
+       ...content.road[0]!,d:start-12+i,x:trilogyCenter(start),
+       y:0,bank:0,width:taper(start-12+i)
+      }));
+      stagedRoad=[...lip,...content.road.map(p=>({
+       ...p,width:p.d<start+24?taper(p.d):p.width
+      }))];
+     }
+     staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,this.richMode,this.trackFirstMode);
+     await staged.prepare(this.device);
+     if(this.trackFirstMode)
+      this.fadeTo={sky:tint(content.manifest.sky),fog:tint(content.manifest.fog),
+       ambient:tint('#a5bfd3')};
     this.next=staged;this.loadState='ready';this.loadMs=performance.now()-started;
     this.history.push({event:'prepared-disabled',world:index,at:this.runTime,bodies:staged.roadBodies+staged.hazardBodies});
    }catch(error){staged?.dispose();this.loadState='failed';this.loadError=String(error);this.retryAt=this.runTime+2;}finally{clearTimeout(timeout);}
@@ -117,6 +140,10 @@ export class TrilogyRun{
  }
  private applyTheme(){
   const m=this.current.manifest;
+  if(this.trackFirstMode){
+   this.fadeFrom={sky:tint(m.sky),fog:tint(m.fog),ambient:tint('#a5bfd3')};
+   this.fadeTo=null;this.themeFade=0;
+  }
   this.camera.camera!.clearColor.copy(tint(m.sky));this.app.scene.fog.type='linear';
   this.app.scene.fog.color.copy(tint(m.fog));this.app.scene.fog.start=72;this.app.scene.fog.end=235;
   this.app.scene.ambientLight.copy(tint(m.id==='candy'?'#d1bfdf':'#a5bfd3'));
@@ -144,7 +171,11 @@ export class TrilogyRun{
    }
    if(this.worldIndex>0){
     // Same force-driven Bullet sphere and lane guidance as the accepted course.
-    const v=this.body.linearVelocity,t=trilogyTangent(progress),forward=v.x*t.x+v.z*t.z;
+    const v=this.body.linearVelocity,t=trilogyTangent(progress);
+    const hill=this.trackFirstMode&&this.worldIndex>=3?
+     (this.current.roadHeight(progress+1)-this.current.roadHeight(progress-1))/2:0;
+    const full=Math.hypot(t.x,t.z,hill),alongX=t.x/full,alongZ=t.z/full,alongY=hill/full;
+    const forward=v.x*alongX+v.y*alongY+v.z*alongZ;
     const lateral=v.x*(-t.z)+v.z*t.x,error=p.x-trilogyCenter(progress)-targetX;
     let goalSpeed=this.richMode?48:26;
     let magnetSide:-1|1|null=null;
@@ -179,11 +210,13 @@ export class TrilogyRun{
     }
     const drive=clamp((goalSpeed-forward)*(this.richMode?36:24),
      this.richMode?-260:-140,this.richMode?500:220);
-    this.body.applyForce(new Vec3(t.x*drive-t.z*side,
-     magnetSide!==null?-100:-8,t.z*drive+t.x*side));
+    this.body.applyForce(new Vec3(alongX*drive-t.z*side,
+     (magnetSide!==null?-100:-8)+alongY*drive+(this.trackFirstMode&&this.worldIndex>=3?29:0),
+     alongZ*drive+t.x*side));
     this.body.applyTorque(new Vec3(-7*t.z,0,7*t.x));
-    if(p.y< -5||Math.abs(p.x-trilogyCenter(progress))>14){
-     this.falls++;const d=this.current.manifest.start+3;this.body.teleport(trilogyCenter(d),2,7-d);
+    if(p.y<(this.trackFirstMode?this.current.roadHeight(progress)-8:-5)||Math.abs(p.x-trilogyCenter(progress))>14){
+     this.falls++;const d=this.current.manifest.start+4;
+     this.body.teleport(trilogyCenter(d),this.current.roadHeight(d)+2,7-d);
      this.body.linearVelocity=new Vec3(0,0,-12);this.body.angularVelocity=new Vec3();
     }
     return true;
@@ -224,6 +257,13 @@ export class TrilogyRun{
   let progress=7-pos.z;
   if(this.constrained&&this.transit){
    const path=this.transit.path,f=path.at(this.distance);
+   if(this.trackFirstMode&&this.fadeFrom&&this.fadeTo){
+    const u=clamp((this.distance/path.length-.36)/.59,0,1);
+    this.themeFade=u*u*(3-2*u);
+    this.camera.camera!.clearColor.lerp(this.fadeFrom.sky,this.fadeTo.sky,this.themeFade);
+    this.app.scene.fog.color.lerp(this.fadeFrom.fog,this.fadeTo.fog,this.themeFade);
+    this.app.scene.ambientLight.lerp(this.fadeFrom.ambient,this.fadeTo.ambient,this.themeFade);
+   }
    const radial=new Vec3(...f.normal).mulScalar(Math.cos(this.angle)).add(new Vec3(...f.binormal).mulScalar(Math.sin(this.angle)));
    const up=radial.clone().mulScalar(-1);
    this.camUp.lerp(this.camUp,up,1-Math.exp(-dt*7)).normalize();
@@ -260,8 +300,15 @@ export class TrilogyRun{
    this.ui.status.textContent=this.state==='holding'?(this.loadState==='failed'?'RECONNECTING · SAFE AT THE EXIT':'PREPARING YOUR NEXT WORLD…'):'SWIPE TO ORBIT · '+Math.round(this.distance/this.transit.path.length*100)+'%';
   }else{
    this.wasConstrained=false;this.camUp.set(0,1,0);const t=trilogyTangent(progress),height=Math.max(.62,pos.y);
-   this.camera.setPosition(pos.x-t.x*11,height+7.4,pos.z-t.z*16);
-   this.camera.lookAt(pos.x+t.x*17,height*.5,pos.z+t.z*24);this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
+   if(this.trackFirstMode&&this.worldIndex>=3){
+    const look=clamp(progress+22,this.current.manifest.start,this.current.manifest.end);
+    this.camera.setPosition(pos.x-t.x*11,height+8.6,pos.z-t.z*16);
+    this.camera.lookAt(trilogyCenter(look),this.current.roadHeight(look)+2.2,7-look);
+   }else{
+    this.camera.setPosition(pos.x-t.x*11,height+7.4,pos.z-t.z*16);
+    this.camera.lookAt(pos.x+t.x*17,height*.5,pos.z+t.z*24);
+   }
+   this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
    this.ui.status.textContent=this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:this.endless?'ENDLESS WORLDS · MAGNETIC JOURNEYS':'THREE WORLDS · TWO MAGNETIC JOURNEYS';
   }
   if(this.lastWorld!==this.worldIndex){document.getElementById('world-flash')?.remove();const e=document.createElement('div');e.id='world-flash';e.textContent=this.current.manifest.title;document.getElementById('game')!.append(e);this.lastWorld=this.worldIndex;}
@@ -280,6 +327,7 @@ export class TrilogyRun{
  }
  snapshot(){return {seed:this.runSeed,state:this.state,worldIndex:this.worldIndex+1,
   richMode:this.richMode,extremeCoasters:this.extremeCoasters,
+  trackFirstMode:this.trackFirstMode,themeFade:this.themeFade,
   guardBoostFrames:this.guardBoostFrames,grindBoostFrames:this.grindBoostFrames,
   guardReleases:this.guardReleases,
   generatedMinSpeed:Number.isFinite(this.generatedMinSpeed)?this.generatedMinSpeed:null,
