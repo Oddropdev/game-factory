@@ -73,7 +73,7 @@ export function generateEndlessWorld(index:number,runSeed:number):{manifest:Worl
  // Samples include overhang at both tube ports, as required by W9.5 Bullet staging.
  for(let d=start-2;d<=end+4;d++){
   const t=Math.max(0,Math.min(1,(d-start)/(end-start))),window=Math.sin(Math.PI*t)**2;
-  road.push({d,x:endlessCenter(d,secondCenter(700)),y:window*(.3+rand()*.45),
+  road.push({d,x:endlessCenter(d,secondCenter(700)),y:window*(.38+.14*Math.sin(t*Math.PI*(2+index%3))),
    bank:window*Math.sin(t*Math.PI*(2+index%3))*(9+design.tier*.55),
    width:10.8+Math.sin(t*Math.PI*2+index)*.7});
  }
