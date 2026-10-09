@@ -269,6 +269,7 @@ export class TrilogyWorld{
   choiceWallBodies:this.choiceWallBodies,choiceWall:this.manifest.choiceWall??null,
   chaos:this.chaos,
   maxElevation:Math.max(...this.road.map(p=>p.y)),
+  minElevation:Math.min(...this.road.map(p=>p.y)),
   meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
   liveBodies:this.disposed?0:this.root.findComponents('rigidbody').length,
   privateMeshes:this.privateMeshes,missing:this.assets.missing};}
