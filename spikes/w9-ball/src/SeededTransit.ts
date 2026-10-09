@@ -84,13 +84,18 @@ export function validateTransit(path:TransitTubePath,entry:TransitPort,exit:Tran
       maxFrameTurn=Math.max(maxFrameTurn,turn);
       if(dot(a.normal,b.normal)<.85)errors.push('frame-continuity');
     }
-    // Conservative swept-surface clearance: compare 1/4-resolution samples,
-    // subtract a sampling margin. Neighbors in the same tube arc are excluded.
-    if(i%4===0)for(let j=i+4;j<f.length;j+=4){
-      if(f[j]!.distance-a.distance<9)continue;
-      clearance=Math.min(clearance,distance(a.center,f[j]!.center));
-    }
   }
+  // Uniform arc-length samples avoid the variable spline-parameter spacing.
+  // Subtract one full sample interval: the two nearest endpoints together
+  // can be at most that far from a pair of actual swept-surface points.
+  const spacing=.8,points=[];
+  for(let d=0;d<path.length;d+=spacing)points.push(path.at(d));
+  points.push(path.at(path.length));
+  for(let i=0;i<points.length;i++)for(let j=i+1;j<points.length;j++){
+    if(points[j]!.distance-points[i]!.distance<9)continue;
+    clearance=Math.min(clearance,distance(points[i]!.center,points[j]!.center));
+  }
+  clearance-=spacing;
   if(minRadius<3.4)errors.push('curvature');
   if(maxFrameTurn>.32)errors.push('tangent-continuity');
   if(clearance<TUBE_OFFSET*2+.8)errors.push('self-clearance');

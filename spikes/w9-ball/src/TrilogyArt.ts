@@ -143,6 +143,15 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
   const d=m.start+(m.end-m.start)*(.22+i*.3);
   batch.ring(mats.trim,[i%2?30:-32,23+i*4,7-d],12+i*2,.12,[0,12,0]);
  }
+ if(m.id==='rainbow'){
+  const end=road.find(p=>p.d===m.end)!;
+  for(let z=0;z<3;z++)for(let x=0;x<10;x++){
+   const a={...end,d:end.d+z*.8},b={...end,d:end.d+(z+1)*.8};
+   batch.add((x+z)%2?mats.dark:mats.white,[...pose(a,x-5,.045),...pose(a,x-4,.045),...pose(b,x-5,.045),...pose(b,x-4,.045)],
+    [0,1,0,0,1,0,0,1,0,0,1,0],[0,1,2,1,3,2]);
+  }
+  batch.ring(mats.gold,[end.x,4.9,7-end.d],6.1,.42);
+ }
  const meshes=batch.flush(device,root);
  return {materials:all,mats,meshCount:meshes,trackQuads,islandCount,middle};
 }

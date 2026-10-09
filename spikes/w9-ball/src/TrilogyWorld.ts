@@ -19,7 +19,7 @@ export class TrilogyWorld{
   if(!legacy)for(let i=0;i<this.road.length;i+=2){
    const p=this.road[i]!,t=trilogyTangent(p.d),bank=p.bank;
    const e=new Entity('trilogy-road-'+m.id+'-'+i);this.root.addChild(e);
-   e.setPosition(p.x,-.30,7-p.d);e.setEulerAngles(0,t.yaw,bank);
+   e.setPosition(p.x,p.y-.30,7-p.d);e.setEulerAngles(0,t.yaw,bank);
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(p.width/2,.30,1.2)});
    e.addComponent('rigidbody',{type:'static',friction:.85,restitution:0});this.roadBodies++;
   }

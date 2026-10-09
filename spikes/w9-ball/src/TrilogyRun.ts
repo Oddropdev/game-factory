@@ -1,4 +1,4 @@
-import {Entity,Vec3,Texture,type AppBase,type GraphicsDevice,type RigidBodyComponent,type StandardMaterial} from 'playcanvas';
+import {Entity,Vec3,Quat,Texture,type AppBase,type GraphicsDevice,type RigidBodyComponent,type StandardMaterial} from 'playcanvas';
 import {WorldAssets} from './TrilogyAssets';
 import {TrilogyWorld,fetchWorld} from './TrilogyWorld';
 import {WORLD_BOUNDS,trilogyCenter,trilogyTangent} from './TrilogyManifest';
@@ -19,6 +19,8 @@ export class TrilogyRun{
  private seed:number;private body:RigidBodyComponent;private loadAbort:AbortController|null=null;
  private sparkPool:Entity[]=[];private ballTexture:Texture;private camUp=new Vec3(0,1,0);
  private persistentAssets:WorldAssets;
+ private lastCameraRotation=new Quat();private wasConstrained=false;
+ maxCameraTurn=0;cameraFinite=true;cameraMinClearance=Infinity;
  private inputLocked=false;private retryAt=0;private introUntil=2;private lastWorld=-1;
  readonly runSeed:number;
  constructor(private app:AppBase,private device:GraphicsDevice,private ball:Entity,
@@ -152,18 +154,43 @@ export class TrilogyRun{
   const pos=this.ball.getPosition(),v=this.body.linearVelocity;
   let progress=7-pos.z;
   if(this.constrained&&this.transit){
-   const f=this.transit.path.at(this.distance),up=new Vec3(...f.normal).mulScalar(-1);
-   // Parallel-transported up avoids the world-up singularity at vertical tangents.
+   const path=this.transit.path,f=path.at(this.distance);
+   const radial=new Vec3(...f.normal).mulScalar(Math.cos(this.angle)).add(new Vec3(...f.binormal).mulScalar(Math.sin(this.angle)));
+   const up=radial.clone().mulScalar(-1);
    this.camUp.lerp(this.camUp,up,1-Math.exp(-dt*7)).normalize();
-   const desired=new Vec3(pos.x-f.tangent[0]*12+up.x*5,pos.y-f.tangent[1]*12+up.y*5,pos.z-f.tangent[2]*12+up.z*5);
-   const now=this.camera.getPosition().clone().lerp(this.camera.getPosition(),desired,1-Math.exp(-dt*8));this.camera.setPosition(now);
-   this.camera.lookAt(new Vec3(pos.x+f.tangent[0]*9,pos.y+f.tangent[1]*9,pos.z+f.tangent[2]*9),this.camUp);
+   // Chase from the SAME exposed side as the ball. The opposite radial side
+   // looks through the opaque pipe and can fill the screen during inversion.
+   const behind=path.at(Math.max(0,this.distance-10));
+   const chaseRadial=new Vec3(...behind.normal).mulScalar(Math.cos(this.angle)).add(new Vec3(...behind.binormal).mulScalar(Math.sin(this.angle)));
+   const desired=new Vec3(...behind.center).add(chaseRadial.mulScalar(8)).add(new Vec3(...behind.binormal).mulScalar(3));
+   if(this.distance<10)desired.add(new Vec3(...f.tangent).mulScalar(-(10-this.distance)));
+   const now=this.camera.getPosition().clone().lerp(this.camera.getPosition(),desired,1-Math.exp(-dt*8));
+   // Protect the camera's near plane while its smoothing cuts across bends.
+   let closest=new Vec3(),nearest=Infinity;
+   for(let i=1;i<path.frames.length;i++){
+    const a=path.frames[i-1]!.center,b=path.frames[i]!.center;
+    const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2];
+    const t=clamp(((now.x-a[0])*dx+(now.y-a[1])*dy+(now.z-a[2])*dz)/(dx*dx+dy*dy+dz*dz||1),0,1);
+    const x=a[0]+dx*t,y=a[1]+dy*t,z=a[2]+dz*t,d=Math.hypot(now.x-x,now.y-y,now.z-z);
+    if(d<nearest){nearest=d;closest.set(x,y,z);}
+   }
+   if(nearest<3){now.sub(closest).normalize().mulScalar(3).add(closest);nearest=3;}
+   this.cameraMinClearance=Math.min(this.cameraMinClearance,nearest);
+   this.camera.setPosition(now);
+   const previousRotation=this.camera.getRotation().clone();
+   this.camera.lookAt(new Vec3(pos.x+f.tangent[0]*4,pos.y+f.tangent[1]*4,pos.z+f.tangent[2]*4),this.camUp);
+   const desiredRotation=this.camera.getRotation().clone();
+   this.camera.setRotation(previousRotation.slerp(previousRotation,desiredRotation,1-Math.exp(-dt*7)));
+   const rotation=this.camera.getRotation();
+   this.cameraFinite&&=[rotation.x,rotation.y,rotation.z,rotation.w].every(Number.isFinite);
+   if(this.wasConstrained){const q=this.lastCameraRotation,dot=Math.abs(q.x*rotation.x+q.y*rotation.y+q.z*rotation.z+q.w*rotation.w);this.maxCameraTurn=Math.max(this.maxCameraTurn,2*Math.acos(Math.min(1,dot)));}
+   this.lastCameraRotation.copy(rotation);this.wasConstrained=true;
    this.camera.camera!.fov=72;
    progress=this.transit.entry.progress+(this.transit.exit.progress-this.transit.entry.progress)*this.distance/this.transit.path.length;
    this.ui.level.textContent=`MAGNETIC JOURNEY ${this.worldIndex+1} · ${this.transit.kind.toUpperCase()}`;
    this.ui.status.textContent=this.state==='holding'?(this.loadState==='failed'?'RECONNECTING · SAFE AT THE EXIT':'PREPARING YOUR NEXT WORLD…'):'SWIPE TO ORBIT · '+Math.round(this.distance/this.transit.path.length*100)+'%';
   }else{
-   this.camUp.set(0,1,0);const t=trilogyTangent(progress),height=Math.max(.62,pos.y);
+   this.wasConstrained=false;this.camUp.set(0,1,0);const t=trilogyTangent(progress),height=Math.max(.62,pos.y);
    this.camera.setPosition(pos.x-t.x*11,height+7.4,pos.z-t.z*16);
    this.camera.lookAt(pos.x+t.x*17,height*.5,pos.z+t.z*24);this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
    this.ui.status.textContent=this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:'THREE WORLDS · TWO MAGNETIC JOURNEYS';
@@ -181,6 +208,7 @@ export class TrilogyRun{
   }
  }
  snapshot(){return {seed:this.runSeed,state:this.state,worldIndex:this.worldIndex+1,loadState:this.loadState,loadError:this.loadError,loadMs:this.loadMs,
+  cameraFinite:this.cameraFinite,maxCameraTurn:this.maxCameraTurn,cameraMinClearance:this.cameraMinClearance,
   entries:this.entries,exits:this.exits,gems:this.gems,falls:this.falls,holdSeconds:this.holdSeconds,angle:this.angle,maxRadiusError:this.maxRadiusError,invertedFrames:this.invertedFrames,
   worldFrames:this.worldFrames,worldContacts:this.worldContacts,active:this.current.snapshot(),staged:this.next?.snapshot()??null,
   retired:this.retired,history:this.history,journeys:this.journeys,privateMeshes:this.privateCount,runTime:this.runTime,

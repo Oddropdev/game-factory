@@ -5,13 +5,14 @@ const names:Record<string,string>={ball:'ball_001.glb',bumper:'obstacle_18_001.g
  arch:'arch_001.glb',balloon:'air_balloon_001.glb',coin:'coin_001.glb'};
 export const privateArtEnabled=()=>import.meta.env.VITE_ITHAPPY_ASSETS==='1'||new URL(location.href).searchParams.get('art')==='licensed';
 export class WorldAssets{
+ private static nextOwner=1;private owner=WorldAssets.nextOwner++;
  assets:Asset[]=[];templates=new Map<string,Entity>();missing:string[]=[];disposed=false;
  constructor(private app:AppBase){}
  async load(ids:string[]){
   if(!privateArtEnabled())return;
   await Promise.all(ids.map(async id=>{
    const file=names[id];if(!file)return;
-   const asset=new Asset('trilogy-'+id,'container',{url:'./licensed/'+file});this.assets.push(asset);this.app.assets.add(asset);
+   const asset=new Asset('trilogy-'+id,'container',{url:'./licensed/'+file+'?worldOwner='+this.owner});this.assets.push(asset);this.app.assets.add(asset);
    try{
     await new Promise<void>((resolve,reject)=>{
      const timeout=setTimeout(()=>reject(Error('Private model timeout')),8000);

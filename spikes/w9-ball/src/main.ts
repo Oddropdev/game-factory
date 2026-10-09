@@ -184,6 +184,10 @@ options.componentSystems=[
 ];
 const app=new AppBase(canvas);
 app.init(options);
+// Keep Bullet and the force controller on the same bounded clock when a
+// heavier world renders slowly. The default 100ms physics step otherwise
+// outruns the 50ms controller tick and can skip the jump/rail catch window.
+if(trilogyMode)app.maxDeltaTime=.05;
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);
 const physics=app.systems.rigidbody as RigidBodyComponentSystem;
@@ -1084,6 +1088,8 @@ app.on('update',(dt:number)=>{
       }
     }
   }
+  // Trilogy owns one continuous camera pose; legacy modes retain theirs.
+  if(!trilogy){
   // Camera composition follows physical position, never controls it.
   if(transitMode&&transitPath&&
     (tubeState==='locked'||tubeState==='holding')){
@@ -1110,6 +1116,7 @@ app.on('update',(dt:number)=>{
   }else{
     camera.setPosition(pos.x*.24,8.1,pos.z+14.8);
     camera.lookAt(pos.x*.18,.65,pos.z-12);
+  }
   }
   ui.coins.textContent=String(twoLevelMode&&levelIndex===2?
     level2GemsCollected:pickups);
