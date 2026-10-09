@@ -322,6 +322,8 @@ export class TrilogyRun{
      old.dispose();this.retired.push(old.snapshot());
      if(this.spiralMode&&this.current.spiral){
       this.spiralHint=12;this.spiralProgress=this.current.manifest.start;
+      const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
+      this.spiralMetric=spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
      }
      if(this.retired.length>24)this.retired.shift();
      this.history.push({event:'disposed',world:this.worldIndex-1,at:this.runTime});
@@ -333,6 +335,69 @@ export class TrilogyRun{
     }
    }
    return true;
+  }
+  return true;
+ }
+
+ private updateSpiral(dt:number,input:number):boolean{
+  const p=this.ball.getPosition(),v=this.body.linearVelocity;
+  const proj=this.current.project(p,this.spiralHint);
+  this.spiralHint=proj.index;this.spiralProgress=proj.d;
+  this.worldFrames[this.worldIndex]=(this.worldFrames[this.worldIndex]??0)+1;
+  const picked=this.current.collect(p,this.runTime);
+  if(picked){this.gems+=picked;this.ui.message.textContent='✦ +'+picked;this.ui.message.classList.add('show');}
+  // Progress is nearest point along the course — NEVER "7 - ball.z".
+  // A complete turn can travel toward +Z for half of its circumference.
+  if(proj.d>=this.current.manifest.end-1.5&&Math.abs(proj.lateral)<2.6&&
+   proj.surfaceGap>-1.0&&proj.surfaceGap<3.5){
+   this.entries++;this.state='transit';this.inputLocked=true;this.body.type='kinematic';
+   this.body.teleport(...this.transit!.path.position(0));
+   this.history.push({event:'transit-enter',world:this.worldIndex,at:this.runTime});
+   const t=this.transit!;
+   this.journeys.push({seed:t.seed,fingerprint:t.fingerprint,kind:t.kind,
+    fallback:t.fallback,inversions:t.validation.invertedSamples,validation:t.validation});
+   this.preload();return true;
+  }
+  const t=proj.tangent,right=proj.right;
+  const forward=v.x*t.x+v.y*t.y+v.z*t.z;
+  // Speed assistance does not set a path-heading or centerline target.
+  // In the absence of steering, the ball maintains its inertial heading;
+  // the helix MUST be navigated with swipes (or collisions with real guards).
+  const horizontal=Math.hypot(v.x,v.z),hx=horizontal>3?v.x/horizontal:t.x,
+   hz=horizontal>3?v.z/horizontal:t.z;
+  const drive=clamp((44-forward)*20,-85,240);
+  const steering=clamp(input/3.3,-1,1);
+  if(Math.abs(steering)>.08)this.spiralInputFrames++;
+  const lateral=steering*230;
+  this.body.applyForce(new Vec3(hx*drive+right.x*lateral,0,
+   hz*drive+right.z*lateral));
+  // Only the real deck area supplies adhesion. No invisible walls or
+  // restoring force based on lateral position. Gravity still governs falls.
+  const onDeck=Math.abs(proj.lateral)<proj.width/2+.65&&
+   proj.surfaceGap>-.7&&proj.surfaceGap<4.5;
+  if(onDeck){
+   const th=Math.hypot(t.x,t.z)||1;
+   const normal=new Vec3(-t.x*t.y/th,th,-t.z*t.y/th).normalize();
+   const gap=proj.surfaceGap-.62;
+   const speedAway=v.dot(normal);
+   const adhesion=this.body.mass*(22*.9+
+    clamp(Math.max(0,gap)*45+Math.max(0,speedAway)*25,0,140));
+   this.body.applyForce(normal.mulScalar(-adhesion));
+   this.gripFrames++;
+  }
+  this.generatedMinSpeed=Math.min(this.generatedMinSpeed,Math.max(0,forward));
+  this.generatedMaxSpeed=Math.max(this.generatedMaxSpeed,Math.max(0,forward));
+  // Falling is real: reset behind the last physical checkpoint, without
+  // auto-advancing the player to the next section or steering for them.
+  if(proj.distance>11||proj.surfaceGap< -9||p.y< -18){
+   this.falls++;this.spiralFalls++;
+   const safe=this.current.manifest.start+Math.max(4,
+    Math.floor(Math.max(0,proj.d-this.current.manifest.start-22)/105)*105);
+   const route=this.current.roadPoint(safe),direction=this.current.spiralTangent(safe);
+   this.body.teleport(route.x,route.y+1.6,route.z);
+   this.body.linearVelocity=new Vec3(direction.x,direction.y,direction.z).mulScalar(20);
+   this.body.angularVelocity=new Vec3();
+   this.spiralProgress=safe;this.spiralHint=Math.max(0,Math.floor(safe-this.current.road[0]!.d));
   }
   return true;
  }
@@ -400,7 +465,7 @@ export class TrilogyRun{
     this.camera.lookAt(pos.x+t.x*17,height*.5,pos.z+t.z*24);
    }
    this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
-   this.ui.status.textContent=this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:this.endless?'ENDLESS WORLDS · MAGNETIC JOURNEYS':'THREE WORLDS · TWO MAGNETIC JOURNEYS';
+   this.ui.status.textContent=this.spiralMode&&this.current.spiral?'STEER TO STAY ON THE SPIRAL · NO AUTOPILOT':this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:this.endless?'ENDLESS WORLDS · MAGNETIC JOURNEYS':'THREE WORLDS · TWO MAGNETIC JOURNEYS';
   }
   if(this.lastWorld!==this.worldIndex){document.getElementById('world-flash')?.remove();const e=document.createElement('div');e.id='world-flash';e.textContent=this.current.manifest.title;document.getElementById('game')!.append(e);this.lastWorld=this.worldIndex;}
   const flash=document.getElementById('world-flash');if(flash)flash.classList.toggle('visible',running&&this.runTime<this.introUntil);
