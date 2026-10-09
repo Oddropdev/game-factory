@@ -169,8 +169,11 @@ export class TrilogyRun{
    const bank=this.current.roadFrame(start).bank;
    const edge=side*(entry.width/2-.58);
    const lateralHeight=Math.sin(bank*Math.PI/180)*edge;
-   this.body.teleport(entry.x+edge*dir.rx,entry.y+.74+lateralHeight,
-    entry.z+edge*dir.rz);
+   const aligned=this.alignedSurfaceMode?
+    trackFrame({x:dir.x,y:dir.y,z:dir.z},bank)
+     .position({x:entry.x,y:entry.y,z:entry.z},edge,.74):null;
+   this.body.teleport(aligned?.x??entry.x+edge*dir.rx,
+    aligned?.y??entry.y+.74+lateralHeight,aligned?.z??entry.z+edge*dir.rz);
    this.body.linearVelocity=new Vec3(0,0,0);
    this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
    this.spiralProgress=start;
@@ -587,17 +590,26 @@ export class TrilogyRun{
   if(this.stabilizedMode&&last){
    const oldProjection=this.current.project(last,Math.max(0,proj.index-4));
    const deck=this.current.roadFrame(proj.d),oldDeck=this.current.roadFrame(oldProjection.d);
-   const hereY=roadSurfaceY(deck.y,deck.bank,proj.lateral);
-   const thereY=roadSurfaceY(oldDeck.y,oldDeck.bank,oldProjection.lateral);
-   if(sweptDeckCatch({previousGap:last.y-thereY,currentGap:p.y-hereY,
-    currentLateral:proj.lateral,halfWidth:proj.width/2,
-    travel:last.distance(p),verticalSpeed:v.y,
+   const oldTangent=this.current.spiralTangent(oldProjection.d);
+   const oldFrame=this.alignedSurfaceMode?trackFrame({
+    x:oldTangent.x,y:oldTangent.y,z:oldTangent.z},oldDeck.bank):null;
+   const oldCenter={x:oldProjection.x,y:oldProjection.y,z:oldProjection.z};
+   const previousGap=oldFrame?oldFrame.clearance(oldCenter,last):
+    last.y-roadSurfaceY(oldDeck.y,oldDeck.bank,oldProjection.lateral);
+   const currentGap=surface?surface.clearance:
+    p.y-roadSurfaceY(deck.y,deck.bank,proj.lateral);
+   const normalVelocity=frame?v.x*frame.up.x+v.y*frame.up.y+v.z*frame.up.z:v.y;
+   if(sweptDeckCatch({previousGap,currentGap,
+    currentLateral:surface?.lateral??proj.lateral,halfWidth:proj.width/2,
+    travel:last.distance(p),verticalSpeed:normalVelocity,
     roadProgressJump:Math.abs(proj.d-oldProjection.d)})){
-    this.body.teleport(p.x,hereY+.69,p.z);
-    // Remove only the inward velocity normal to the actual inclined surface.
-    // Preserve tangent inertia instead of stopping the player on the slope.
+    const surfacePoint=frame?frame.position(center,surface?.lateral??0,.70):null;
+    this.body.teleport(surfacePoint?.x??p.x,
+     surfacePoint?.y??roadSurfaceY(deck.y,deck.bank,proj.lateral)+.69,
+     surfacePoint?.z??p.z);
     const h=Math.hypot(t.x,t.z)||1;
-    const n=new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
+    const n=frame?new Vec3(frame.up.x,frame.up.y,frame.up.z):
+     new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
     const now=this.body.linearVelocity,into=now.dot(n);
     if(into<0)this.body.linearVelocity=now.clone().sub(n.mulScalar(into));
     this.clipRecoveries++;
