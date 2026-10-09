@@ -7,6 +7,7 @@ import {generateTransit,generateSpectacleTransit,generateExtremeTransit,type See
 import {buildTubeMesh,TUBE_OFFSET} from './TubeTransit';
 import {polished,tint} from './TrilogyArt';
 import {spiralSpec,generateSpiralRoad,spiralMetrics} from './SpiralCourse';
+import {TouchDriveInput} from './TouchDriveInput';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -25,7 +26,10 @@ export class TrilogyRun{
  maxCameraTurn=0;cameraFinite=true;cameraMinClearance=Infinity;
  private inputLocked=false;private retryAt=0;private introUntil=2;private lastWorld=-1;
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
- readonly chaosMode:boolean;readonly spiralMode:boolean;
+ readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
+ readonly touchDrive=new TouchDriveInput();private driveKeys=new Set<string>();
+ private lastSpiralPosition:Vec3|null=null;private safeCheckpoint=0;
+ lastSpiralSpeed=0;clipRecoveries=0;cameraHardCatches=0;
  private spiralHint=12;private spiralProgress=0;
  spiralInputFrames=0;spiralFalls=0;spiralMetric:null|ReturnType<typeof spiralMetrics>=null;
  gripFrames=0;maxSurfaceGap=0;edgeBounces=0;maxCurve=0;motifSignature='';
@@ -42,7 +46,8 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.spiralMode=this.endless&&p.get('edition')==='w10';
+  this.touchDriveMode=this.endless&&p.get('edition')==='w101';
+  this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
   this.richMode=this.endless&&(p.get('edition')==='w97'||this.trackFirstMode);
@@ -104,8 +109,9 @@ export class TrilogyRun{
    await this.current.prepare(this.device);this.current.activate();
    const entry=this.current.roadPoint(content.manifest.start);
    this.body.teleport(entry.x,entry.y+1.6,entry.z);
-   this.body.linearVelocity=new Vec3(0,0,-24);
+   this.body.linearVelocity=new Vec3(0,0,0);
    this.spiralHint=12;this.spiralProgress=content.manifest.start;
+   this.safeCheckpoint=content.manifest.start;this.lastSpiralPosition=null;
   }else{
    this.current=new TrilogyWorld(this.app,manifest,road,root,this.richMode,this.trackFirstMode,this.chaosMode);
    await this.current.prepare(this.device,true);this.current.activate();
@@ -322,6 +328,8 @@ export class TrilogyRun{
      old.dispose();this.retired.push(old.snapshot());
      if(this.spiralMode&&this.current.spiral){
       this.spiralHint=12;this.spiralProgress=this.current.manifest.start;
+      this.safeCheckpoint=this.current.manifest.start;
+      this.lastSpiralPosition=null;this.touchDrive.cancel();this.driveKeys.clear();
       const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
       this.spiralMetric=spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
      }
@@ -339,6 +347,41 @@ export class TrilogyRun{
   return true;
  }
 
+ get driveAvailable(){return this.touchDriveMode&&this.state==='world'&&this.worldIndex>=3;}
+ drivePointerDown(id:number,x:number,y:number){
+  if(this.driveAvailable)this.touchDrive.down(id,x,y);
+ }
+ drivePointerMove(id:number,x:number,y:number){
+  if(this.driveAvailable)this.touchDrive.move(id,x,y);
+ }
+ drivePointerUp(id:number){if(this.touchDriveMode)this.touchDrive.up(id);}
+ driveKeyDown(code:string,repeat:boolean){
+  if(!this.driveAvailable)return;
+  const known=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyS','KeyA','KeyD'];
+  if(!known.includes(code))return;
+  if(!repeat&&!this.driveKeys.has(code)&&
+    (code==='ArrowUp'||code==='KeyW'||code==='ArrowDown'||code==='KeyS')){
+   const t=this.current.spiralTangent(this.spiralProgress);
+   const dir=code==='ArrowUp'||code==='KeyW'?1:-1;
+   const v=this.body.linearVelocity,forward=v.x*t.x+v.y*t.y+v.z*t.z;
+   const delta=dir>0?Math.min(9,Math.max(0,56-forward)):
+    Math.max(-9,Math.min(0,-12-forward));
+   if(delta)this.body.applyImpulse(new Vec3(t.x,t.y,t.z).mulScalar(this.body.mass*delta));
+  }
+  this.driveKeys.add(code);
+ }
+ driveKeyUp(code:string){this.driveKeys.delete(code);}
+ resetSpiralSpawn(){
+  if(!this.touchDriveMode||!this.current.spiral)return false;
+  this.touchDrive.cancel();this.driveKeys.clear();
+  const start=this.current.manifest.start+7,p=this.current.roadPoint(start);
+  this.body.type='dynamic';this.body.teleport(p.x,p.y+.70,p.z);
+  this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
+  this.spiralProgress=start;
+  this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
+  this.safeCheckpoint=start;this.lastSpiralPosition=null;
+  return true;
+ }
  private updateSpiral(dt:number,input:number):boolean{
   const p=this.ball.getPosition(),v=this.body.linearVelocity;
   const proj=this.current.project(p,this.spiralHint);
