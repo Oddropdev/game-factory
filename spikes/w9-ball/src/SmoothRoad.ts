@@ -21,7 +21,7 @@ export function smoothRoad(road:readonly SpiralPoint[],radius=9,passes=2):Spiral
    // on/off smoothing boundary itself became a physical kink in testing.
    const ease=(u:number)=>{const t=Math.max(0,Math.min(1,u));return t*t*(3-2*t)};
    const strength=.60*ease((i-13)/27)*ease((last-i-5)/37);
-   if(strength<.000001)return {...p};
+   if(i<radius||i>last-radius||strength<.000001)return {...p};
    let x=0,y=0,z=0,bank=0;
    for(let j=-radius;j<=radius;j++){
     const q=rows[i+j]!,k=kernel[j+radius]!/weight;
