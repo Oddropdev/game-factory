@@ -1,4 +1,5 @@
-import {Entity,Vec3,type AppBase,type GraphicsDevice,type StandardMaterial} from 'playcanvas';
+import {Entity,Vec3,Mat4,Quat,type AppBase,type GraphicsDevice,type StandardMaterial} from 'playcanvas';
+import {trackFrame,type V3} from './TrackSurfaceFrame';
 import {WorldAssets} from './TrilogyAssets';
 import {projectSpiral,type SpiralPoint} from './SpiralCourse';
 import {buildWorldArt,coinMesh,polished} from './TrilogyArt';
@@ -13,13 +14,13 @@ export class TrilogyWorld{
  private glowingGuard:StandardMaterial|null=null;private guardIsLit=false;
  constructor(readonly app:AppBase,readonly manifest:WorldManifest,readonly road:RoadSample[],
   root?:Entity,readonly rich=false,readonly minimalist=false,readonly chaos=false,
-  readonly spiral=false,readonly stableRoad=false){
+  readonly spiral=false,readonly stableRoad=false,readonly alignedSurface=false){
   this.root=root??new Entity('world-'+manifest.id);this.root.enabled=false;
   if(!this.root.parent)app.root.addChild(this.root);this.assets=new WorldAssets(app);
  }
  async prepare(device:GraphicsDevice,legacy=false){
   const m=this.manifest;
-  const art=buildWorldArt(device,this.root,m,this.road,this.minimalist);
+  const art=buildWorldArt(device,this.root,m,this.road,this.minimalist,this.alignedSurface);
   if(this.spiral)this.glowingGuard=art.mats.guard;
   this.materials=art.materials;this.meshCount=art.meshCount;this.islandCount=art.islandCount;this.trackQuads=art.trackQuads;
   if(!legacy&&this.spiral)this.prepareSpiralColliders();
@@ -109,6 +110,17 @@ export class TrilogyWorld{
   this.glowingGuard.emissiveIntensity=enabled?3.0:.45;
   this.glowingGuard.update();
  }
+ private alignCollision(e:Entity,center:V3,bank:number,from:V3,to:V3,
+  lateral:number,height:number){
+  const frame=trackFrame({x:to.x-from.x,y:to.y-from.y,z:to.z-from.z},bank);
+  const p=frame.position(center,lateral,height);
+  e.setPosition(p.x,p.y,p.z);
+  const mat=new Mat4(),v=mat.data;
+  v[0]=frame.right.x;v[1]=frame.right.y;v[2]=frame.right.z;
+  v[4]=frame.up.x;v[5]=frame.up.y;v[6]=frame.up.z;
+  v[8]=frame.back.x;v[9]=frame.back.y;v[10]=frame.back.z;
+  e.setRotation(new Quat().setFromMat4(mat));
+ }
  private prepareSpiralColliders(){
   const m=this.manifest;
   const from=m.spiralCoilStart??m.start+110,to=m.spiralCoilEnd??m.end-160;
@@ -119,9 +131,15 @@ export class TrilogyWorld{
    const yaw=-Math.atan2(dx,-dz)*180/Math.PI,pitch=Math.atan2(dy,horizontal)*180/Math.PI;
    const e=new Entity('trilogy-road-'+m.id+'-'+i);
    const thick=this.stableRoad?1.25:.30;
-   e.setPosition((a.x+b.x)/2,(a.y+b.y)/2-thick,
-    ((a.z??7-a.d)+(b.z??7-b.d))/2);
-   e.setEulerAngles(pitch,yaw,(a.bank+b.bank)/2);
+   if(this.alignedSurface){
+    this.alignCollision(e,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,
+     z:((a.z??7-a.d)+(b.z??7-b.d))/2},(a.bank+b.bank)/2,
+     {x:a.x,y:a.y,z:a.z??7-a.d},{x:b.x,y:b.y,z:b.z??7-b.d},0,-thick);
+   }else{
+    e.setPosition((a.x+b.x)/2,(a.y+b.y)/2-thick,
+     ((a.z??7-a.d)+(b.z??7-b.d))/2);
+    e.setEulerAngles(pitch,yaw,(a.bank+b.bank)/2);
+   }
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(
     a.width/2,thick,length/2+(this.stableRoad?.65:.11))});
    e.addComponent('rigidbody',{type:'static',friction:this.stableRoad?.78:.6,restitution:0});
@@ -135,9 +153,16 @@ export class TrilogyWorld{
     const rx=-dz/horizontal,rz=dx/horizontal;
     const edge=new Entity('w10-physical-guard-'+side+'-'+i);
     const width=a.width/2-.18;
-    edge.setPosition((a.x+b.x)/2+side*rx*width,(a.y+b.y)/2+.85,
-     ((a.z??7-a.d)+(b.z??7-b.d))/2+side*rz*width);
-    edge.setEulerAngles(pitch,yaw,0);
+    if(this.alignedSurface){
+     this.alignCollision(edge,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,
+      z:((a.z??7-a.d)+(b.z??7-b.d))/2},(a.bank+b.bank)/2,
+      {x:a.x,y:a.y,z:a.z??7-a.d},{x:b.x,y:b.y,z:b.z??7-b.d},
+      side*width,.98);
+    }else{
+     edge.setPosition((a.x+b.x)/2+side*rx*width,(a.y+b.y)/2+.85,
+      ((a.z??7-a.d)+(b.z??7-b.d))/2+side*rz*width);
+     edge.setEulerAngles(pitch,yaw,0);
+    }
     edge.addComponent('collision',{type:'box',halfExtents:new Vec3(.22,1.06,length+.30)});
     edge.addComponent('rigidbody',{type:'static',friction:.2,restitution:.02});
     this.root.addChild(edge);this.guardBodies++;
@@ -207,7 +232,7 @@ export class TrilogyWorld{
  snapshot(){return {id:this.manifest.id,active:this.active,disposed:this.disposed,roadBodies:this.roadBodies,
   hazardBodies:this.hazardBodies,guardBodies:this.guardBodies,grindTops:this.grindTops,
   grindSides:this.grindSides,boxObstacles:this.boxObstacles,minimalist:this.minimalist,
-  spiral:this.spiral,stableRoad:this.stableRoad,
+  spiral:this.spiral,stableRoad:this.stableRoad,alignedSurface:this.alignedSurface,
   chaos:this.chaos,
   maxElevation:Math.max(...this.road.map(p=>p.y)),
   meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
