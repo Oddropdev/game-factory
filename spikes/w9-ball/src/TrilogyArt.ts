@@ -65,13 +65,23 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
  const biome=m.biome??m.id;
  const crystalStyle=biome==='crystal'||/Aurora|Frost|Storm/.test(biome);
  const candyStyle=biome==='candy'||/Coral|Neon|Solar/.test(biome);
- const mats={road:m.colors.map(c=>polished(c)),trim:polished(m.trim,.22),white:polished('#fff8f0'),
+ const spiral=m.geometry==='spiral';
+ const mats={road:m.colors.map(c=>polished(c)),trim:polished(m.trim,.22),guard:polished('#4de5a5',.45),white:polished('#fff8f0'),
   island:polished(m.island),water:polished(m.water,.03),leaf:polished(crystalStyle?'#54dcd8':m.island),
   gold:polished('#ffe180',.3),dark:polished(m.id==='rainbow'?'#66479d':'#897ac6')};
- const all=[...mats.road,mats.trim,mats.white,mats.island,mats.water,mats.leaf,mats.gold,mats.dark];
+ const all=[...mats.road,mats.trim,mats.guard,mats.white,mats.island,mats.water,mats.leaf,mats.gold,mats.dark];
  const batch=new Batch(),rand=seededRandom(m.scenerySeed);
  const pose=(p:RoadSample,offset:number,y:number):V=>{
-  const t=trilogyTangent(p.d),b=p.bank*Math.PI/180;
+  const b=p.bank*Math.PI/180;
+  if(spiral){
+   const i=Math.max(1,Math.min(road.length-2,Math.round(p.d-road[0]!.d)));
+   const a=road[i-1]!,c=road[i+1]!;
+   const dx=c.x-a.x,dz=(c.z??7-c.d)-(a.z??7-a.d),l=Math.hypot(dx,dz)||1;
+   const rightX=-dz/l,rightZ=dx/l;
+   return [p.x+rightX*offset*Math.cos(b),p.y+y+offset*Math.sin(b),
+    (p.z??7-p.d)+rightZ*offset*Math.cos(b)];
+  }
+  const t=trilogyTangent(p.d);
   return [p.x+(-t.z)*offset*Math.cos(b),p.y+y+offset*Math.sin(b),7-p.d+t.x*offset*Math.cos(b)];
  };
  let trackQuads=0;
@@ -87,6 +97,18 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
    batch.add(mat,p,n,[0,1,2,1,3,2]);trackQuads++;
   };
   const w=a.width/2;quad(-w,w,.02,roadMat);quad(-w,-w+.22,.055,mats.trim);quad(w-.22,w,.055,mats.trim);
+  // Safety rails are rendered as two continuous batched green walls: no
+  // invisible lateral clamp and no hundreds of separate render draw calls.
+  if(spiral&&m.spiralCoilStart!==undefined&&m.spiralCoilEnd!==undefined&&
+     a.d>=m.spiralCoilStart-5&&a.d<=m.spiralCoilEnd+5){
+   for(const side of [-1,1]){
+    const off=side*(w-.15);
+    batch.add(mats.guard,[...pose(a,off,.05),...pose(a,off,1.90),
+      ...pose(b,off,.05),...pose(b,off,1.90)],
+     [side,0,0,side,0,0,side,0,0,side,0,0],
+     side===-1?[0,2,1,1,2,3]:[0,1,2,1,3,2]);
+   }
+  }
   // Track-first production profile draws only the road and two fine
   // edge strips; suppress costly rounded undersides and silhouettes.
   if(minimalist)continue;
