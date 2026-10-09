@@ -4,7 +4,7 @@ describe('W10.1 touch-to-drive (no autopilot)',()=>{
  it('stays motionless and produces zero boosts until actual swipe',()=>{
   const c=new TouchDriveInput();expect(c.active).toBe(false);
   expect(c.throttle).toBe(0);expect(c.consumeBoost()).toBeNull();
-  c.down(1,150,500);expect(c.armed).toBe(true);expect(c.throttle).toBe(0);
+  c.down(1,150,500);expect(c.snapshot().armed).toBe(true);expect(c.throttle).toBe(0);
   c.move(1,155,498);expect(c.consumeBoost()).toBeNull();
   c.up(1);expect(c.throttle).toBe(0);expect(c.boosts).toBe(0);
  });
