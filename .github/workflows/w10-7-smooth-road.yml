@@ -29,6 +29,8 @@ jobs:
           npm run build:w9-5:public
           npm run check:w9-5:public
       - run: npx playwright install --with-deps chromium
+      - name: W10.7 real smooth Bullet slabs, stable steering and small outer-corner guards
+        run: npx playwright test --config=playwright.w10-7.config.mjs
       - name: Regression W10 true 360-degree spiral
         run: npx playwright test --config=playwright.w10.config.mjs
       - name: Regression W10.1 swipe/hold
@@ -41,8 +43,6 @@ jobs:
         run: npx playwright test --config=playwright.w10-4.config.mjs
       - name: W10.6 camera, eight macro valleys and real static stopping wall
         run: npx playwright test --config=playwright.w10-6.config.mjs
-      - name: W10.7 real smooth Bullet slabs, stable steering and small outer-corner guards
-        run: npx playwright test --config=playwright.w10-7.config.mjs
       - name: Stage verified public Pages payload
         run: |
           set -euo pipefail
