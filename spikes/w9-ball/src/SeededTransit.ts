@@ -160,3 +160,40 @@ export function generateSpectacleTransit(seed:number,entry:TransitPort,exit:Tran
  // to a broken coaster on a low-powered phone.
  return generateTransit(seed,entry,exit);
 }
+
+
+/** W9.7 experimental "crazy coaster": genuine rising and falling 3D spirals
+ * with a large lateral displacement toward the next world's seeded landing.
+ * Retains exact W9.5 hard-lock, tangent and exit-normal safety contracts. */
+export function generateExtremeTransit(seed:number,entry:TransitPort,exit:TransitPort):SeededTransit{
+ const span=exit.progress-entry.progress;
+ if(!Number.isFinite(seed)||span<120||span>240)throw Error('Invalid extreme transit ports');
+ for(let attempt=0;attempt<16;attempt++){
+  const actual=(seed+Math.imul(attempt,0x9e3779b9))>>>0,rand=seededRandom(actual);
+  const hand=rand()>.5?1:-1,turns=attempt<10?(1.75+rand()*.5):(1.3+rand()*.35);
+  const radius=(attempt<10?14:10)+rand()*5,climb=35+rand()*11;
+  const center=(u:number):V3=>{
+   const t=Math.max(0,Math.min(1,u)),window=Math.sin(Math.PI*t)**2;
+   const eased=t*t*(3-2*t),phase=hand*2*Math.PI*turns*t;
+   const base=entry.x+(exit.x-entry.x)*eased+entry.dx*span*t*(1-t)**2;
+   // The circular orbit is in the lateral/vertical plane. Both amplitude
+   // and height return to zero at the ports, avoiding any transition snap.
+   const orbitX=radius*window*Math.cos(phase);
+   const orbitY=radius*window*Math.sin(phase);
+   return [base+orbitX,2.36+climb*window+orbitY,7-entry.progress-span*t];
+  };
+  const path=new TransitTubePath(760,center,true);
+  const validation=validateTransit(path,entry,exit);
+  const ys=path.frames.map(f=>f.center[1]),xs=path.frames.map(f=>f.center[0]);
+  if(!validation.valid||Math.max(...ys)-Math.min(...ys)<31||
+   Math.max(...xs)-Math.min(...xs)<16)continue;
+  let hash=2166136261;
+  for(const f of path.frames)for(const x of f.center)
+   hash=Math.imul(hash^Math.round(x*1000),16777619)>>>0;
+  return {path,requestedSeed:seed>>>0,seed:actual,attempts:attempt+1,
+   fallback:false,kind:'helix',validation,
+   fingerprint:hash.toString(16).padStart(8,'0'),entry,exit};
+ }
+ // Never compromise the physics contract to satisfy a spectacle request.
+ return generateSpectacleTransit(seed,entry,exit);
+}
