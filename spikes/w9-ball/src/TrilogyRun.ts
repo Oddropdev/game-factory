@@ -11,6 +11,8 @@ import {TouchDriveInput} from './TouchDriveInput';
 import {magneticAssist,railContactSide,type GuardSide} from './MagneticGuardAssist';
 import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
 import {trackFrame,surfaceContact,guardDownforce} from './TrackSurfaceFrame';
+import {buildMacroCourse,validateMacroCourse} from './MacroCourse';
+import {exitVelocity,exitAfterburner} from './EntryBoost';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -31,6 +33,9 @@ export class TrilogyRun{
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
+ readonly macroMode:boolean;
+ macroKind='';macroMotifs:string[]=[];macroSignature='';
+ exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
  readonly touchDrive=new TouchDriveInput();private driveKeys=new Set<string>();
  private lastSpiralPosition:Vec3|null=null;private safeCheckpoint=0;
@@ -56,9 +61,10 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&['w101','w102','w103'].includes(p.get('edition')??'');
-  this.alignedSurfaceMode=this.endless&&p.get('edition')==='w103';
-  this.stabilizedMode=this.endless&&['w102','w103'].includes(p.get('edition')??'');
+  this.touchDriveMode=this.endless&&['w101','w102','w103','w104'].includes(p.get('edition')??'');
+  this.macroMode=this.endless&&p.get('edition')==='w104';
+  this.alignedSurfaceMode=this.endless&&['w103','w104'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&['w102','w103','w104'].includes(p.get('edition')??'');
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
