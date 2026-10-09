@@ -45,7 +45,35 @@ jobs:
             curl -fsS "http://127.0.0.1:4177/ball/levels/$id.json" >/dev/null
           done
           curl -fsSI 'http://127.0.0.1:4177/ball/ammo/ammo.wasm.wasm' >/dev/null
-      - name: Downloadable W9.6 Android preview, not public release
+      - name: Stage W9.6 public game under project URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat > public-site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="refresh" content="0;url=./ball/?mode=endless">
+          <title>Prism Run — Endless Worlds</title></head>
+          <body><a href="./ball/?mode=endless">Play endless Prism Run</a></body></html>
+          HTML
+          test -s public-site/ball/index.html
+          test -s public-site/ball/levels/crystal.json
+          test -s public-site/ball/levels/candy.json
+          test -s public-site/ball/levels/rainbow.json
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo "Private licensed models prohibited in public distribution"
+            exit 1
+          fi
+      - name: Upload verified W9.6 Pages payload
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+      - name: Downloadable W9.6 Android preview
         uses: actions/upload-artifact@v4
         with:
           name: w9-6-endless-preview
@@ -57,3 +85,21 @@ jobs:
             test-results/w96-world-*.png
           retention-days: 14
           if-no-files-found: error
+
+  publish:
+    name: Publish validated W9.6 to mobile GitHub Pages
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: w9-6-mobile-preview
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy verified W9.6 browser build
+        uses: actions/deploy-pages@v4
+        id: deployment
