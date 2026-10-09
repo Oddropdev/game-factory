@@ -10,6 +10,7 @@ import {spiralSpec,generateSpiralRoad,spiralMetrics} from './SpiralCourse';
 import {TouchDriveInput} from './TouchDriveInput';
 import {magneticAssist,railContactSide,type GuardSide} from './MagneticGuardAssist';
 import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
+import {trackFrame,surfaceContact,guardDownforce} from './TrackSurfaceFrame';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -29,7 +30,8 @@ export class TrilogyRun{
  private inputLocked=false;private retryAt=0;private introUntil=2;private lastWorld=-1;
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
- readonly stabilizedMode:boolean;
+ readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
+ guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
  readonly touchDrive=new TouchDriveInput();private driveKeys=new Set<string>();
  private lastSpiralPosition:Vec3|null=null;private safeCheckpoint=0;
  lastSpiralSpeed=0;clipRecoveries=0;cameraHardCatches=0;
@@ -54,8 +56,9 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&['w101','w102'].includes(p.get('edition')??'');
-  this.stabilizedMode=this.endless&&p.get('edition')==='w102';
+  this.touchDriveMode=this.endless&&['w101','w102','w103'].includes(p.get('edition')??'');
+  this.alignedSurfaceMode=this.endless&&p.get('edition')==='w103';
+  this.stabilizedMode=this.endless&&['w102','w103'].includes(p.get('edition')??'');
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -157,7 +160,7 @@ export class TrilogyRun{
    this.spiralMetric=spiralMetrics(spec);
    this.worldIndex=index;root.enabled=false;
    this.current=new TrilogyWorld(this.app,content.manifest,generateSpiralRoad(spec),
-    undefined,this.richMode,true,false,true,this.touchDriveMode);
+    undefined,this.richMode,true,false,true,this.touchDriveMode,this.alignedSurfaceMode);
    await this.current.prepare(this.device);this.current.activate();
    const start=this.spiralSpawnProgress();
    const entry=this.current.roadPoint(start);
@@ -231,7 +234,7 @@ export class TrilogyRun{
      }
      staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,
       this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3,
-      this.touchDriveMode&&index>=3);
+      this.touchDriveMode&&index>=3,this.alignedSurfaceMode&&index>=3);
      await staged.prepare(this.device);
      if(this.trackFirstMode)
       this.fadeTo={sky:tint(content.manifest.sky),fog:tint(content.manifest.fog),
@@ -445,8 +448,12 @@ export class TrilogyRun{
   const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
   const tangent=this.current.spiralTangent(start),bank=this.current.roadFrame(start).bank;
   const offset=side*(p.width/2-.58),y=p.y+.74+offset*Math.sin(bank*Math.PI/180);
+  const aligned=this.alignedSurfaceMode?
+   trackFrame({x:tangent.x,y:tangent.y,z:tangent.z},bank)
+    .position({x:p.x,y:p.y,z:p.z},offset,.74):null;
   this.body.type='dynamic';
-  this.body.teleport(p.x+offset*tangent.rx,y,p.z+offset*tangent.rz);
+  this.body.teleport(aligned?.x??p.x+offset*tangent.rx,
+   aligned?.y??y,aligned?.z??p.z+offset*tangent.rz);
   this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
   this.spiralProgress=start;
   this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
