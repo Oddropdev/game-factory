@@ -25,6 +25,10 @@ jobs:
       - run: npm run test
       - run: npm run build:w9-5:public
       - run: npm run check:w9-5:public
+      - name: Install Chromium for actual 6-world browser handoff
+        run: npx playwright install --with-deps chromium
+      - name: Browser proves World 3 does not finish and Worlds 4–6 load with Bullet
+        run: npx playwright test --config=playwright.w9-6.config.mjs
       - name: Smoke game URL, JSON files and Ammo WASM
         shell: bash
         run: |
@@ -49,5 +53,7 @@ jobs:
             playtest-dist/ball/
             tools/run-transit-preview.mjs
             Start_Three_Levels.cmd
+            test-results/w96-six-world-browser-evidence.json
+            test-results/w96-world-*.png
           retention-days: 14
           if-no-files-found: error
