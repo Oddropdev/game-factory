@@ -85,8 +85,15 @@ export function courseAt(g:CourseGrammar,d:number){
    lateral=Math.cos(phase*1.5+motif.phase*.1)*e;
    height=motif.rise*e*.48;break;
  }
- return {x:motif.direction*motif.amplitude*lateral,
-  y:Math.max(0,height),kind:motif.kind,motifIndex:g.motifs.indexOf(motif)};
+ // Macro coaster silhouette spans the WHOLE 520m world. These broad,
+ // low-curvature sweeps guarantee scale even if sharp local motifs must be
+ // attenuated by the validated safety gate.
+ const globalU=clamp((t-g.start)/(g.end-g.start),0,1);
+ const macroWindow=Math.sin(Math.PI*globalU)**2;
+ const macroX=(24+(g.index%5)*4)*macroWindow*Math.sin(Math.PI*2*globalU);
+ const macroY=13*macroWindow;
+ return {x:macroX+motif.direction*motif.amplitude*lateral,
+  y:Math.max(0,height+macroY),kind:motif.kind,motifIndex:g.motifs.indexOf(motif)};
 }
 export function courseKinematics(g:CourseGrammar,d:number){
  const step=.5,a=courseAt(g,d-step),b=courseAt(g,d),c=courseAt(g,d+step);
