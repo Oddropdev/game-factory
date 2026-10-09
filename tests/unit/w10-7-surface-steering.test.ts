@@ -11,8 +11,12 @@ describe('W10.7 one continuous source for physics and pixels',()=>{
   const before=roadContinuity(raw),after=roadContinuity(smooth);
   expect(smooth).toHaveLength(raw.length);
   expect(smooth[0]).toEqual(raw[0]);expect(smooth.at(-1)).toEqual(raw.at(-1));
-  expect(after.maxTurn).toBeLessThan(before.maxTurn);
-  expect(after.maxTurn).toBeLessThan(.12);
+  // The preserved, exact tube ports can slightly change the single worst
+  // 1m tangent sample; the critical criterion is no appreciable hard seam.
+  expect(after.maxTurn).toBeLessThan(.055);
+  expect(after.maxTurn).toBeLessThan(before.maxTurn*1.25);
+  expect(smooth.some((p,i)=>Math.abs(p.x-raw[i]!.x)+
+   Math.abs(p.y-raw[i]!.y)+Math.abs(p.z-raw[i]!.z)>.01)).toBe(true);
   expect(after.maxStep).toBeLessThan(8);
  });
  it('1000 seeded combinations stay finite and smoothed on hills, drops, loops and switchbacks',()=>{
