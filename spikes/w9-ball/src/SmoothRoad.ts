@@ -15,14 +15,22 @@ export function smoothRoad(road:readonly SpiralPoint[],radius=9,passes=2):Spiral
  for(let pass=0;pass<passes;pass++){
   const last=rows.length-1,weight=kernel.reduce((a,b)=>a+b,0);
   const next=rows.map((p,i)=>{
-   // Preserve straight tube ports and literal start/end of world.
-   if(i<radius+4||i>last-radius-4)return {...p};
+   // PORTS are pinned: the first 12 samples before the world and all 4
+   // samples after its exit must be byte-for-byte unchanged.
+   // Fade the FILTER STRENGTH rather than stopping it abruptly: a hard
+   // on/off smoothing boundary itself became a physical kink in testing.
+   const ease=(u:number)=>{const t=Math.max(0,Math.min(1,u));return t*t*(3-2*t)};
+   const strength=.60*ease((i-13)/27)*ease((last-i-5)/37);
+   if(strength<.000001)return {...p};
    let x=0,y=0,z=0,bank=0;
    for(let j=-radius;j<=radius;j++){
     const q=rows[i+j]!,k=kernel[j+radius]!/weight;
     x+=q.x*k;y+=q.y*k;z+=q.z*k;bank+=q.bank*k;
    }
-   return {...p,x,y,z,bank};
+   return {...p,x:p.x*(1-strength)+x*strength,
+    y:p.y*(1-strength)+y*strength,
+    z:p.z*(1-strength)+z*strength,
+    bank:p.bank*(1-strength)+bank*strength};
   });
   rows=next;
  }
