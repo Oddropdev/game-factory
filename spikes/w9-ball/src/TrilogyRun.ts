@@ -13,6 +13,7 @@ import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
 import {trackFrame,surfaceContact,guardDownforce} from './TrackSurfaceFrame';
 import {buildMacroCourse,validateMacroCourse} from './MacroCourse';
 import {exitVelocity,exitAfterburner} from './EntryBoost';
+import {jumpPlan,withLaunchJump,inRealGap,validateJump} from './LaunchJump';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -33,7 +34,8 @@ export class TrilogyRun{
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
- readonly macroMode:boolean;
+ readonly macroMode:boolean;readonly jumpMode:boolean;
+ jumpAirFrames=0;jumpLaunchFrames=0;jumpLandings=0;
  macroKind='';macroMotifs:string[]=[];macroSignature='';
  exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
@@ -61,10 +63,12 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&['w101','w102','w103','w104'].includes(p.get('edition')??'');
-  this.macroMode=this.endless&&p.get('edition')==='w104';
-  this.alignedSurfaceMode=this.endless&&['w103','w104'].includes(p.get('edition')??'');
-  this.stabilizedMode=this.endless&&['w102','w103','w104'].includes(p.get('edition')??'');
+  this.touchDriveMode=this.endless&&['w101','w102','w103','w104','w105'].includes(p.get('edition')??'');
+  this.macroMode=this.endless&&['w104','w105'].includes(p.get('edition')??'');
+  this.jumpMode=this.endless&&p.get('edition')==='w105'&&
+   (p.get('jump')==='preview'||p.get('start')==='jump');
+  this.alignedSurfaceMode=this.endless&&['w103','w104','w105'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&['w102','w103','w104','w105'].includes(p.get('edition')??'');
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -166,6 +170,13 @@ export class TrilogyRun{
   content.manifest.macroMotifs=macro.motifs;
   content.manifest.macroSignature=macro.signature;
   if(index>3)content.manifest.title=macro.kind.replace(/-/g,' ').toUpperCase();
+  if(this.jumpMode&&index>=4){
+   const plan=jumpPlan(content.manifest.start),proof=validateJump(plan);
+   if(!proof.valid)throw Error('W105_UNSAFE_BALLISTIC_JUMP');
+   content.manifest.jumpPlan=plan;
+   content.manifest.title+=' · LAUNCH GAP';
+   return withLaunchJump(macro.road,plan);
+  }
   return macro.road;
  }
  private noteMacro(){
@@ -181,7 +192,7 @@ export class TrilogyRun{
   }
   const params=new URL(location.href).searchParams;
   const directMode=params.get('start');
-  if(this.spiralMode&&(directMode==='spiral'||this.macroMode&&directMode==='macro')){
+  if(this.spiralMode&&(directMode==='spiral'||this.macroMode&&(directMode==='macro'||directMode==='jump'))){
    const requested=Number(params.get('world')),world=this.macroMode&&
     params.has('world')&&Number.isSafeInteger(requested)?
      clamp(requested,4,100):4;
@@ -912,7 +923,10 @@ export class TrilogyRun{
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
-  macroMode:this.macroMode,macroKind:this.macroKind,macroMotifs:this.macroMotifs,
+  macroMode:this.macroMode,jumpMode:this.jumpMode,
+  jumpAirFrames:this.jumpAirFrames,jumpLaunchFrames:this.jumpLaunchFrames,
+  jumpLandings:this.jumpLandings,
+  macroKind:this.macroKind,macroMotifs:this.macroMotifs,
   macroSignature:this.macroSignature,
   exitBoostCount:this.exitBoostCount,lastExitSpeed:this.lastExitSpeed,
   exitBoostFrames:this.exitBoostFrames,exitBoostActive:this.runTime<this.exitBoostUntil,
