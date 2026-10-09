@@ -438,10 +438,31 @@ export class TrilogyRun{
      if(this.spiralMode&&this.current.spiral){
       this.spiralHint=12;this.spiralProgress=this.current.manifest.start;
       this.safeCheckpoint=this.current.manifest.start;
-      if(this.touchDriveMode){this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();}
+      if(this.macroMode){
+       // Actual incoming tube momentum MUST NOT be zeroed. Resolve the
+       // outgoing road's real 3D tangent (the tube tangent may differ).
+       const m=this.current.manifest,join=m.start+4;
+       const road=this.current.roadPoint(join),dir=this.current.spiralTangent(join);
+       const bank=this.current.roadFrame(join).bank;
+       const frame=trackFrame({x:dir.x,y:dir.y,z:dir.z},bank);
+       const spawn=frame.position({x:road.x,y:road.y,z:road.z},0,.73);
+       const impulse=exitVelocity(dir,this.richMode?62:38);
+       this.body.teleport(spawn.x,spawn.y,spawn.z);
+       this.body.linearVelocity=new Vec3(impulse.x,impulse.y,impulse.z);
+       this.body.angularVelocity=new Vec3();
+       this.spiralProgress=join;
+       this.spiralHint=Math.max(0,Math.round(join-this.current.road[0]!.d));
+       this.safeCheckpoint=join;
+       this.exitBoostUntil=this.runTime+1.05;
+       this.lastExitSpeed=impulse.speed;this.exitBoostCount++;
+       this.noteMacro();
+      }else if(this.touchDriveMode){
+       this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
+      }
       this.lastSpiralPosition=null;this.touchDrive.cancel();this.driveKeys.clear();
       const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
-      this.spiralMetric=spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
+      this.spiralMetric=this.macroMode&&this.worldIndex>3?null:
+       spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
      }
      if(this.retired.length>24)this.retired.shift();
      this.history.push({event:'disposed',world:this.worldIndex-1,at:this.runTime});
@@ -544,6 +565,14 @@ export class TrilogyRun{
   const onDeck=surface?(surface.inside&&surface.clearance>-.85&&surface.clearance<3.65):
    Math.abs(proj.lateral)<proj.width/2+.65&&
    proj.surfaceGap>-.9&&proj.surfaceGap<3.4;
+  if(this.macroMode&&onDeck&&this.runTime<this.exitBoostUntil){
+   const burst=exitAfterburner(1.05-(this.exitBoostUntil-this.runTime),forward);
+   if(burst>0){
+    this.body.applyForce(new Vec3(t.x,t.y,t.z)
+     .mulScalar(this.body.mass*burst));
+    this.exitBoostFrames++;
+   }
+  }
   if(onDeck){
    // Only the HOLD gesture drives the motor. No automatic center-seeking,
    // no implicit track-following, and no force at rest before first swipe.
@@ -875,6 +904,10 @@ export class TrilogyRun{
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
+  macroMode:this.macroMode,macroKind:this.macroKind,macroMotifs:this.macroMotifs,
+  macroSignature:this.macroSignature,
+  exitBoostCount:this.exitBoostCount,lastExitSpeed:this.lastExitSpeed,
+  exitBoostFrames:this.exitBoostFrames,exitBoostActive:this.runTime<this.exitBoostUntil,
   nativeCcdConfigured:this.nativeCcdConfigured,ccdRefreshes:this.ccdRefreshes,
   stabilizedMode:this.stabilizedMode,alignedSurfaceMode:this.alignedSurfaceMode,
   guardDownforceFrames:this.guardDownforceFrames,guardLiftDamped:this.guardLiftDamped,
