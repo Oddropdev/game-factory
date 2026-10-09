@@ -727,6 +727,27 @@ export class TrilogyRun{
     e.setPosition(pos.x-t.x*age*5+Math.sin(i*17)*.7,pos.y+.05+Math.sin(i*8)*.3,pos.z-t.z*age*5);
     e.setLocalScale(.045*(1-age),.045*(1-age),.6*(1-age));}
   }
+  if(this.stabilizedMode){
+   const contact=this.state==='world'&&this.current.spiral&&
+    this.guardSide!==null&&this.runTime<this.guardGlowUntil&&
+    this.runTime>=this.guardCooldown;
+   this.current.setGuardLit(contact);
+   if(contact)this.guardSparkFrames++;
+   const track=this.current.spiralTangent(progress);
+   for(const [i,e] of this.guardSparks.entries()){
+    e.enabled=Boolean(contact);
+    if(contact){
+     const spin=this.runTime*19+i*2.399963229728653;
+     const spread=.12+(i%4)*.13;
+     const behind=(i/10)*1.6;
+     const side=this.guardSide!;
+     e.setPosition(pos.x+track.rx*side*.49+Math.cos(spin)*spread-track.x*behind,
+      pos.y-.35+Math.sin(spin)*.30,
+      pos.z+track.rz*side*.49+Math.sin(spin*1.31)*spread-track.z*behind);
+     e.setLocalScale(.055+(i%3)*.025,.075,.17+(i%4)*.09);
+    }
+   }
+  }
  }
  snapshot(){return {seed:this.runSeed,state:this.state,worldIndex:this.worldIndex+1,
   richMode:this.richMode,extremeCoasters:this.extremeCoasters,
