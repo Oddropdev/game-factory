@@ -1,0 +1,51 @@
+import {test,expect} from '@playwright/test';
+import {mkdir,writeFile} from 'node:fs/promises';
+const snap=p=>p.evaluate(()=>globalThis.__W9_BALL_TEST__?.snapshot());
+test('W10.7 real 360° road: smooth segment collisions, short outside safety rails and controllable fast lateral swipe',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+ await page.goto('/ball/?mode=endless&edition=w107&coaster=extreme&seed=17&start=spiral');
+ await expect.poll(async()=>!!(await snap(page))?.physicsLoaded,{timeout:30000}).toBe(true);
+ let s=await snap(page);
+ expect(s.trilogy.smoothRoadMode).toBe(true);
+ expect(s.trilogy.active.smoothRoadMode).toBe(true);
+ expect(s.trilogy.active.outerGuardSections).toBeGreaterThan(18);
+ expect(s.trilogy.active.guardBodies).toBe(s.trilogy.active.outerGuardSections);
+ expect(s.trilogy.active.roadBodies).toBeGreaterThan(500);
+ expect(s.trilogy.roadSmoothings).toBeGreaterThan(0);
+ expect(s.trilogy.maxRoadTurn).toBeLessThan(.16);
+ await page.locator('#start').click();
+ await page.waitForTimeout(750);
+ s=await snap(page);expect(s.trilogy.touchDrive.boosts).toBe(0);
+ await page.mouse.move(195,710);await page.mouse.down();
+ await page.mouse.move(195,525,{steps:10});
+ await page.waitForTimeout(950);
+ await page.mouse.move(245,525,{steps:10});
+ await page.waitForTimeout(420);
+ s=await snap(page);
+ expect(s.trilogy.touchDrive.holding).toBe(true);
+ expect(s.trilogy.maxSteeringAccel).toBeGreaterThan(0);
+ expect(s.trilogy.maxSteeringAccel).toBeLessThanOrEqual(30.01);
+ expect(s.trilogy.nativeCcdConfigured).toBe(true);
+ expect(s.trilogy.falls).toBeLessThan(3);
+ expect(s.trilogy.cameraFinite).toBe(true);
+ expect(errors).toEqual([]);
+ await page.mouse.up();
+ await mkdir('test-results',{recursive:true});
+ await page.screenshot({path:'test-results/w107-smooth-helix.png'});
+ await writeFile('test-results/w107-smooth-evidence.json',JSON.stringify({s,errors},null,2));
+});
+test('W10.7 world5 has NO arbitrary STOP wall: only real compulsory 90-degree motif or jump may have one',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+ for(const world of [5,6,9]){
+  await page.goto('/ball/?mode=endless&edition=w107&coaster=extreme&seed=17&start=macro&world='+world);
+  await expect.poll(async()=>!!(await snap(page))?.physicsLoaded,{timeout:30000}).toBe(true);
+  const s=await snap(page);
+  expect(s.trilogy.active.choiceWallBodies).toBe(0);
+  expect(s.trilogy.active.choiceWall).toBeNull();
+  expect(s.trilogy.active.outerGuardSections).toBeGreaterThan(3);
+  expect(s.trilogy.active.smoothRoadMode).toBe(true);
+  expect(s.trilogy.maxRoadTurn).toBeLessThan(.24);
+  expect(s.trilogy.cameraFinite).toBe(true);
+ }
+ expect(errors).toEqual([]);
+});
