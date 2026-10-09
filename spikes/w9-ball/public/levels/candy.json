@@ -1,0 +1,56 @@
+{
+  "id": "candy",
+  "title": "CLOUD CANDY",
+  "start": 590,
+  "end": 770,
+  "scenerySeed": 712,
+  "sky": "#b0d5ef",
+  "fog": "#f7e4f1",
+  "water": "#b7bddf",
+  "colors": [
+    "#fca1c7",
+    "#c1b7f8",
+    "#a9e5dc",
+    "#ffdbad"
+  ],
+  "trim": "#fff4db",
+  "island": "#c7a0d5",
+  "gems": [
+    603,
+    613,
+    623,
+    633,
+    643,
+    653,
+    663,
+    673,
+    683,
+    693,
+    703,
+    713,
+    723,
+    733,
+    743,
+    753,
+    763
+  ],
+  "hazards": [
+    621,
+    658,
+    732
+  ],
+  "arches": [
+    602,
+    633,
+    687,
+    750
+  ],
+  "privateModels": [
+    "tree",
+    "arch",
+    "balloon",
+    "roller"
+  ],
+  "version": 1,
+  "geometry": "./levels/candy-road.json"
+}

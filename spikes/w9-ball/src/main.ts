@@ -29,19 +29,21 @@ import {GUARD_TOP_Y,GUARD_HOLD_FORCE,GUARD_DOWN_FORCE,GUARD_SPEED_FORCE,
   PLAYER_RADIUS,RELEASE_COOLDOWN,guardSurface,allowGuardLock,
   oppositeToGuard,grindTopQualifies,trappedBelowGrind,relativeRailSpring,
   type GuardLock,type GrindLock} from './RailModes';
+import {TrilogyRun} from './TrilogyRun';
 import './style.css';
 
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
 const gameMode=new URL(window.location.href).searchParams.get('mode');
+const trilogyMode=gameMode==='trilogy';
 const twoLevelMode=gameMode==='twolevel';
 const transitMode=gameMode==='transit'||twoLevelMode;
-const grindMode=gameMode==='grind'||transitMode;
+const grindMode=gameMode==='grind'||transitMode||trilogyMode;
 const railMode=gameMode==='rail'||grindMode;
 const longJumpMode=gameMode==='jump'||railMode;
 const speedMode=gameMode==='speed'||longJumpMode;
 const activeSpeedCap=longJumpMode?LONG_SPEED_CAP:SPEED_CAP;
-const finishDistance=twoLevelMode?700:transitMode?TUBE_FINISH_PROGRESS:
+const finishDistance=trilogyMode?1160:twoLevelMode?700:transitMode?TUBE_FINISH_PROGRESS:
   longJumpMode?LONG_FINISH_DISTANCE:SPEED_FINISH_DISTANCE;
 const centerAt=(progress:number)=>twoLevelMode&&progress>=550?
   secondCenter(progress):longJumpMode?longCenter(progress):trackCenter(progress);
@@ -54,6 +56,7 @@ const MAX_SIDE_SPEED = 7.5;
 const clamp=(x:number,min:number,max:number)=>Math.max(min,Math.min(max,x));
 const canvas=document.getElementById('application-canvas') as HTMLCanvasElement;
 const root=document.getElementById('game')!;
+if(trilogyMode)root.classList.add('trilogy');
 if(twoLevelMode)root.classList.add('two-worlds');
 const ui={
   status:document.getElementById('status')!,
@@ -181,6 +184,10 @@ options.componentSystems=[
 ];
 const app=new AppBase(canvas);
 app.init(options);
+// Keep Bullet and the force controller on the same bounded clock when a
+// heavier world renders slowly. The default 100ms physics step otherwise
+// outruns the 50ms controller tick and can skip the jump/rail catch window.
+if(trilogyMode)app.maxDeltaTime=.05;
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);
 const physics=app.systems.rigidbody as RigidBodyComponentSystem;
@@ -198,6 +205,10 @@ light.setEulerAngles(52,-30,0);
 app.root.addChild(light);
 app.scene.ambientLight=new Color(.63,.72,.84);
 
+const firstWorldRoot=trilogyMode?new Entity('world-crystal'):app.root;
+if(trilogyMode)app.root.addChild(firstWorldRoot);
+let constructionRoot=firstWorldRoot;
+let trilogy:TrilogyRun|null=null;
 type Point=[number,number,number];
 function shape(name:string,type:'box'|'sphere'|'cylinder',pos:Point,scale:Point,
   surface:StandardMaterial,solid:'static'|'dynamic'|false=false,yaw=0,pitch=0):Entity {
@@ -222,7 +233,7 @@ function shape(name:string,type:'box'|'sphere'|'cylinder',pos:Point,scale:Point,
       linearDamping:solid==='dynamic'?.25:0,
       angularDamping:solid==='dynamic'?.19:0});
   }
-  app.root.addChild(e);
+  constructionRoot.addChild(e);
   return e;
 }
 // The independent physics course: genuine separated planks, not a moving background.
@@ -269,7 +280,7 @@ const speedWorld=speedMode?makeSpeedCourse(shape,surfaces,suppressOldEdge):null;
 const jumpWorld=longJumpMode?makeLongJumpCourse(shape,surfaces,suppressOldEdge,
   d=>grindMode&&d>=GRIND_VOID_FROM&&d<=GRIND_VOID_TO):null;
 const magneticRails=railMode?buildCurveRails(shape):null;
-const grindTrack=grindMode?buildGrindTrack(shape,device,app.root):null;
+const grindTrack=grindMode?buildGrindTrack(shape,device,firstWorldRoot):null;
 const transitPath=transitMode?new TransitTubePath():null;
 const tubeSkin=material('#26789B',.93);
 tubeSkin.emissive=new Color(.02,.13,.25);
@@ -291,6 +302,13 @@ level2Palette.trim.emissive=new Color(.65,.42,.16);
 level2Palette.trim.emissiveIntensity=.8;level2Palette.trim.update();
 level2Palette.gem.emissive=new Color(.62,.36,.08);
 level2Palette.gem.emissiveIntensity=1.8;level2Palette.gem.update();
+if(trilogyMode){
+ for(const e of firstWorldRoot.children){
+  if(/^(sky-course-plank|long-sky-plank)/.test(e.name))e.children[0]!.enabled=false;
+  if(/^(sky-edge|long-sky-rail|cloud-)/.test(e.name))e.enabled=false;
+ }
+ constructionRoot=app.root;
+}
 // Distinct striped sphere: rotation comes from Bullet, never a visual spin timer.
 const ball=shape('real-rigidbody-ball','sphere',[0,2.2,7],
   [BALL_RADIUS*2,BALL_RADIUS*2,BALL_RADIUS*2],surfaces.ball,'dynamic');
@@ -381,7 +399,7 @@ ball.collision!.on('collisionstart',(event:{other:Entity})=>{
   }
 });
 const gems:{node:Entity;collected:boolean}[]=[];
-for(let i=0;i<6;i++){
+if(!trilogyMode)for(let i=0;i<6;i++){
   const z=-6-i*15.2;
   const x=speedMode?centerAt(SPEED_START_Z-z):[-2.5,2.5,0,-2.2,2.4,0][i]!;
   const e=shape('gem-'+i,'sphere',[x,1,z],[.88,.88,.88],surfaces.jewel);
@@ -394,10 +412,20 @@ const finish=shape('finish-line','box',
   [8,.1,.65],surfaces.teal);
 // Licensed GLB art overlays are opt-in and never alter the unit-scale
 // Bullet rigidbodies or authored course. CI without private packs is unchanged.
-const licensedArt=await loadPrivateArt(app,{
+const licensedArt=trilogyMode?{mode:'placeholder',loaded:0,expected:6,activeMeshes:0,requiredMissing:[] as string[],dynamicBallStillPhysics:true}:await loadPrivateArt(app,{
   tracks:trackNodes,hazards:hazardNodes,treeCrowns,treeTrunks,
   ball,ballBand:band,finish
 });
+if(trilogyMode){
+ band.enabled=false;finish.enabled=false;
+ trilogy=new TrilogyRun(app,device,ball,camera,ui,()=>{
+  phase='complete';ui.dialog.classList.remove('hidden');
+  ui.title.innerHTML='THREE WORLDS <em>CLEARED.</em>';
+  ui.description.textContent=`Crystal Sky → Cloud Candy → Rainbow Rush. ${trilogy!.gems} stars in ${trilogy!.runTime.toFixed(1)}s.`;
+  ui.start.textContent='ROLL AGAIN →';
+ },surfaces.ball);
+ await trilogy.initialize(firstWorldRoot);
+}
 // The entire next sector is fetched and physically staged during tube travel.
 const preloadNextLevel=()=>{
   if(!transitMode||nextLevelLoadState!=='idle')return;
@@ -463,6 +491,7 @@ const checkpoint=()=>{ // a fall respawns without changing the authoritative phy
   if(phase==='running')message('TRY AGAIN!');
 };
 function restart(){
+  if(trilogyMode&&attempts>0){location.reload();return;}
   if(!realPhysics||phase==='error')return;
   attempts++;
   phase='running';
@@ -543,6 +572,15 @@ if(speedMode){
     railMode?'START RAIL RUN →':
     longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
 }
+if(trilogyMode){
+ document.title='Prism Run · Three Worlds';
+ document.querySelector('header small')!.textContent='PRISM RUN';
+ document.querySelector('.eyebrow')!.textContent='A JOURNEY THROUGH COLOR';
+ ui.title.innerHTML='FOLLOW THE <em>WONDER.</em>';
+ ui.description.textContent='Crystal shores. Candy clouds. Rainbow roads. One ball, three worlds, and two magnetic rollercoasters.';
+ ui.start.textContent='LET’S ROLL →';
+ document.querySelector('.hint')!.textContent='↔ STEER · ↑ SPEED · ORBIT THE TUBES';
+}
 ui.start.addEventListener('click',e=>{e.preventDefault();restart();});
 const releaseGuard=()=>{
   if(!grindMode||guardSide===null||
@@ -559,6 +597,7 @@ const releaseGuard=()=>{
   message('RELEASE!');
 };
 const steer=(clientX:number)=>{
+  if(trilogy?.constrained)return;
   if(transitMode&&(tubeState==='locked'||tubeState==='holding'))return;
   // In rail mode the legal outer lane must reach the Bullet wall at x≈3.8m.
   // Legacy modes keep their original ±3.3m control envelope untouched.
@@ -568,6 +607,7 @@ const steer=(clientX:number)=>{
     releaseGuard();
 };
 const flickForward=()=>{
+  if(trilogy?.constrained)return;
   if(transitMode&&(tubeState==='locked'||tubeState==='holding'))return;
   if(!speedMode||phase!=='running')return;
   const p=ball.getPosition(),v=body.linearVelocity;
@@ -592,6 +632,7 @@ root.addEventListener('pointerdown',e=>{
 root.addEventListener('pointermove',e=>{
   if(e.buttons!==0||e.pointerType==='touch'){
     const swipeDelta=pointerLastX===null?0:e.clientX-pointerLastX;
+    if(trilogy?.constrained){trilogy.rotate(swipeDelta/window.innerWidth*3);pointerLastX=e.clientX;pointerLastY=e.clientY;return;}
     if(transitMode&&(tubeState==='locked'||tubeState==='holding')){
       // Rotation around the pipe, NOT permission to detach from it.
       tubeAngle+=clamp(swipeDelta/window.innerWidth*2.6,-.28,.28);
@@ -618,6 +659,11 @@ root.addEventListener('pointerup',()=>{pointerLastY=null;pointerLastX=null;});
 root.addEventListener('pointercancel',()=>{pointerLastY=null;pointerLastX=null;});
 window.addEventListener('keydown',e=>{
   if(e.code==='Space'||e.code==='Enter'){e.preventDefault();restart();}
+  if(trilogy?.constrained){
+    if(e.code==='ArrowLeft'||e.code==='KeyA')trilogy.rotate(-.18);
+    if(e.code==='ArrowRight'||e.code==='KeyD')trilogy.rotate(.18);
+    return;
+  }
   if(transitMode&&(tubeState==='locked'||tubeState==='holding')){
     if(e.code==='ArrowLeft'||e.code==='KeyA')tubeAngle-=.15;
     if(e.code==='ArrowRight'||e.code==='KeyD')tubeAngle+=.15;
@@ -644,6 +690,9 @@ app.on('update',(dt:number)=>{
   if(phase==='running') {
     physicsFrames++;
     elapsed+=tick;
+    const trilogyControlled=trilogy?.update(tick,true,targetX)??false;
+    if(trilogy?.constrained){guardLock='free';guardSide=null;grindLock='off';touchingRails.clear();touchingGrindTop.clear();}
+    if(!trilogyControlled){
     // Hard kinematic constraint, not an arbitrarily large magnetic spring:
     // unlike the guard and rail this cannot detach on an inversion.
     if(transitMode&&transitPath&&
@@ -1013,9 +1062,10 @@ app.on('update',(dt:number)=>{
       ui.start.textContent='ROLL AGAIN →';
     }
     } // legacy Bullet modes / tube approach and exit (not constrained travel)
+    } // trilogy owns transits and its later worlds
   }
   const pos=ball.getPosition();
-  if(magneticRails){
+  if(magneticRails&&(!trilogy||trilogy.worldIndex===0)){
     const contactGlow=phase==='running'&&
       elapsed-railLastContactAt<.38?railRecentSection:null;
     magneticRails.activeSection(contactGlow);
@@ -1038,6 +1088,8 @@ app.on('update',(dt:number)=>{
       }
     }
   }
+  // Trilogy owns one continuous camera pose; legacy modes retain theirs.
+  if(!trilogy){
   // Camera composition follows physical position, never controls it.
   if(transitMode&&transitPath&&
     (tubeState==='locked'||tubeState==='holding')){
@@ -1065,6 +1117,7 @@ app.on('update',(dt:number)=>{
     camera.setPosition(pos.x*.24,8.1,pos.z+14.8);
     camera.lookAt(pos.x*.18,.65,pos.z-12);
   }
+  }
   ui.coins.textContent=String(twoLevelMode&&levelIndex===2?
     level2GemsCollected:pickups);
   const displayedProgress=transitMode&&transitPath&&
@@ -1079,6 +1132,7 @@ app.on('update',(dt:number)=>{
         tubeState==='locked'?TUBE_CRUISE_METRES_PER_SECOND*3.6:0)} km/h`:
       `${twoLevelMode?(levelIndex===2?'SUNSET RIBBON':'SKY SPEED')+' · ':''}ROLLING · ${Math.round(-pos.z+7)} m · ${Math.round(Math.abs(body.linearVelocity.z)*3.6)} km/h`):
     (phase==='complete'?'PHYSICS COURSE COMPLETE':'AMMO PHYSICS READY');
+  trilogy?.present(tick,phase==='running');
 });
 app.start();
 // Probe is intentionally read-only; tests must drive real touch/keyboard input.
@@ -1086,6 +1140,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
   snapshot:()=>{
     const p=ball.getPosition(),v=body.linearVelocity,w=body.angularVelocity;
     return {
+      trilogyMode,trilogy:trilogy?.snapshot()??null,
       phase,renderer:'playcanvas',physicsBackend:'ammo-bullet',
       physicsLoaded:realPhysics,rigidbodyType:body.type,
       frames,physicsFrames,position:[p.x,p.y,p.z],

@@ -44,9 +44,9 @@ export function tubeCenter(u:number):V3{
     SPEED_START_Z-progress+loopZ
   ];
 }
-function tangentAt(u:number):V3{
+function tangentAt(u:number,centerAt:(u:number)=>V3=tubeCenter):V3{
   const e=.0002;
-  return unit(sub(tubeCenter(Math.min(1,u+e)),tubeCenter(Math.max(0,u-e))));
+  return unit(sub(centerAt(Math.min(1,u+e)),centerAt(Math.max(0,u-e))));
 }
 function transport(n:V3,t0:V3,t1:V3):V3{
   const axis=cross(t0,t1),sin=length(axis);
@@ -60,12 +60,12 @@ function transport(n:V3,t0:V3,t1:V3):V3{
 export class TransitTubePath{
   readonly frames:TubeFrame[]=[];
   readonly length:number;
-  constructor(sampleCount=400){
-    let previous=tangentAt(0);
+  constructor(sampleCount=400,centerAt:(u:number)=>V3=tubeCenter,alignExit=false){
+    let previous=tangentAt(0,centerAt);
     let normal=unit(sub([0,-1,0] as V3,mul(previous,dot([0,-1,0],previous))));
-    let distance=0,prevCenter=tubeCenter(0);
+    let distance=0,prevCenter=centerAt(0);
     for(let i=0;i<=sampleCount;i++){
-      const u=i/sampleCount,center=tubeCenter(u),t=tangentAt(u);
+      const u=i/sampleCount,center=centerAt(u),t=tangentAt(u,centerAt);
       if(i>0){
         distance+=length(sub(center,prevCenter));
         normal=transport(normal,previous,t);
@@ -75,6 +75,19 @@ export class TransitTubePath{
       prevCenter=center;previous=t;
     }
     this.length=distance;
+    // New seeded paths may accumulate transport roll. Distribute its inverse
+    // smoothly so the exit is bottom-aligned without a last-frame angle snap.
+    // The accepted W9.4-7 curve retains its original exact frames by default.
+    if(alignExit){
+      const end=this.frames.at(-1)!;
+      const down=unit(sub([0,-1,0],mul(end.tangent,dot([0,-1,0],end.tangent))));
+      const twist=Math.atan2(dot(down,end.binormal),dot(down,end.normal));
+      for(const f of this.frames){
+        const a=twist*smooth(.12,.95,f.distance/distance);
+        f.normal=unit(add(mul(f.normal,Math.cos(a)),mul(f.binormal,Math.sin(a))));
+        f.binormal=unit(cross(f.tangent,f.normal));
+      }
+    }
   }
   at(distance:number):TubeFrame{
     const target=clamp(distance,0,this.length);
