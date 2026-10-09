@@ -29,6 +29,8 @@ jobs:
           npm run build:w9-5:public
           npm run check:w9-5:public
       - run: npx playwright install --with-deps chromium
+      - name: W10.5 real unsupported gap, physical launch and landing
+        run: npx playwright test --config=playwright.w10-5.config.mjs
       - name: Regression W10 true 360-degree spiral
         run: npx playwright test --config=playwright.w10.config.mjs
       - name: Regression W10.1 swipe/hold
@@ -39,8 +41,6 @@ jobs:
         run: npx playwright test --config=playwright.w10-3.config.mjs
       - name: W10.4 seeded macro world diversity and REAL magnetic tube momentum
         run: npx playwright test --config=playwright.w10-4.config.mjs
-      - name: W10.5 real unsupported gap, physical launch and landing
-        run: npx playwright test --config=playwright.w10-5.config.mjs
       - name: Stage verified public Pages payload
         run: |
           set -euo pipefail
