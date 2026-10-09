@@ -1,0 +1,83 @@
+name: W10.2 Native CCD + Magnetic Guard Boost
+on:
+  push:
+    branches: [w10-2-magnetic-guard-ccd]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: w10-2-safe
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: 90Hz collision, 1000 worlds, real physics contact and mobile input
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - name: Typecheck, lint, unit and geometric continuity
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Public build, no private assets
+        run: |
+          npm run build:w9-5:public
+          npm run check:w9-5:public
+      - run: npx playwright install --with-deps chromium
+      - name: Regression W10 true 360-degree spiral
+        run: npx playwright test --config=playwright.w10.config.mjs
+      - name: Regression W10.1 swipe/hold
+        run: npx playwright test --config=playwright.w10-1.config.mjs
+      - name: W10.2 fast ball with real Bullet CCD and physical guard contact
+        run: npx playwright test --config=playwright.w10-2.config.mjs
+      - name: Stage verified public Pages payload
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat >public-site/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="refresh" content="0;url=./ball/?mode=endless">
+          <title>Prism Run</title></head><body><a href="./ball/?mode=endless">Prism Run</a></body></html>
+          HTML
+          test -s public-site/ball/index.html
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo "Private assets prohibited";exit 1
+          fi
+      - name: Preserve real browser screenshots and telemetry
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w10-2-contact-evidence
+          path: |
+            test-results/w102-*
+            test-results/w10-*
+          retention-days: 14
+          if-no-files-found: ignore
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+  publish:
+    name: Publish isolated W10.2 only after all smoke tests
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: w10-2-android-preview
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4

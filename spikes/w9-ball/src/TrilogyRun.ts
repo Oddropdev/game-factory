@@ -1,4 +1,4 @@
-import {Entity,Vec3,Quat,Texture,Color,type AppBase,type GraphicsDevice,type RigidBodyComponent,type StandardMaterial} from 'playcanvas';
+import {Entity,Vec3,Quat,Texture,Color,type AppBase,type GraphicsDevice,type RigidBodyComponent,type RigidBodyComponentSystem,type StandardMaterial} from 'playcanvas';
 import {WorldAssets} from './TrilogyAssets';
 import {TrilogyWorld,fetchWorld} from './TrilogyWorld';
 import {WORLD_BOUNDS,trilogyCenter,trilogyTangent,setRichEndlessRoute} from './TrilogyManifest';
@@ -8,6 +8,8 @@ import {buildTubeMesh,TUBE_OFFSET} from './TubeTransit';
 import {polished,tint} from './TrilogyArt';
 import {spiralSpec,generateSpiralRoad,spiralMetrics} from './SpiralCourse';
 import {TouchDriveInput} from './TouchDriveInput';
+import {magneticAssist,railContactSide,type GuardSide} from './MagneticGuardAssist';
+import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -20,16 +22,22 @@ export class TrilogyRun{
  history:Event[]=[];retired:ReturnType<TrilogyWorld['snapshot']>[]=[];
  journeys:{seed:number;fingerprint:string;kind:string;fallback:boolean;inversions:number;validation:SeededTransit['validation']}[]=[];
  private seed:number;private body:RigidBodyComponent;private loadAbort:AbortController|null=null;
- private sparkPool:Entity[]=[];private ballTexture:Texture;private camUp=new Vec3(0,1,0);
+ private sparkPool:Entity[]=[];private guardSparks:Entity[]=[];private ballTexture:Texture;private camUp=new Vec3(0,1,0);
  private persistentAssets:WorldAssets;
  private lastCameraRotation=new Quat();private wasConstrained=false;
  maxCameraTurn=0;cameraFinite=true;cameraMinClearance=Infinity;
  private inputLocked=false;private retryAt=0;private introUntil=2;private lastWorld=-1;
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
+ readonly stabilizedMode:boolean;
  readonly touchDrive=new TouchDriveInput();private driveKeys=new Set<string>();
  private lastSpiralPosition:Vec3|null=null;private safeCheckpoint=0;
  lastSpiralSpeed=0;clipRecoveries=0;cameraHardCatches=0;
+ nativeCcdConfigured=false;ccdRefreshes=0;guardSparkFrames=0;
+ guardContactCount=0;guardSpeedPeak=0;
+ private guardSide:GuardSide|null=null;private guardLastContact=-100;
+ private guardCooldown=0;private guardGlowUntil=0;
+ private nativeBody:null|object=null;
  private spiralHint=12;private spiralProgress=0;
  spiralInputFrames=0;spiralFalls=0;spiralMetric:null|ReturnType<typeof spiralMetrics>=null;
  gripFrames=0;maxSurfaceGap=0;edgeBounces=0;maxCurve=0;motifSignature='';
@@ -46,7 +54,8 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&p.get('edition')==='w101';
+  this.touchDriveMode=this.endless&&['w101','w102'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&p.get('edition')==='w102';
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -57,8 +66,9 @@ export class TrilogyRun{
   setChaosProfile(this.chaosMode,this.seed);
   this.runSeed=this.seed;this.body=ball.rigidbody!;this.persistentAssets=new WorldAssets(app);
   if(this.touchDriveMode){
-   this.body.restitution=.02;this.body.friction=1.1;
-   this.body.linearDamping=.35;this.body.angularDamping=.60;
+   this.body.restitution=.02;this.body.friction=this.stabilizedMode?.72:1.1;
+   this.body.linearDamping=this.stabilizedMode?.085:.35;
+   this.body.angularDamping=this.stabilizedMode?.36:.60;
   }
   this.ballTexture=this.makeBallTexture();this.ballMaterial.diffuseMap=this.ballTexture;
   this.ballMaterial.diffuse=tint('#ffffff');this.ballMaterial.useMetalness=true;this.ballMaterial.metalness=.48;this.ballMaterial.gloss=.93;this.ballMaterial.update();
@@ -69,6 +79,7 @@ export class TrilogyRun{
   ball.collision!.on('collisionstart',(e:{other:Entity})=>{
    if(e.other.name.startsWith('trilogy-road-'))this.worldContacts[this.worldIndex]=(this.worldContacts[this.worldIndex]??0)+1;
    const name=e.other.name;
+   if(this.stabilizedMode)this.trackGuardContact(name,true);
    if(this.richMode){
     if(name.startsWith('w97-guard-'))this.guardContacts.add(name);
     if(name.startsWith('w97-grind-top-'))this.grindTopContacts.add(name);
@@ -81,9 +92,46 @@ export class TrilogyRun{
    const candidate=e as {other?:Entity;name?:string}|undefined;
    const name=candidate?.other?.name??candidate?.name;
    if(typeof name!=='string')return;
+   if(this.stabilizedMode&&railContactSide(name)!==null&&
+      this.guardSide===railContactSide(name))this.guardLastContact=this.runTime-.30;
    this.guardContacts.delete(name);this.grindTopContacts.delete(name);
    this.grindSideContacts.delete(name);
   });
+  if(this.stabilizedMode){
+   ball.collision!.on('contact',(event:{other:Entity})=>{
+    this.trackGuardContact(event.other.name,false);
+   });
+   for(let i=0;i<10;i++){
+    const spark=new Entity('w102-magnetic-guard-spark-'+i);
+    spark.addComponent('render',{type:'sphere',material:polished(
+     i%2?'#b6ffef':'#f5fff7',2.1),castShadows:false});
+    spark.setLocalScale(.09,.09,.27);spark.enabled=false;
+    this.app.root.addChild(spark);this.guardSparks.push(spark);
+   }
+  }
+ }
+ private trackGuardContact(name:string,start:boolean){
+  const side=railContactSide(name);
+  if(side===null||this.state!=='world'||!this.current?.spiral)return;
+  if(start||this.guardSide!==side||this.runTime-this.guardLastContact>.3)this.guardContactCount++;
+  this.guardSide=side;this.guardLastContact=this.runTime;
+  this.guardGlowUntil=this.runTime+.20;
+ }
+ private enableBulletCcd(){
+  if(!this.stabilizedMode||this.body.type!=='dynamic')return;
+  // Native Ammo CCD, re-applied after the engine recreates the btRigidBody
+  // during kinematic magnetic tube transitions.
+  const component=this.body as unknown as {body?:{
+   setCcdMotionThreshold?:(n:number)=>void;
+   setCcdSweptSphereRadius?:(n:number)=>void;
+  }};
+  const native=component.body;
+  if(!native||this.nativeBody===native)return;
+  if(typeof native.setCcdMotionThreshold!=='function'||
+     typeof native.setCcdSweptSphereRadius!=='function')return;
+  native.setCcdMotionThreshold(.12);
+  native.setCcdSweptSphereRadius(.52);
+  this.nativeBody=native;this.nativeCcdConfigured=true;this.ccdRefreshes++;
  }
  private makeBallTexture(){
   const c=document.createElement('canvas');c.width=256;c.height=128;const ctx=c.getContext('2d')!;
@@ -111,11 +159,19 @@ export class TrilogyRun{
    this.current=new TrilogyWorld(this.app,content.manifest,generateSpiralRoad(spec),
     undefined,this.richMode,true,false,true,this.touchDriveMode);
    await this.current.prepare(this.device);this.current.activate();
-   const entry=this.current.roadPoint(content.manifest.start);
-   this.body.teleport(entry.x,entry.y+1.6,entry.z);
+   const start=this.spiralSpawnProgress();
+   const entry=this.current.roadPoint(start);
+   const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
+   const dir=this.current.spiralTangent(start);
+   const bank=this.current.roadFrame(start).bank;
+   const edge=side*(entry.width/2-.58);
+   const lateralHeight=Math.sin(bank*Math.PI/180)*edge;
+   this.body.teleport(entry.x+edge*dir.rx,entry.y+.74+lateralHeight,
+    entry.z+edge*dir.rz);
    this.body.linearVelocity=new Vec3(0,0,0);
-   this.spiralHint=12;this.spiralProgress=content.manifest.start;
-   this.safeCheckpoint=content.manifest.start;this.lastSpiralPosition=null;
+   this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
+   this.spiralProgress=start;
+   this.safeCheckpoint=start;this.lastSpiralPosition=null;
   }else{
    this.current=new TrilogyWorld(this.app,manifest,road,root,this.richMode,this.trackFirstMode,this.chaosMode);
    await this.current.prepare(this.device,true);this.current.activate();
@@ -370,18 +426,27 @@ export class TrilogyRun{
    const t=this.current.spiralTangent(this.spiralProgress);
    const dir=code==='ArrowUp'||code==='KeyW'?1:-1;
    const v=this.body.linearVelocity,forward=v.x*t.x+v.y*t.y+v.z*t.z;
-   const delta=dir>0?Math.min(9,Math.max(0,56-forward)):
+   const delta=dir>0?Math.min(this.stabilizedMode?14:9,Math.max(0,(this.stabilizedMode?78:56)-forward)):
     Math.max(-9,Math.min(0,-12-forward));
    if(delta)this.body.applyImpulse(new Vec3(t.x,t.y,t.z).mulScalar(this.body.mass*delta));
   }
   this.driveKeys.add(code);
  }
  driveKeyUp(code:string){this.driveKeys.delete(code);}
+ private spiralSpawnProgress(){
+  return this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?
+   Math.round((this.current.manifest.spiralCoilStart??this.current.manifest.start+107)+30):
+   this.current.manifest.start+7;
+ }
  resetSpiralSpawn(){
   if(!this.touchDriveMode||!this.current.spiral)return false;
   this.touchDrive.cancel();this.driveKeys.clear();
-  const start=this.current.manifest.start+7,p=this.current.roadPoint(start);
-  this.body.type='dynamic';this.body.teleport(p.x,p.y+.70,p.z);
+  const start=this.spiralSpawnProgress(),p=this.current.roadPoint(start);
+  const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
+  const tangent=this.current.spiralTangent(start),bank=this.current.roadFrame(start).bank;
+  const offset=side*(p.width/2-.58),y=p.y+.74+offset*Math.sin(bank*Math.PI/180);
+  this.body.type='dynamic';
+  this.body.teleport(p.x+offset*tangent.rx,y,p.z+offset*tangent.rz);
   this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
   this.spiralProgress=start;
   this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
@@ -389,6 +454,7 @@ export class TrilogyRun{
   return true;
  }
  private updateTouchSpiral(dt:number):boolean{
+  this.enableBulletCcd();
   const p=this.ball.getPosition(),v=this.body.linearVelocity;
   const proj=this.current.project(p,this.spiralHint);
   this.spiralHint=proj.index;this.spiralProgress=proj.d;
@@ -410,9 +476,10 @@ export class TrilogyRun{
   if(boost){
    // Once per fresh swipe, in ANY direction. Releasing and swiping again
    // can accelerate, but impulses cannot create unbounded velocity.
-   const f=boost.forward>=0?Math.max(0,Math.min(9,58-forward)):
+   const f=boost.forward>=0?Math.max(0,Math.min(this.stabilizedMode?14:9,
+    (this.stabilizedMode?78:58)-forward)):
     Math.max(-9,Math.min(0,-16-forward));
-   const a=clamp(boost.steer*5.8,-6,6);
+   const a=clamp(boost.steer*(this.stabilizedMode?7:5.8),-7,7);
    this.body.applyImpulse(new Vec3(t.x*f+right.x*a,t.y*f,
     t.z*f+right.z*a).mulScalar(this.body.mass));
   }
@@ -422,9 +489,11 @@ export class TrilogyRun{
   if(onDeck){
    // Only the HOLD gesture drives the motor. No automatic center-seeking,
    // no implicit track-following, and no force at rest before first swipe.
-   const drive=throttle>0?Math.max(0,Math.min(throttle*16,(52-forward)*6)):
+   const drive=throttle>0?Math.max(0,Math.min(
+    throttle*(this.stabilizedMode?30:16),((this.stabilizedMode?74:52)-forward)*6)):
     throttle<0?Math.max(throttle*25,(-17-forward)*6):0;
-   const steerAuthority=19+clamp(forward*forward/43,0,53);
+   const steerAuthority=this.stabilizedMode?23+clamp(forward*forward/30,0,78):
+    19+clamp(forward*forward/43,0,53);
    const lateral=steer*steerAuthority-clamp(side*3.2,-18,18);
    this.body.applyForce(new Vec3(t.x*drive+right.x*lateral,t.y*drive,
     t.z*drive+right.z*lateral).mulScalar(this.body.mass));
@@ -435,7 +504,7 @@ export class TrilogyRun{
     Math.max(0,away)*15,0,80);
    this.body.applyForce(normal.mulScalar(-this.body.mass*grip));
    this.gripFrames++;
-   if(!this.touchDrive.holding&&keyboardThrottle===0){
+   if(!this.stabilizedMode&&!this.touchDrive.holding&&keyboardThrottle===0){
     const brake=Math.min(8,Math.abs(forward)/Math.max(dt,.016));
     this.body.applyForce(new Vec3(t.x,t.y,t.z).mulScalar(
      -Math.sign(forward)*brake*this.body.mass));
@@ -445,10 +514,60 @@ export class TrilogyRun{
      this.body.linearVelocity=new Vec3(0,v.y,0);
    }
   }
+  if(this.stabilizedMode&&onDeck&&
+    Math.abs(proj.lateral)>proj.width/2-2.4){
+   // A short ray may reach a REAL Bullet guard before collisionstart fires;
+   // this restores the desirable slight rail attraction, but never creates
+   // a fictional wall in sections without a static green guard collider.
+   const direction=proj.lateral<0?-1 as const:1 as const;
+   const from=new Vec3(p.x,p.y+.10,p.z);
+   const to=new Vec3(p.x+right.x*direction*2.4,p.y+.10,
+    p.z+right.z*direction*2.4);
+   const physics=this.app.systems.rigidbody as RigidBodyComponentSystem;
+   const guard=physics.raycastAll(from,to).find(hit=>
+    railContactSide(hit.entity.name)===direction);
+   if(guard)this.trackGuardContact(guard.entity.name,false);
+  }
+  if(this.stabilizedMode){
+   const active=this.guardSide!==null&&this.runTime-this.guardLastContact<.22&&
+    this.runTime>=this.guardCooldown;
+   const assist=active?magneticAssist({side:this.guardSide!,lateral:proj.lateral,
+    halfWidth:proj.width/2,sideSpeed:side,forward,steer,
+    now:this.runTime,cooldownUntil:this.guardCooldown}):null;
+   if(assist?.release){
+    this.guardCooldown=this.runTime+.65;this.guardSide=null;
+    this.guardReleases++;this.current.setGuardLit(false);
+   }else if(assist?.locked&&onDeck){
+    // Real contact pulls ONLY toward the physical guard, not toward the
+    // centerline. It boosts along the actual 3D tangent while touching.
+    this.body.applyForce(new Vec3(t.x*assist.drive+right.x*assist.pull,
+     t.y*assist.drive,t.z*assist.drive+right.z*assist.pull).mulScalar(this.body.mass));
+    this.guardBoostFrames++;this.guardSpeedPeak=Math.max(this.guardSpeedPeak,forward);
+    this.guardGlowUntil=this.runTime+.18;
+   }
+  }
   // A bounded sweep-repair for missed Bullet contacts at tiny collider
   // seams. This is NOT a lateral clamp: outside the real road, it does nothing.
   const last=this.lastSpiralPosition;
-  if(onDeck&&last&&proj.surfaceGap<.46&&proj.surfaceGap>-.5&&
+  if(this.stabilizedMode&&last){
+   const oldProjection=this.current.project(last,Math.max(0,proj.index-4));
+   const deck=this.current.roadFrame(proj.d),oldDeck=this.current.roadFrame(oldProjection.d);
+   const hereY=roadSurfaceY(deck.y,deck.bank,proj.lateral);
+   const thereY=roadSurfaceY(oldDeck.y,oldDeck.bank,oldProjection.lateral);
+   if(sweptDeckCatch({previousGap:last.y-thereY,currentGap:p.y-hereY,
+    currentLateral:proj.lateral,halfWidth:proj.width/2,
+    travel:last.distance(p),verticalSpeed:v.y,
+    roadProgressJump:Math.abs(proj.d-oldProjection.d)})){
+    this.body.teleport(p.x,hereY+.69,p.z);
+    // Remove only the inward velocity normal to the actual inclined surface.
+    // Preserve tangent inertia instead of stopping the player on the slope.
+    const h=Math.hypot(t.x,t.z)||1;
+    const n=new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
+    const now=this.body.linearVelocity,into=now.dot(n);
+    if(into<0)this.body.linearVelocity=now.clone().sub(n.mulScalar(into));
+    this.clipRecoveries++;
+   }
+  }else if(onDeck&&last&&proj.surfaceGap<.46&&proj.surfaceGap>-.5&&
    last.y>=proj.y+.61&&v.y<-.5){
    this.body.teleport(p.x,proj.y+.70,p.z);
    const vv=this.body.linearVelocity;
@@ -463,7 +582,7 @@ export class TrilogyRun{
    this.safeCheckpoint=this.current.manifest.start+
     Math.floor((proj.d-this.current.manifest.start)/100)*100;
   // A fail sends the sphere BACK to a reached checkpoint, at rest.
-  if(proj.distance>11||proj.surfaceGap< -9||p.y< -20){
+  if(proj.distance>11||proj.surfaceGap<(this.stabilizedMode?-4:-9)||p.y< -20){
    this.falls++;this.spiralFalls++;
    const checkpoint=Math.max(this.current.manifest.start+5,this.safeCheckpoint);
    const node=this.current.roadPoint(checkpoint);
@@ -639,6 +758,27 @@ export class TrilogyRun{
     e.setPosition(pos.x-t.x*age*5+Math.sin(i*17)*.7,pos.y+.05+Math.sin(i*8)*.3,pos.z-t.z*age*5);
     e.setLocalScale(.045*(1-age),.045*(1-age),.6*(1-age));}
   }
+  if(this.stabilizedMode){
+   const contact=this.state==='world'&&this.current.spiral&&
+    this.guardSide!==null&&this.runTime<this.guardGlowUntil&&
+    this.runTime>=this.guardCooldown;
+   this.current.setGuardLit(contact);
+   if(contact)this.guardSparkFrames++;
+   const track=this.current.spiralTangent(progress);
+   for(const [i,e] of this.guardSparks.entries()){
+    e.enabled=Boolean(contact);
+    if(contact){
+     const spin=this.runTime*19+i*2.399963229728653;
+     const spread=.12+(i%4)*.13;
+     const behind=(i/10)*1.6;
+     const side=this.guardSide!;
+     e.setPosition(pos.x+track.rx*side*.49+Math.cos(spin)*spread-track.x*behind,
+      pos.y-.35+Math.sin(spin)*.30,
+      pos.z+track.rz*side*.49+Math.sin(spin*1.31)*spread-track.z*behind);
+     e.setLocalScale(.055+(i%3)*.025,.075,.17+(i%4)*.09);
+    }
+   }
+  }
  }
  snapshot(){return {seed:this.runSeed,state:this.state,worldIndex:this.worldIndex+1,
   richMode:this.richMode,extremeCoasters:this.extremeCoasters,
@@ -646,6 +786,9 @@ export class TrilogyRun{
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
+  nativeCcdConfigured:this.nativeCcdConfigured,ccdRefreshes:this.ccdRefreshes,
+  stabilizedMode:this.stabilizedMode,guardContactCount:this.guardContactCount,
+  guardSparkFrames:this.guardSparkFrames,guardSpeedPeak:this.guardSpeedPeak,
   clipRecoveries:this.clipRecoveries,cameraHardCatches:this.cameraHardCatches,
   spiralProgress:this.spiralProgress,
   spiralInputFrames:this.spiralInputFrames,spiralFalls:this.spiralFalls,

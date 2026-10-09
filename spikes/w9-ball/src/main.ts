@@ -192,6 +192,14 @@ if(trilogyMode)app.maxDeltaTime=.05;
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);
 const physics=app.systems.rigidbody as RigidBodyComponentSystem;
+if(trilogyMode&&new URL(location.href).searchParams.get('edition')==='w102'){
+ // Faster cars require substeps + native Bullet CCD. Keep W10.1 and
+ // other production modes at their previously approved physics clocks.
+ const tuned=physics as RigidBodyComponentSystem&{
+  fixedTimeStep:number;maxSubSteps:number
+ };
+ tuned.fixedTimeStep=1/90;tuned.maxSubSteps=9;
+}
 physics.gravity.set(0,-22,0);
 const camera=new Entity('follow-camera');
 camera.addComponent('camera',{fov:58,nearClip:.1,farClip:250,
