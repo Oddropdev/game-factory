@@ -96,6 +96,16 @@ export class TrilogyRun{
    if(e.other.name.startsWith('trilogy-road-'))this.worldContacts[this.worldIndex]=(this.worldContacts[this.worldIndex]??0)+1;
    const name=e.other.name;
    if(this.stabilizedMode)this.trackGuardContact(name,true);
+   if(this.directorMode&&name.startsWith('w106-choice-wall-')&&this.state==='world'){
+    this.choiceWallHits++;this.wallLastHit=this.runTime;
+    this.wallBrakeUntil=this.runTime+1.3;
+    // A real static Bullet collision is the only stopping authority.
+    if(this.body.linearVelocity.length()>3){
+     this.body.linearVelocity=new Vec3();
+     this.body.angularVelocity=new Vec3();
+     this.choiceWallStops++;
+    }
+   }
    if(this.richMode){
     if(name.startsWith('w97-guard-'))this.guardContacts.add(name);
     if(name.startsWith('w97-grind-top-'))this.grindTopContacts.add(name);
@@ -591,6 +601,11 @@ export class TrilogyRun{
   const onDeck=surface?(surface.inside&&surface.clearance>-.85&&surface.clearance<3.65):
    Math.abs(proj.lateral)<proj.width/2+.65&&
    proj.surfaceGap>-.9&&proj.surfaceGap<3.4;
+  const choice=this.current.manifest.choiceWall;
+  if(this.directorMode&&choice&&this.choiceSide===null&&proj.d>choice.d+4){
+   const selected=sideDecision(surface?.lateral??proj.lateral,choice);
+   if(selected){this.choiceSide=selected;this.choiceWallDecisions++;}
+  }
   if(this.macroMode&&onDeck&&this.runTime<this.exitBoostUntil){
    const burst=exitAfterburner(1.05-(this.exitBoostUntil-this.runTime),forward);
    if(burst>0){
@@ -605,12 +620,15 @@ export class TrilogyRun{
    const drive=throttle>0?Math.max(0,Math.min(
     throttle*(this.stabilizedMode?30:16),((this.stabilizedMode?74:52)-forward)*6)):
     throttle<0?Math.max(throttle*25,(-17-forward)*6):0;
+   const restrictedDrive=this.directorMode&&this.runTime<this.wallBrakeUntil?
+    Math.min(0,drive):drive;
    const steerAuthority=this.stabilizedMode?23+clamp(forward*forward/30,0,78):
     19+clamp(forward*forward/43,0,53);
    const lateral=steer*steerAuthority-clamp(side*3.2,-18,18);
    const axis=frame?.right??{x:right.x,y:0,z:right.z};
-   this.body.applyForce(new Vec3(t.x*drive+axis.x*lateral,
-    t.y*drive+axis.y*lateral,t.z*drive+axis.z*lateral).mulScalar(this.body.mass));
+   this.body.applyForce(new Vec3(t.x*restrictedDrive+axis.x*lateral,
+    t.y*restrictedDrive+axis.y*lateral,
+    t.z*restrictedDrive+axis.z*lateral).mulScalar(this.body.mass));
    const h=Math.hypot(t.x,t.z)||1;
    const normal=frame?new Vec3(frame.up.x,frame.up.y,frame.up.z):
     new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
@@ -863,7 +881,29 @@ export class TrilogyRun{
    this.ui.status.textContent=this.state==='holding'?(this.loadState==='failed'?'RECONNECTING · SAFE AT THE EXIT':'PREPARING YOUR NEXT WORLD…'):'SWIPE TO ORBIT · '+Math.round(this.distance/this.transit.path.length*100)+'%';
   }else{
    this.wasConstrained=false;this.camUp.set(0,1,0);const t=trilogyTangent(progress),height=Math.max(.62,pos.y);
-   if(this.touchDriveMode&&this.worldIndex>=3){
+   if(this.directorMode&&this.worldIndex>=3){
+    const before=this.current.spiralTangent(progress-13),
+     d=this.current.spiralTangent(progress),
+     future=this.current.spiralTangent(progress+26),
+     nextRoad=this.current.roadPoint(progress+24);
+    const dynamic=adaptiveCamera({ball:pos,forward:d,roadAhead:nextRoad,
+     speed:Math.hypot(v.x,v.y,v.z),
+     turn:turnIntensity(before,future),
+     aspect:window.innerWidth/Math.max(1,window.innerHeight)});
+    const desired=new Vec3(dynamic.position.x,dynamic.position.y,dynamic.position.z);
+    const now=this.camera.getPosition(),lag=now.distance(desired);
+    const k=1-Math.exp(-dt*clamp(7+Math.hypot(v.x,v.y,v.z)*.08,7,14));
+    if(lag>38)this.cameraHardCatches++;
+    this.camera.setPosition(lag>38?desired:now.clone().lerp(now,desired,k));
+    const previous=this.camera.getRotation().clone();
+    this.camera.lookAt(dynamic.target.x,dynamic.target.y,dynamic.target.z);
+    const desiredRotation=this.camera.getRotation().clone();
+    this.camera.setRotation(previous.slerp(previous,desiredRotation,1-Math.exp(-dt*9)));
+    this.camera.camera!.fov=dynamic.fov;
+    this.maxAdaptiveFov=Math.max(this.maxAdaptiveFov,dynamic.fov);
+    if(dynamic.fov>=80)this.cameraWideFrames++;
+    if(Math.abs(d.y)>.20)this.cameraSteepFrames++;
+   }else if(this.touchDriveMode&&this.worldIndex>=3){
     const d=this.current.spiralTangent(progress);
     const desired=new Vec3(pos.x-d.x*11,pos.y+8.3,pos.z-d.z*11);
     const now=this.camera.getPosition(),lag=now.distance(desired);
@@ -885,7 +925,8 @@ export class TrilogyRun{
     this.camera.setPosition(pos.x-t.x*11,height+7.4,pos.z-t.z*16);
     this.camera.lookAt(pos.x+t.x*17,height*.5,pos.z+t.z*24);
    }
-   this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
+   if(!this.directorMode||this.worldIndex<3)
+    this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
    this.ui.status.textContent=this.touchDriveMode&&this.current.spiral?
     (this.touchDrive.holding?'HOLD TO DRIVE · SWIPE TO STEER':'SWIPE UP · HOLD TO DRIVE · REPEAT FOR SPEED'):
     this.spiralMode&&this.current.spiral?'STEER TO STAY ON THE SPIRAL · NO AUTOPILOT':this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:this.endless?'ENDLESS WORLDS · MAGNETIC JOURNEYS':'THREE WORLDS · TWO MAGNETIC JOURNEYS';
