@@ -196,7 +196,7 @@ export class TrilogyRun{
   if(this.spiralMode&&(directMode==='spiral'||this.macroMode&&(directMode==='macro'||directMode==='jump'))){
    const requested=Number(params.get('world')),world=this.macroMode&&
     params.has('world')&&Number.isSafeInteger(requested)?
-     clamp(requested,4,100):4;
+     clamp(requested,4,100):directMode==='jump'?5:4;
    const index=world-1,content=generateEndlessWorld(index,this.seed,true);
    const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
    const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
