@@ -1,0 +1,56 @@
+name: W9.5 Android Wi-Fi Preview
+on:
+  pull_request:
+    paths:
+      - "tools/run-transit-preview.mjs"
+      - "Start_Android_Playtest.cmd"
+      - "docs/W9.5_ANDROID_WIFI_TEST.md"
+      - ".github/workflows/w9-5-mobile-lan.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  owner-lan-preview:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'w9-5-mobile-lan-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - name: Strict types and isolated public W9.5 build
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build:w9-5:public
+          npm run check:w9-5:public
+      - name: Actual LAN HTTP route and required browser assets
+        run: |
+          node --check tools/run-transit-preview.mjs
+          node tools/run-transit-preview.mjs --trilogy --lan >/tmp/w95-wifi-preview.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          sleep 2
+          grep 'LAN-only; no public deployment' /tmp/w95-wifi-preview.log
+          curl --fail --silent --show-error 'http://127.0.0.1:4177/ball/?mode=trilogy' --output /dev/null
+          curl --fail --silent --show-error 'http://127.0.0.1:4177/ball/levels/crystal.json' | grep '"crystal"'
+          curl --fail --silent --show-error 'http://127.0.0.1:4177/ball/levels/candy.json' | grep '"candy"'
+          curl --fail --silent --show-error 'http://127.0.0.1:4177/ball/levels/rainbow.json' | grep '"rainbow"'
+          curl --fail --silent --show-error --head 'http://127.0.0.1:4177/ball/ammo/ammo.wasm.wasm'
+          kill $pid
+          trap - EXIT
+      - name: Downloadable Windows + Android staging package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-5-android-wifi-playtest-preview
+          path: |
+            Start_Android_Playtest.cmd
+            Start_Three_Levels.cmd
+            tools/run-transit-preview.mjs
+            playtest-dist/ball/
+            docs/W9.5_ANDROID_WIFI_TEST.md
+          if-no-files-found: error
+          retention-days: 14
