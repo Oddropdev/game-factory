@@ -2,7 +2,7 @@ import {Entity,Vec3,Quat,Texture,type AppBase,type GraphicsDevice,type RigidBody
 import {WorldAssets} from './TrilogyAssets';
 import {TrilogyWorld,fetchWorld} from './TrilogyWorld';
 import {WORLD_BOUNDS,trilogyCenter,trilogyTangent,setRichEndlessRoute} from './TrilogyManifest';
-import {endlessBounds,generateEndlessWorld} from './EndlessWorlds';
+import {endlessBounds,generateEndlessWorld,generateWorldFeatures} from './EndlessWorlds';
 import {generateTransit,generateSpectacleTransit,generateExtremeTransit,type SeededTransit} from './SeededTransit';
 import {buildTubeMesh,TUBE_OFFSET} from './TubeTransit';
 import {polished,tint} from './TrilogyArt';
@@ -107,6 +107,8 @@ export class TrilogyRun{
    let staged:TrilogyWorld|null=null;
    try{
     const content=this.endless&&index>=3?generateEndlessWorld(index,this.seed,this.richMode):await fetchWorld(index,controller.signal);
+    if(this.richMode&&index<3)
+     content.manifest.features=generateWorldFeatures(index,content.manifest.start,content.manifest.end,this.seed);
     staged=new TrilogyWorld(this.app,content.manifest,content.road,undefined,this.richMode);await staged.prepare(this.device);
     this.next=staged;this.loadState='ready';this.loadMs=performance.now()-started;
     this.history.push({event:'prepared-disabled',world:index,at:this.runTime,bodies:staged.roadBodies+staged.hazardBodies});
@@ -146,7 +148,7 @@ export class TrilogyRun{
     const lateral=v.x*(-t.z)+v.z*t.x,error=p.x-trilogyCenter(progress)-targetX;
     let goalSpeed=this.richMode?48:26;
     let magnetSide:-1|1|null=null;
-    if(this.richMode&&this.worldIndex>=3){
+    if(this.richMode&&this.worldIndex>0){
      const active=[...this.guardContacts][0];
      const match=active?/^w97-guard-(-?1)-/.exec(active):null;
      if(match)magnetSide=Number(match[1]) as -1|1;
