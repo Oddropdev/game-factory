@@ -12,7 +12,7 @@ export class TrilogyWorld{
  guardBodies=0;grindTops=0;grindSides=0;boxObstacles=0;
  constructor(readonly app:AppBase,readonly manifest:WorldManifest,readonly road:RoadSample[],
   root?:Entity,readonly rich=false,readonly minimalist=false,readonly chaos=false,
-  readonly spiral=false){
+  readonly spiral=false,readonly stableRoad=false){
   this.root=root??new Entity('world-'+manifest.id);this.root.enabled=false;
   if(!this.root.parent)app.root.addChild(this.root);this.assets=new WorldAssets(app);
  }
@@ -110,10 +110,13 @@ export class TrilogyWorld{
    const length=Math.hypot(dx,dy,dz),horizontal=Math.hypot(dx,dz)||1;
    const yaw=-Math.atan2(dx,-dz)*180/Math.PI,pitch=Math.atan2(dy,horizontal)*180/Math.PI;
    const e=new Entity('trilogy-road-'+m.id+'-'+i);
-   e.setPosition((a.x+b.x)/2,(a.y+b.y)/2-.30,((a.z??7-a.d)+(b.z??7-b.d))/2);
+   const thick=this.stableRoad?.82:.30;
+   e.setPosition((a.x+b.x)/2,(a.y+b.y)/2-thick,
+    ((a.z??7-a.d)+(b.z??7-b.d))/2);
    e.setEulerAngles(pitch,yaw,(a.bank+b.bank)/2);
-   e.addComponent('collision',{type:'box',halfExtents:new Vec3(a.width/2,.30,length/2+.11)});
-   e.addComponent('rigidbody',{type:'static',friction:.6,restitution:0});
+   e.addComponent('collision',{type:'box',halfExtents:new Vec3(
+    a.width/2,thick,length/2+(this.stableRoad?.40:.11))});
+   e.addComponent('rigidbody',{type:'static',friction:this.stableRoad?1.1:.6,restitution:0});
    this.root.addChild(e);this.roadBodies++;
    // Guard only genuinely dangerous 360-degree climbing spiral.
    if(a.d<from-5||a.d>to+5||i%2!==0)continue;
@@ -193,7 +196,7 @@ export class TrilogyWorld{
  snapshot(){return {id:this.manifest.id,active:this.active,disposed:this.disposed,roadBodies:this.roadBodies,
   hazardBodies:this.hazardBodies,guardBodies:this.guardBodies,grindTops:this.grindTops,
   grindSides:this.grindSides,boxObstacles:this.boxObstacles,minimalist:this.minimalist,
-  spiral:this.spiral,
+  spiral:this.spiral,stableRoad:this.stableRoad,
   chaos:this.chaos,
   maxElevation:Math.max(...this.road.map(p=>p.y)),
   meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
