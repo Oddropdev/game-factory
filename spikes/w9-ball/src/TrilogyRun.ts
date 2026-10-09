@@ -39,7 +39,7 @@ export class TrilogyRun{
  cameraWideFrames=0;cameraSteepFrames=0;maxAdaptiveFov=0;
  choiceWallHits=0;choiceWallStops=0;choiceWallDecisions=0;
  choiceSide:'left'|'right'|null=null;
- private wallBrakeUntil=-1;private wallLastHit=-99;
+ private wallBrakeUntil=-1;
  macroKind='';macroMotifs:string[]=[];macroSignature='';
  exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
@@ -97,7 +97,7 @@ export class TrilogyRun{
    const name=e.other.name;
    if(this.stabilizedMode)this.trackGuardContact(name,true);
    if(this.directorMode&&name.startsWith('w106-choice-wall-')&&this.state==='world'){
-    this.choiceWallHits++;this.wallLastHit=this.runTime;
+    this.choiceWallHits++;
     this.wallBrakeUntil=this.runTime+1.3;
     // A real static Bullet collision is the only stopping authority.
     if(this.body.linearVelocity.length()>3){
