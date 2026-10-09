@@ -106,11 +106,11 @@ export class TrilogyRun{
     this.choiceWallHits++;
     this.wallBrakeUntil=this.runTime+1.3;
     // A real static Bullet collision is the only stopping authority.
-    if(this.body.linearVelocity.length()>3){
-     this.body.linearVelocity=new Vec3();
-     this.body.angularVelocity=new Vec3();
-     this.choiceWallStops++;
-    }
+    // A physical wall contact is a stop even if Bullet already reduced the
+    // velocity to <3m/s during the same frame. Zero it deterministically.
+    this.body.linearVelocity=new Vec3();
+    this.body.angularVelocity=new Vec3();
+    this.choiceWallStops++;
    }
    if(this.richMode){
     if(name.startsWith('w97-guard-'))this.guardContacts.add(name);
