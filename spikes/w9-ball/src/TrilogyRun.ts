@@ -470,6 +470,11 @@ export class TrilogyRun{
   if(picked){this.gems+=picked;this.ui.message.textContent='✦ +'+picked;
    this.ui.message.classList.add('show');}
   const t=proj.tangent,right=proj.right;
+  const bank=this.current.roadFrame(proj.d).bank;
+  const frame=this.alignedSurfaceMode?trackFrame(t,bank):null;
+  const center={x:proj.x,y:proj.y,z:proj.z};
+  const surface=frame?surfaceContact(frame,center,p,proj.width):null;
+  if(surface)this.maxRoadClearance=Math.max(this.maxRoadClearance,Math.max(0,surface.clearance));
   const forward=v.x*t.x+v.y*t.y+v.z*t.z;
   const side=v.x*right.x+v.z*right.z;
   const keys=this.driveKeys;
@@ -491,7 +496,8 @@ export class TrilogyRun{
     t.z*f+right.z*a).mulScalar(this.body.mass));
   }
   if(Math.abs(throttle)+Math.abs(steer)>.08)this.spiralInputFrames++;
-  const onDeck=Math.abs(proj.lateral)<proj.width/2+.65&&
+  const onDeck=surface?(surface.inside&&surface.clearance>-.85&&surface.clearance<3.65):
+   Math.abs(proj.lateral)<proj.width/2+.65&&
    proj.surfaceGap>-.9&&proj.surfaceGap<3.4;
   if(onDeck){
    // Only the HOLD gesture drives the motor. No automatic center-seeking,
@@ -502,12 +508,15 @@ export class TrilogyRun{
    const steerAuthority=this.stabilizedMode?23+clamp(forward*forward/30,0,78):
     19+clamp(forward*forward/43,0,53);
    const lateral=steer*steerAuthority-clamp(side*3.2,-18,18);
-   this.body.applyForce(new Vec3(t.x*drive+right.x*lateral,t.y*drive,
-    t.z*drive+right.z*lateral).mulScalar(this.body.mass));
+   const axis=frame?.right??{x:right.x,y:0,z:right.z};
+   this.body.applyForce(new Vec3(t.x*drive+axis.x*lateral,
+    t.y*drive+axis.y*lateral,t.z*drive+axis.z*lateral).mulScalar(this.body.mass));
    const h=Math.hypot(t.x,t.z)||1;
-   const normal=new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
+   const normal=frame?new Vec3(frame.up.x,frame.up.y,frame.up.z):
+    new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
    const away=v.dot(normal);
-   const grip=19.8+clamp(Math.max(0,proj.surfaceGap-.68)*28+
+   const clearance=surface?.clearance??proj.surfaceGap;
+   const grip=19.8+clamp(Math.max(0,clearance-.68)*28+
     Math.max(0,away)*15,0,80);
    this.body.applyForce(normal.mulScalar(-this.body.mass*grip));
    this.gripFrames++;
@@ -522,14 +531,16 @@ export class TrilogyRun{
    }
   }
   if(this.stabilizedMode&&onDeck&&
-    Math.abs(proj.lateral)>proj.width/2-2.4){
+    Math.abs(surface?.lateral??proj.lateral)>proj.width/2-2.4){
    // A short ray may reach a REAL Bullet guard before collisionstart fires;
    // this restores the desirable slight rail attraction, but never creates
    // a fictional wall in sections without a static green guard collider.
-   const direction=proj.lateral<0?-1 as const:1 as const;
+   const direction=(surface?.lateral??proj.lateral)<0?-1 as const:1 as const;
    const from=new Vec3(p.x,p.y+.10,p.z);
-   const to=new Vec3(p.x+right.x*direction*2.4,p.y+.10,
-    p.z+right.z*direction*2.4);
+   const target=frame?.position(center,direction*(proj.width/2-.15),.8);
+   const to=target?new Vec3(target.x,target.y,target.z):
+    new Vec3(p.x+right.x*direction*2.4,p.y+.10,
+     p.z+right.z*direction*2.4);
    const physics=this.app.systems.rigidbody as RigidBodyComponentSystem;
    const guard=physics.raycastAll(from,to).find(hit=>
     railContactSide(hit.entity.name)===direction);
@@ -538,7 +549,8 @@ export class TrilogyRun{
   if(this.stabilizedMode){
    const active=this.guardSide!==null&&this.runTime-this.guardLastContact<.22&&
     this.runTime>=this.guardCooldown;
-   const assist=active?magneticAssist({side:this.guardSide!,lateral:proj.lateral,
+   const assist=active?magneticAssist({side:this.guardSide!,
+    lateral:surface?.lateral??proj.lateral,
     halfWidth:proj.width/2,sideSpeed:side,forward,steer,
     now:this.runTime,cooldownUntil:this.guardCooldown}):null;
    if(assist?.release){
@@ -547,8 +559,24 @@ export class TrilogyRun{
    }else if(assist?.locked&&onDeck){
     // Real contact pulls ONLY toward the physical guard, not toward the
     // centerline. It boosts along the actual 3D tangent while touching.
-    this.body.applyForce(new Vec3(t.x*assist.drive+right.x*assist.pull,
-     t.y*assist.drive,t.z*assist.drive+right.z*assist.pull).mulScalar(this.body.mass));
+    const railRight=frame?.right??{x:right.x,y:0,z:right.z};
+    this.body.applyForce(new Vec3(t.x*assist.drive+railRight.x*assist.pull,
+     t.y*assist.drive+railRight.y*assist.pull,
+     t.z*assist.drive+railRight.z*assist.pull).mulScalar(this.body.mass));
+    if(frame&&surface&&surface.clearance>-.55&&surface.clearance<4.4){
+     const nvel=v.x*frame.up.x+v.y*frame.up.y+v.z*frame.up.z;
+     const down=guardDownforce({frame,mass:this.body.mass,
+      verticalFromDeck:surface.clearance,normalVelocity:nvel,
+      nearGuard:true,magnetActive:true});
+     this.body.applyForce(new Vec3(down.x,down.y,down.z));
+     this.guardDownforceFrames++;
+     if(nvel>7.5){
+      const cancel=Math.min(24,(nvel-7.5)*.8);
+      this.body.applyImpulse(new Vec3(-frame.up.x,-frame.up.y,-frame.up.z)
+       .mulScalar(this.body.mass*cancel));
+      this.guardLiftDamped++;
+     }
+    }
     this.guardBoostFrames++;this.guardSpeedPeak=Math.max(this.guardSpeedPeak,forward);
     this.guardGlowUntil=this.runTime+.18;
    }
@@ -794,7 +822,9 @@ export class TrilogyRun{
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
   nativeCcdConfigured:this.nativeCcdConfigured,ccdRefreshes:this.ccdRefreshes,
-  stabilizedMode:this.stabilizedMode,guardContactCount:this.guardContactCount,
+  stabilizedMode:this.stabilizedMode,alignedSurfaceMode:this.alignedSurfaceMode,
+  guardDownforceFrames:this.guardDownforceFrames,guardLiftDamped:this.guardLiftDamped,
+  maxRoadClearance:this.maxRoadClearance,guardContactCount:this.guardContactCount,
   guardSparkFrames:this.guardSparkFrames,guardSpeedPeak:this.guardSpeedPeak,
   clipRecoveries:this.clipRecoveries,cameraHardCatches:this.cameraHardCatches,
   spiralProgress:this.spiralProgress,
