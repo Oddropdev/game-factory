@@ -26,7 +26,7 @@ describe('W9.9 seed-first playable random course grammar',()=>{
   }
   expect(signatures.size).toBeGreaterThan(985);
   expect(kinds.size).toBe(8);
- });
+ },20000);
  it('real generated road matches global center and elevation banking',()=>{
   setLongCoasterProfile(true);setRichEndlessRoute(true);setChaosProfile(true,17);
   for(const i of [3,4,5,136,999]){

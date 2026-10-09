@@ -6,6 +6,7 @@ import {endlessBounds,generateEndlessWorld,generateWorldFeatures,setLongCoasterP
 import {generateTransit,generateSpectacleTransit,generateExtremeTransit,type SeededTransit} from './SeededTransit';
 import {buildTubeMesh,TUBE_OFFSET} from './TubeTransit';
 import {polished,tint} from './TrilogyArt';
+import {spiralSpec,generateSpiralRoad,spiralMetrics} from './SpiralCourse';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -24,7 +25,9 @@ export class TrilogyRun{
  maxCameraTurn=0;cameraFinite=true;cameraMinClearance=Infinity;
  private inputLocked=false;private retryAt=0;private introUntil=2;private lastWorld=-1;
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
- readonly chaosMode:boolean;
+ readonly chaosMode:boolean;readonly spiralMode:boolean;
+ private spiralHint=12;private spiralProgress=0;
+ spiralInputFrames=0;spiralFalls=0;spiralMetric:null|ReturnType<typeof spiralMetrics>=null;
  gripFrames=0;maxSurfaceGap=0;edgeBounces=0;maxCurve=0;motifSignature='';
  themeFade=0;
  private fadeFrom:{sky:Color;fog:Color;ambient:Color}|null=null;
@@ -39,8 +42,9 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
+  this.spiralMode=this.endless&&p.get('edition')==='w10';
   this.chaosMode=this.endless&&p.get('edition')==='w99';
-  this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode);
+  this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
   this.richMode=this.endless&&(p.get('edition')==='w97'||this.trackFirstMode);
   this.extremeCoasters=this.richMode&&p.get('coaster')==='extreme';
   setRichEndlessRoute(this.richMode);setLongCoasterProfile(this.trackFirstMode);
@@ -86,7 +90,26 @@ export class TrilogyRun{
   if(this.persistentAssets.attach('ball',this.ball,new Vec3(1.24,1.24,1.24))){
    this.ball.findByName(this.ball.name+'-visual')!.enabled=false;this.privateCount++;
   }
-  this.current=new TrilogyWorld(this.app,manifest,road,root,this.richMode,this.trackFirstMode,this.chaosMode);await this.current.prepare(this.device,true);this.current.activate();
+  if(this.spiralMode&&new URL(location.href).searchParams.get('start')==='spiral'){
+   const index=3,content=generateEndlessWorld(index,this.seed,true);
+   const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
+   const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
+   content.manifest.geometry='spiral';
+   content.manifest.spiralCoilStart=spec.coilStart;
+   content.manifest.spiralCoilEnd=spec.coilEnd;
+   this.spiralMetric=spiralMetrics(spec);
+   this.worldIndex=index;root.enabled=false;
+   this.current=new TrilogyWorld(this.app,content.manifest,generateSpiralRoad(spec),
+    undefined,this.richMode,true,false,true);
+   await this.current.prepare(this.device);this.current.activate();
+   const entry=this.current.roadPoint(content.manifest.start);
+   this.body.teleport(entry.x,entry.y+1.6,entry.z);
+   this.body.linearVelocity=new Vec3(0,0,-24);
+   this.spiralHint=12;this.spiralProgress=content.manifest.start;
+  }else{
+   this.current=new TrilogyWorld(this.app,manifest,road,root,this.richMode,this.trackFirstMode,this.chaosMode);
+   await this.current.prepare(this.device,true);this.current.activate();
+  }
   this.privateCount+=this.current.privateMeshes;this.history.push({event:'activated',world:0,at:0});this.applyTheme();this.prepareTube();
  }
  private prepareTube(){
@@ -132,7 +155,16 @@ export class TrilogyRun{
        ...p,width:p.d<start+24?taper(p.d):p.width
       }))];
      }
-     staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,this.richMode,this.trackFirstMode,this.chaosMode);
+     if(this.spiralMode&&index>=3){
+      const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
+      const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
+      stagedRoad=generateSpiralRoad(spec);
+      content.manifest.geometry='spiral';
+      content.manifest.spiralCoilStart=spec.coilStart;
+      content.manifest.spiralCoilEnd=spec.coilEnd;
+     }
+     staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,
+      this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3);
      await staged.prepare(this.device);
      if(this.trackFirstMode)
       this.fadeTo={sky:tint(content.manifest.sky),fog:tint(content.manifest.fog),
@@ -159,7 +191,10 @@ export class TrilogyRun{
  get constrained(){return this.state==='transit'||this.state==='holding';}
  update(dt:number,running:boolean,targetX:number):boolean{
   if(!running)return false;this.runTime+=dt;
-  const p=this.ball.getPosition(),progress=7-p.z;
+  const p=this.ball.getPosition();
+  if(this.spiralMode&&this.worldIndex>=3&&this.state==='world')
+   return this.updateSpiral(dt,targetX);
+  const progress=7-p.z;
   if(this.state==='world'){
    this.worldFrames[this.worldIndex]=(this.worldFrames[this.worldIndex]??0)+1;
    const picked=this.current.collect(p,this.runTime);if(picked){this.gems+=picked;this.ui.message.textContent='✦ +'+picked;this.ui.message.classList.add('show');}
@@ -216,6 +251,7 @@ export class TrilogyRun{
       lateral*(this.chaosMode?58:this.richMode?26:16),
       this.chaosMode?-1200:this.richMode?-670:-300,
       this.chaosMode?1200:this.richMode?670:300);
+    if(this.spiralMode)side=targetX*105; // No center-seeking force on Worlds 2-3.
     if(this.chaosMode&&this.worldIndex>=3){
      // Feed-forward centrifugal compensation leaves steering interactive.
      const signed=(right-2*middle+left)/Math.pow(1+t.dx*t.dx,1.5);
@@ -284,6 +320,11 @@ export class TrilogyRun{
      const exit=path.position(path.length,0),direction=path.at(path.length).tangent;
      this.body.type='dynamic';this.body.teleport(...exit);this.body.linearVelocity=new Vec3(...direction).mulScalar(this.richMode?50:26);this.body.angularVelocity=new Vec3();
      old.dispose();this.retired.push(old.snapshot());
+     if(this.spiralMode&&this.current.spiral){
+      this.spiralHint=12;this.spiralProgress=this.current.manifest.start;
+      const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
+      this.spiralMetric=spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
+     }
      if(this.retired.length>24)this.retired.shift();
      this.history.push({event:'disposed',world:this.worldIndex-1,at:this.runTime});
      if(this.history.length>180)this.history.splice(0,this.history.length-180);
@@ -297,9 +338,73 @@ export class TrilogyRun{
   }
   return true;
  }
+
+ private updateSpiral(dt:number,input:number):boolean{
+  const p=this.ball.getPosition(),v=this.body.linearVelocity;
+  const proj=this.current.project(p,this.spiralHint);
+  this.spiralHint=proj.index;this.spiralProgress=proj.d;
+  this.worldFrames[this.worldIndex]=(this.worldFrames[this.worldIndex]??0)+1;
+  const picked=this.current.collect(p,this.runTime);
+  if(picked){this.gems+=picked;this.ui.message.textContent='✦ +'+picked;this.ui.message.classList.add('show');}
+  // Progress is nearest point along the course — NEVER "7 - ball.z".
+  // A complete turn can travel toward +Z for half of its circumference.
+  if(proj.d>=this.current.manifest.end-1.5&&Math.abs(proj.lateral)<2.6&&
+   proj.surfaceGap>-1.0&&proj.surfaceGap<3.5){
+   this.entries++;this.state='transit';this.inputLocked=true;this.body.type='kinematic';
+   this.body.teleport(...this.transit!.path.position(0));
+   this.history.push({event:'transit-enter',world:this.worldIndex,at:this.runTime});
+   const t=this.transit!;
+   this.journeys.push({seed:t.seed,fingerprint:t.fingerprint,kind:t.kind,
+    fallback:t.fallback,inversions:t.validation.invertedSamples,validation:t.validation});
+   this.preload();return true;
+  }
+  const t=proj.tangent,right=proj.right;
+  const forward=v.x*t.x+v.y*t.y+v.z*t.z;
+  // Speed assistance does not set a path-heading or centerline target.
+  // In the absence of steering, the ball maintains its inertial heading;
+  // the helix MUST be navigated with swipes (or collisions with real guards).
+  const horizontal=Math.hypot(v.x,v.z),hx=horizontal>3?v.x/horizontal:t.x,
+   hz=horizontal>3?v.z/horizontal:t.z;
+  const drive=clamp((44-forward)*20,-85,240);
+  const steering=clamp(input/3.3,-1,1);
+  if(dt>0&&Math.abs(steering)>.08)this.spiralInputFrames++;
+  const lateral=steering*230;
+  this.body.applyForce(new Vec3(hx*drive+right.x*lateral,0,
+   hz*drive+right.z*lateral));
+  // Only the real deck area supplies adhesion. No invisible walls or
+  // restoring force based on lateral position. Gravity still governs falls.
+  const onDeck=Math.abs(proj.lateral)<proj.width/2+.65&&
+   proj.surfaceGap>-.7&&proj.surfaceGap<4.5;
+  if(onDeck){
+   const th=Math.hypot(t.x,t.z)||1;
+   const normal=new Vec3(-t.x*t.y/th,th,-t.z*t.y/th).normalize();
+   const gap=proj.surfaceGap-.62;
+   const speedAway=v.dot(normal);
+   const adhesion=this.body.mass*(22*.9+
+    clamp(Math.max(0,gap)*45+Math.max(0,speedAway)*25,0,140));
+   this.body.applyForce(normal.mulScalar(-adhesion));
+   this.gripFrames++;
+  }
+  this.generatedMinSpeed=Math.min(this.generatedMinSpeed,Math.max(0,forward));
+  this.generatedMaxSpeed=Math.max(this.generatedMaxSpeed,Math.max(0,forward));
+  // Falling is real: reset behind the last physical checkpoint, without
+  // auto-advancing the player to the next section or steering for them.
+  if(proj.distance>11||proj.surfaceGap< -9||p.y< -18){
+   this.falls++;this.spiralFalls++;
+   const safe=this.current.manifest.start+Math.max(4,
+    Math.floor(Math.max(0,proj.d-this.current.manifest.start-22)/105)*105);
+   const route=this.current.roadPoint(safe),direction=this.current.spiralTangent(safe);
+   this.body.teleport(route.x,route.y+1.6,route.z);
+   this.body.linearVelocity=new Vec3(direction.x,direction.y,direction.z).mulScalar(20);
+   this.body.angularVelocity=new Vec3();
+   this.spiralProgress=safe;this.spiralHint=Math.max(0,Math.floor(safe-this.current.road[0]!.d));
+  }
+  return true;
+ }
  present(dt:number,running:boolean){
   const pos=this.ball.getPosition(),v=this.body.linearVelocity;
-  let progress=7-pos.z;
+  let progress=this.spiralMode&&this.worldIndex>=3&&!this.constrained?
+   this.spiralProgress:7-pos.z;
   if(this.constrained&&this.transit){
    const path=this.transit.path,f=path.at(this.distance);
    if(this.trackFirstMode&&this.fadeFrom&&this.fadeTo){
@@ -345,7 +450,13 @@ export class TrilogyRun{
    this.ui.status.textContent=this.state==='holding'?(this.loadState==='failed'?'RECONNECTING · SAFE AT THE EXIT':'PREPARING YOUR NEXT WORLD…'):'SWIPE TO ORBIT · '+Math.round(this.distance/this.transit.path.length*100)+'%';
   }else{
    this.wasConstrained=false;this.camUp.set(0,1,0);const t=trilogyTangent(progress),height=Math.max(.62,pos.y);
-   if(this.trackFirstMode&&this.worldIndex>=3){
+   if(this.spiralMode&&this.worldIndex>=3){
+    const t3=this.current.spiralTangent(progress),look=this.current.roadPoint(progress+24);
+    const desired=new Vec3(pos.x-t3.x*19,pos.y+10,pos.z-t3.z*19);
+    this.camera.setPosition(this.camera.getPosition().clone().lerp(
+     this.camera.getPosition(),desired,1-Math.exp(-dt*5)));
+    this.camera.lookAt(look.x,look.y+2.5,look.z);
+   }else if(this.trackFirstMode&&this.worldIndex>=3){
     const look=clamp(progress+22,this.current.manifest.start,this.current.manifest.end);
     this.camera.setPosition(pos.x-t.x*11,height+8.6,pos.z-t.z*16);
     this.camera.lookAt(trilogyCenter(look),this.current.roadHeight(look)+2.2,7-look);
@@ -354,7 +465,7 @@ export class TrilogyRun{
     this.camera.lookAt(pos.x+t.x*17,height*.5,pos.z+t.z*24);
    }
    this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
-   this.ui.status.textContent=this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:this.endless?'ENDLESS WORLDS · MAGNETIC JOURNEYS':'THREE WORLDS · TWO MAGNETIC JOURNEYS';
+   this.ui.status.textContent=this.spiralMode&&this.current.spiral?'STEER TO STAY ON THE SPIRAL · NO AUTOPILOT':this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:this.endless?'ENDLESS WORLDS · MAGNETIC JOURNEYS':'THREE WORLDS · TWO MAGNETIC JOURNEYS';
   }
   if(this.lastWorld!==this.worldIndex){document.getElementById('world-flash')?.remove();const e=document.createElement('div');e.id='world-flash';e.textContent=this.current.manifest.title;document.getElementById('game')!.append(e);this.lastWorld=this.worldIndex;}
   const flash=document.getElementById('world-flash');if(flash)flash.classList.toggle('visible',running&&this.runTime<this.introUntil);
@@ -374,6 +485,9 @@ export class TrilogyRun{
   richMode:this.richMode,extremeCoasters:this.extremeCoasters,
   trackFirstMode:this.trackFirstMode,themeFade:this.themeFade,
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
+  spiralMode:this.spiralMode,spiralProgress:this.spiralProgress,
+  spiralInputFrames:this.spiralInputFrames,spiralFalls:this.spiralFalls,
+  spiralMetric:this.spiralMetric,
   edgeBounces:this.edgeBounces,maxSurfaceGap:this.maxSurfaceGap,maxCurve:this.maxCurve,
   guardBoostFrames:this.guardBoostFrames,grindBoostFrames:this.grindBoostFrames,
   guardReleases:this.guardReleases,

@@ -7,12 +7,12 @@ let richEndlessRoute=false;
 export function setRichEndlessRoute(enabled:boolean){richEndlessRoute=enabled;}
 export function richRouteEnabled(){return richEndlessRoute;}
 export type WorldId='crystal'|'candy'|'rainbow'|`endless-${number}`;
-export type RoadSample={d:number;x:number;bank:number;width:number;y:number};
+export type RoadSample={d:number;x:number;bank:number;width:number;y:number;z?:number};
 export type WorldManifest={version:1;id:WorldId;title:string;start:number;end:number;
   geometry:string;scenerySeed:number;sky:string;fog:string;water:string;
   colors:string[];trim:string;island:string;gems:number[];hazards:number[];arches:number[];
   privateModels:string[];biome?:string;tier?:number;worldNumber?:number;
-  features?:GeneratedFeatures};
+  features?:GeneratedFeatures;spiralCoilStart?:number;spiralCoilEnd?:number};
 export const WORLD_URLS=['crystal','candy','rainbow'].map(id=>'./levels/'+id+'.json');
 export const WORLD_BOUNDS=[[0,428],[590,770],[940,1160]] as const;
 const smooth=(a:number,b:number,x:number)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
