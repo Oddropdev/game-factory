@@ -174,9 +174,12 @@ export class TrilogyRun{
   if(this.jumpMode&&index>=4){
    const plan=jumpPlan(content.manifest.start),proof=validateJump(plan);
    if(!proof.valid)throw Error('W105_UNSAFE_BALLISTIC_JUMP');
+   const ramped=withLaunchJump(macro.road,plan);
+   const validated=validateMacroCourse({...macro,road:ramped});
+   if(!validated.valid)throw Error('W105_UNSAFE_RAMPED_COURSE_'+index);
    content.manifest.jumpPlan=plan;
    content.manifest.title+=' · LAUNCH GAP';
-   return withLaunchJump(macro.road,plan);
+   return ramped;
   }
   return macro.road;
  }
