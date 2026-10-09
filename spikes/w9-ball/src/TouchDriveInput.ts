@@ -3,7 +3,7 @@
 // One impulse per separate touch. Keeping a finger down supplies sustained thrust.
 // Both axes can be combined freely during the same touch.
 const clamp=(v:number)=>Math.min(1,Math.max(-1,v));
-export type TouchDriveSnapshot={active:boolean;armed:boolean;forward:number;steer:number;
+export type TouchDriveSnapshot={active:boolean;holding:boolean;armed:boolean;forward:number;steer:number;
  boosts:number;releases:number;session:number;pendingBoost:{forward:number;steer:number}|null};
 export class TouchDriveInput{
  private pointer:number|null=null;
@@ -46,7 +46,7 @@ export class TouchDriveInput{
  get throttle(){return this.forward;}
  get lateral(){return this.steer;}
  snapshot():TouchDriveSnapshot{
-  return {active:this.active,armed:this.armed,forward:this.forward,
+  return {active:this.active,holding:this.holding,armed:this.armed,forward:this.forward,
    steer:this.steer,boosts:this.boosts,releases:this.releases,
    session:this.session,pendingBoost:this.pending};
  }
