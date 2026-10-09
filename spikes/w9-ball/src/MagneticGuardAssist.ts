@@ -16,7 +16,7 @@ export function magneticAssist(args:{
  const locked=now>=cooldownUntil&&nearEdge&&!release;
  const target=side*(halfWidth-.75);
  const pull=locked?clamp((target-lateral)*16-sideSpeed*4,-50,50):0;
- const drive=locked?clamp((72-forward)*12,0,330):0;
+ const drive=locked?clamp((72-forward)*2.8,0,90):0;
  return {locked,release,nearEdge,pull,drive,
   spark:locked&&Math.abs(sideSpeed)<12};
 }
