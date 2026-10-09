@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {trackFrame,guardDownforce,surfaceContact,dot,unit,magnitude} from
+import {trackFrame,guardDownforce,surfaceContact,dot,magnitude} from
  '../../spikes/w9-ball/src/TrackSurfaceFrame';
 import {spiralSpec,generateSpiralRoad} from '../../spikes/w9-ball/src/SpiralCourse';
 const near=(a:number,b:number,eps=.000001)=>expect(Math.abs(a-b)).toBeLessThan(eps);
