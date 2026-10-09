@@ -10,7 +10,7 @@ export const smooth=(t:number)=>{
 export function jumpPlan(worldStart:number):JumpPlan{
  return {start:worldStart,rampStart:worldStart+17,gapStart:worldStart+50,
   gapEnd:worldStart+68,landingEnd:worldStart+111,
-  blendEnd:worldStart+148,rise:2.25,minSafeSpeed:43,airMeters:18};
+  blendEnd:worldStart+148,rise:2.25,minSafeSpeed:35,airMeters:18};
 }
 export function rampHeight(d:number,j:JumpPlan){
  if(d<=j.rampStart)return 0;
