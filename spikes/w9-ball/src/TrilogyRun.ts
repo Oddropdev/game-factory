@@ -367,7 +367,7 @@ export class TrilogyRun{
    hz=horizontal>3?v.z/horizontal:t.z;
   const drive=clamp((44-forward)*20,-85,240);
   const steering=clamp(input/3.3,-1,1);
-  if(Math.abs(steering)>.08)this.spiralInputFrames++;
+  if(dt>0&&Math.abs(steering)>.08)this.spiralInputFrames++;
   const lateral=steering*230;
   this.body.applyForce(new Vec3(hx*drive+right.x*lateral,0,
    hz*drive+right.z*lateral));
