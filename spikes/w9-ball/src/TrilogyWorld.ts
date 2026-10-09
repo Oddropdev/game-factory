@@ -1,5 +1,6 @@
 import {Entity,Vec3,Mat4,Quat,type AppBase,type GraphicsDevice,type StandardMaterial} from 'playcanvas';
 import {trackFrame,type V3} from './TrackSurfaceFrame';
+import {inRealGap} from './LaunchJump';
 import {WorldAssets} from './TrilogyAssets';
 import {projectSpiral,type SpiralPoint} from './SpiralCourse';
 import {buildWorldArt,coinMesh,polished} from './TrilogyArt';
@@ -49,6 +50,7 @@ export class TrilogyWorld{
   // Physical hazards sit in optional outer lanes; center route stays readable.
   const hazardAnchors:Entity[]=[];
   for(const [i,d] of m.hazards.entries()){
+   if(m.jumpPlan&&inRealGap(d,m.jumpPlan))continue;
    const side=i%3===0?-2.6:i%3===1?2.6:0;
    const e=new Entity((this.minimalist?'w98-crate-':'hazard-')+m.id+'-'+i);this.root.addChild(e);
    const point=this.spiral?this.roadPoint(d):null;
@@ -126,6 +128,7 @@ export class TrilogyWorld{
   const from=m.spiralCoilStart??m.start+110,to=m.spiralCoilEnd??m.end-160;
   for(let i=0;i<this.road.length-1;i++){
    const a=this.road[i]!,b=this.road[i+1]!;
+   if(m.jumpPlan&&inRealGap(a.d,m.jumpPlan))continue;
    const dx=b.x-a.x,dy=b.y-a.y,dz=(b.z??7-b.d)-(a.z??7-a.d);
    const length=Math.hypot(dx,dy,dz),horizontal=Math.hypot(dx,dz)||1;
    const yaw=-Math.atan2(dx,-dz)*180/Math.PI,pitch=Math.atan2(dy,horizontal)*180/Math.PI;
@@ -233,6 +236,7 @@ export class TrilogyWorld{
   hazardBodies:this.hazardBodies,guardBodies:this.guardBodies,grindTops:this.grindTops,
   grindSides:this.grindSides,boxObstacles:this.boxObstacles,minimalist:this.minimalist,
   spiral:this.spiral,stableRoad:this.stableRoad,alignedSurface:this.alignedSurface,
+  actualGap:this.manifest.jumpPlan?this.manifest.jumpPlan.airMeters:0,
   chaos:this.chaos,
   maxElevation:Math.max(...this.road.map(p=>p.y)),
   meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
