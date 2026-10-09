@@ -104,7 +104,7 @@ jobs:
       id-token: write
       contents: read
     environment:
-      name: github-pages
+      name: w9-5-mobile-preview
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Configure already-enabled GitHub Pages
