@@ -15,6 +15,8 @@ import {buildMacroCourse,validateMacroCourse} from './MacroCourse';
 import {exitVelocity,exitAfterburner} from './EntryBoost';
 import {adaptiveCamera,turnIntensity} from './AdaptiveCourseCamera';
 import {choiceWall,choiceLaneWidth,sideDecision} from './ChoiceWall';
+import {smoothRoad,roadContinuity} from './SmoothRoad';
+import {SmoothLateralDrive} from './SmoothLateralDrive';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -36,6 +38,9 @@ export class TrilogyRun{
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
  readonly macroMode:boolean;readonly directorMode:boolean;
+ readonly smoothRoadMode:boolean;
+ private lateralDrive=new SmoothLateralDrive();
+ maxSteeringAccel=0;maxRoadTurn=0;roadSmoothings=0;
  cameraWideFrames=0;cameraSteepFrames=0;maxAdaptiveFov=0;
  choiceWallHits=0;choiceWallStops=0;choiceWallDecisions=0;
  choiceSide:'left'|'right'|null=null;
@@ -67,11 +72,12 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&['w101','w102','w103','w104','w106'].includes(p.get('edition')??'');
-  this.directorMode=this.endless&&p.get('edition')==='w106';
-  this.macroMode=this.endless&&['w104','w106'].includes(p.get('edition')??'');
-  this.alignedSurfaceMode=this.endless&&['w103','w104','w106'].includes(p.get('edition')??'');
-  this.stabilizedMode=this.endless&&['w102','w103','w104','w106'].includes(p.get('edition')??'');
+  this.touchDriveMode=this.endless&&['w101','w102','w103','w104','w106','w107'].includes(p.get('edition')??'');
+  this.directorMode=this.endless&&['w106','w107'].includes(p.get('edition')??'');
+  this.smoothRoadMode=this.endless&&p.get('edition')==='w107';
+  this.macroMode=this.endless&&['w104','w106','w107'].includes(p.get('edition')??'');
+  this.alignedSurfaceMode=this.endless&&['w103','w104','w106','w107'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&['w102','w103','w104','w106','w107'].includes(p.get('edition')??'');
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -167,6 +173,13 @@ export class TrilogyRun{
   }
   const t=new Texture(this.device,{name:'original-prism-ball',mipmaps:true});t.setSource(c);return t;
  }
+ private refineRoad(road:ReturnType<typeof generateSpiralRoad>){
+  const refined=smoothRoad(road,10,2);
+  const continuity=roadContinuity(refined);
+  this.maxRoadTurn=Math.max(this.maxRoadTurn,continuity.maxTurn);
+  this.roadSmoothings++;
+  return refined;
+ }
  private prepareMacroRoad(index:number,content:ReturnType<typeof generateEndlessWorld>){
   const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
   const macro=buildMacroCourse(index,this.seed,content.manifest.start,
@@ -183,7 +196,7 @@ export class TrilogyRun{
   content.manifest.macroMotifs=macro.motifs;
   content.manifest.macroSignature=macro.signature;
   if(index>3)content.manifest.title=macro.kind.replace(/-/g,' ').toUpperCase();
-  if(this.directorMode&&index>3){
+  if(this.directorMode&&!this.smoothRoadMode&&index>3){
    const w=choiceWall(content.manifest.start,index);
    if(w){
     content.manifest.choiceWall=w;
@@ -215,8 +228,9 @@ export class TrilogyRun{
    const index=world-1,content=generateEndlessWorld(index,this.seed,true);
    const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
    const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
-   const directRoad=this.macroMode?this.prepareMacroRoad(index,content):
+   const rawRoad=this.macroMode?this.prepareMacroRoad(index,content):
     generateSpiralRoad(spec);
+   const directRoad=this.smoothRoadMode?this.refineRoad(rawRoad):rawRoad;
    if(!this.macroMode){
     content.manifest.geometry='spiral';
     content.manifest.spiralCoilStart=spec.coilStart;
@@ -225,7 +239,8 @@ export class TrilogyRun{
    this.spiralMetric=this.macroMode&&index>3?null:spiralMetrics(spec);
    this.worldIndex=index;root.enabled=false;
    this.current=new TrilogyWorld(this.app,content.manifest,directRoad,
-    undefined,this.richMode,true,false,true,this.touchDriveMode,this.alignedSurfaceMode);
+    undefined,this.richMode,true,false,true,this.touchDriveMode,this.alignedSurfaceMode,
+    this.smoothRoadMode);
    await this.current.prepare(this.device);this.current.activate();
    if(this.macroMode){this.noteMacro();this.choiceSide=null;this.wallBrakeUntil=-1;}
    const start=this.spiralSpawnProgress();
@@ -306,9 +321,11 @@ export class TrilogyRun{
        content.manifest.spiralCoilEnd=spec.coilEnd;
       }
      }
+     if(this.smoothRoadMode&&index>=3)stagedRoad=this.refineRoad(stagedRoad);
      staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,
       this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3,
-      this.touchDriveMode&&index>=3,this.alignedSurfaceMode&&index>=3);
+      this.touchDriveMode&&index>=3,this.alignedSurfaceMode&&index>=3,
+      this.smoothRoadMode&&index>=3);
      await staged.prepare(this.device);
      if(this.trackFirstMode)
       this.fadeTo={sky:tint(content.manifest.sky),fog:tint(content.manifest.fog),
@@ -490,6 +507,8 @@ export class TrilogyRun{
        this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
       }
       this.lastSpiralPosition=null;this.touchDrive.cancel();this.driveKeys.clear();
+   this.lateralDrive.reset();
+      this.lateralDrive.reset();
       const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
       this.spiralMetric=this.macroMode&&this.worldIndex>3?null:
        spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
@@ -578,7 +597,8 @@ export class TrilogyRun{
   const surface=frame?surfaceContact(frame,center,p,proj.width):null;
   if(surface)this.maxRoadClearance=Math.max(this.maxRoadClearance,Math.max(0,surface.clearance));
   const forward=v.x*t.x+v.y*t.y+v.z*t.z;
-  const side=v.x*right.x+v.z*right.z;
+  const side=frame?v.x*frame.right.x+v.y*frame.right.y+v.z*frame.right.z:
+   v.x*right.x+v.z*right.z;
   const keys=this.driveKeys;
   const keyboardThrottle=Number(keys.has('ArrowUp')||keys.has('KeyW'))-
    Number(keys.has('ArrowDown')||keys.has('KeyS'));
@@ -593,7 +613,8 @@ export class TrilogyRun{
    const f=boost.forward>=0?Math.max(0,Math.min(this.stabilizedMode?14:9,
     (this.stabilizedMode?78:58)-forward)):
     Math.max(-9,Math.min(0,-16-forward));
-   const a=clamp(boost.steer*(this.stabilizedMode?7:5.8),-7,7);
+   const a=this.smoothRoadMode?clamp(boost.steer*2.3,-2.3,2.3):
+    clamp(boost.steer*(this.stabilizedMode?7:5.8),-7,7);
    this.body.applyImpulse(new Vec3(t.x*f+right.x*a,t.y*f,
     t.z*f+right.z*a).mulScalar(this.body.mass));
   }
@@ -624,7 +645,10 @@ export class TrilogyRun{
     Math.min(0,drive):drive;
    const steerAuthority=this.stabilizedMode?23+clamp(forward*forward/30,0,78):
     19+clamp(forward*forward/43,0,53);
-   const lateral=steer*steerAuthority-clamp(side*3.2,-18,18);
+   const lateral=this.smoothRoadMode?
+    this.lateralDrive.step(dt,steer,side,forward).accel:
+    steer*steerAuthority-clamp(side*3.2,-18,18);
+   if(this.smoothRoadMode)this.maxSteeringAccel=Math.max(this.maxSteeringAccel,Math.abs(lateral));
    const axis=frame?.right??{x:right.x,y:0,z:right.z};
    this.body.applyForce(new Vec3(t.x*restrictedDrive+axis.x*lateral,
     t.y*restrictedDrive+axis.y*lateral,
@@ -758,7 +782,7 @@ export class TrilogyRun{
   if(proj.d>=this.current.manifest.end-1.5&&Math.abs(proj.lateral)<2.5&&
    proj.surfaceGap>-.8&&proj.surfaceGap<2.8&&forward>4){
    this.entries++;this.state='transit';this.inputLocked=true;
-   this.touchDrive.cancel();this.driveKeys.clear();this.body.type='kinematic';
+   this.touchDrive.cancel();this.driveKeys.clear();this.lateralDrive.reset();this.body.type='kinematic';
    this.body.teleport(...this.transit!.path.position(0));
    this.history.push({event:'transit-enter',world:this.worldIndex,at:this.runTime});
    const journey=this.transit!;
@@ -973,6 +997,8 @@ export class TrilogyRun{
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
   macroMode:this.macroMode,directorMode:this.directorMode,
+  smoothRoadMode:this.smoothRoadMode,maxSteeringAccel:this.maxSteeringAccel,
+  roadSmoothings:this.roadSmoothings,maxRoadTurn:this.maxRoadTurn,
   cameraWideFrames:this.cameraWideFrames,cameraSteepFrames:this.cameraSteepFrames,
   maxAdaptiveFov:this.maxAdaptiveFov,
   choiceWallHits:this.choiceWallHits,choiceWallStops:this.choiceWallStops,
