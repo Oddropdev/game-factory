@@ -418,7 +418,7 @@ export class TrilogyRun{
    const t=this.current.spiralTangent(this.spiralProgress);
    const dir=code==='ArrowUp'||code==='KeyW'?1:-1;
    const v=this.body.linearVelocity,forward=v.x*t.x+v.y*t.y+v.z*t.z;
-   const delta=dir>0?Math.min(9,Math.max(0,56-forward)):
+   const delta=dir>0?Math.min(this.stabilizedMode?14:9,Math.max(0,(this.stabilizedMode?78:56)-forward)):
     Math.max(-9,Math.min(0,-12-forward));
    if(delta)this.body.applyImpulse(new Vec3(t.x,t.y,t.z).mulScalar(this.body.mass*delta));
   }
@@ -459,9 +459,10 @@ export class TrilogyRun{
   if(boost){
    // Once per fresh swipe, in ANY direction. Releasing and swiping again
    // can accelerate, but impulses cannot create unbounded velocity.
-   const f=boost.forward>=0?Math.max(0,Math.min(9,58-forward)):
+   const f=boost.forward>=0?Math.max(0,Math.min(this.stabilizedMode?14:9,
+    (this.stabilizedMode?78:58)-forward)):
     Math.max(-9,Math.min(0,-16-forward));
-   const a=clamp(boost.steer*5.8,-6,6);
+   const a=clamp(boost.steer*(this.stabilizedMode?7:5.8),-7,7);
    this.body.applyImpulse(new Vec3(t.x*f+right.x*a,t.y*f,
     t.z*f+right.z*a).mulScalar(this.body.mass));
   }
@@ -471,9 +472,11 @@ export class TrilogyRun{
   if(onDeck){
    // Only the HOLD gesture drives the motor. No automatic center-seeking,
    // no implicit track-following, and no force at rest before first swipe.
-   const drive=throttle>0?Math.max(0,Math.min(throttle*16,(52-forward)*6)):
+   const drive=throttle>0?Math.max(0,Math.min(
+    throttle*(this.stabilizedMode?30:16),((this.stabilizedMode?74:52)-forward)*6)):
     throttle<0?Math.max(throttle*25,(-17-forward)*6):0;
-   const steerAuthority=19+clamp(forward*forward/43,0,53);
+   const steerAuthority=this.stabilizedMode?23+clamp(forward*forward/30,0,78):
+    19+clamp(forward*forward/43,0,53);
    const lateral=steer*steerAuthority-clamp(side*3.2,-18,18);
    this.body.applyForce(new Vec3(t.x*drive+right.x*lateral,t.y*drive,
     t.z*drive+right.z*lateral).mulScalar(this.body.mass));
@@ -484,7 +487,7 @@ export class TrilogyRun{
     Math.max(0,away)*15,0,80);
    this.body.applyForce(normal.mulScalar(-this.body.mass*grip));
    this.gripFrames++;
-   if(!this.touchDrive.holding&&keyboardThrottle===0){
+   if(!this.stabilizedMode&&!this.touchDrive.holding&&keyboardThrottle===0){
     const brake=Math.min(8,Math.abs(forward)/Math.max(dt,.016));
     this.body.applyForce(new Vec3(t.x,t.y,t.z).mulScalar(
      -Math.sign(forward)*brake*this.body.mass));
@@ -494,10 +497,46 @@ export class TrilogyRun{
      this.body.linearVelocity=new Vec3(0,v.y,0);
    }
   }
+  if(this.stabilizedMode){
+   const active=this.guardSide!==null&&this.runTime-this.guardLastContact<.22&&
+    this.runTime>=this.guardCooldown;
+   const assist=active?magneticAssist({side:this.guardSide!,lateral:proj.lateral,
+    halfWidth:proj.width/2,sideSpeed:side,forward,steer,
+    now:this.runTime,cooldownUntil:this.guardCooldown}):null;
+   if(assist?.release){
+    this.guardCooldown=this.runTime+.65;this.guardSide=null;
+    this.guardReleases++;this.current.setGuardLit(false);
+   }else if(assist?.locked&&onDeck){
+    // Real contact pulls ONLY toward the physical guard, not toward the
+    // centerline. It boosts along the actual 3D tangent while touching.
+    this.body.applyForce(new Vec3(t.x*assist.drive+right.x*assist.pull,
+     t.y*assist.drive,t.z*assist.drive+right.z*assist.pull).mulScalar(this.body.mass));
+    this.guardBoostFrames++;this.guardSpeedPeak=Math.max(this.guardSpeedPeak,forward);
+    this.guardGlowUntil=this.runTime+.18;
+   }
+  }
   // A bounded sweep-repair for missed Bullet contacts at tiny collider
   // seams. This is NOT a lateral clamp: outside the real road, it does nothing.
   const last=this.lastSpiralPosition;
-  if(onDeck&&last&&proj.surfaceGap<.46&&proj.surfaceGap>-.5&&
+  if(this.stabilizedMode&&last){
+   const oldProjection=this.current.project(last,Math.max(0,proj.index-4));
+   const deck=this.current.roadFrame(proj.d),oldDeck=this.current.roadFrame(oldProjection.d);
+   const hereY=roadSurfaceY(deck.y,deck.bank,proj.lateral);
+   const thereY=roadSurfaceY(oldDeck.y,oldDeck.bank,oldProjection.lateral);
+   if(sweptDeckCatch({previousGap:last.y-thereY,currentGap:p.y-hereY,
+    currentLateral:proj.lateral,halfWidth:proj.width/2,
+    travel:last.distance(p),verticalSpeed:v.y,
+    roadProgressJump:Math.abs(proj.d-oldProjection.d)})){
+    this.body.teleport(p.x,hereY+.69,p.z);
+    // Remove only the inward velocity normal to the actual inclined surface.
+    // Preserve tangent inertia instead of stopping the player on the slope.
+    const h=Math.hypot(t.x,t.z)||1;
+    const n=new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
+    const now=this.body.linearVelocity,into=now.dot(n);
+    if(into<0)this.body.linearVelocity=now.clone().sub(n.mulScalar(into));
+    this.clipRecoveries++;
+   }
+  }else if(onDeck&&last&&proj.surfaceGap<.46&&proj.surfaceGap>-.5&&
    last.y>=proj.y+.61&&v.y<-.5){
    this.body.teleport(p.x,proj.y+.70,p.z);
    const vv=this.body.linearVelocity;
@@ -512,7 +551,7 @@ export class TrilogyRun{
    this.safeCheckpoint=this.current.manifest.start+
     Math.floor((proj.d-this.current.manifest.start)/100)*100;
   // A fail sends the sphere BACK to a reached checkpoint, at rest.
-  if(proj.distance>11||proj.surfaceGap< -9||p.y< -20){
+  if(proj.distance>11||proj.surfaceGap<(this.stabilizedMode?-4:-9)||p.y< -20){
    this.falls++;this.spiralFalls++;
    const checkpoint=Math.max(this.current.manifest.start+5,this.safeCheckpoint);
    const node=this.current.roadPoint(checkpoint);
