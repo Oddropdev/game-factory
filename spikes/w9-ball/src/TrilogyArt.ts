@@ -2,6 +2,7 @@ import {Color,Entity,Mesh,MeshInstance,StandardMaterial,Vec3,Quat,
  type GraphicsDevice} from 'playcanvas';
 import {seededRandom} from './SeededTransit';
 import {trilogyTangent,type WorldManifest,type RoadSample} from './TrilogyManifest';
+import {trackFrame} from './TrackSurfaceFrame';
 type V=[number,number,number];
 export function tint(hex:string){return new Color(...[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255) as V);}
 export function polished(hex:string,glow=0){
@@ -61,7 +62,7 @@ const sphere=(()=>{
   if(y<12&&x<20){const a=y*21+x;i.push(a,a+1,a+21,a+1,a+22,a+21);}
  }return {p,n,i};
 })();
-export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,road:RoadSample[],minimalist=false){
+export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,road:RoadSample[],minimalist=false,alignedSurface=false){
  const biome=m.biome??m.id;
  const crystalStyle=biome==='crystal'||/Aurora|Frost|Storm/.test(biome);
  const candyStyle=biome==='candy'||/Coral|Neon|Solar/.test(biome);
@@ -71,7 +72,16 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
   gold:polished('#ffe180',.3),dark:polished(m.id==='rainbow'?'#66479d':'#897ac6')};
  const all=[...mats.road,mats.trim,mats.guard,mats.white,mats.island,mats.water,mats.leaf,mats.gold,mats.dark];
  const batch=new Batch(),rand=seededRandom(m.scenerySeed);
+ const physicalFrame=(p:RoadSample)=>{
+  const i=Math.max(1,Math.min(road.length-2,Math.round(p.d-road[0]!.d)));
+  const a=road[i-1]!,c=road[i+1]!;
+  return trackFrame({x:c.x-a.x,y:c.y-a.y,z:(c.z??7-c.d)-(a.z??7-a.d)},p.bank);
+ };
  const pose=(p:RoadSample,offset:number,y:number):V=>{
+  if(spiral&&alignedSurface){
+   const q=physicalFrame(p).position({x:p.x,y:p.y,z:p.z??7-p.d},offset,y);
+   return [q.x,q.y,q.z];
+  }
   const b=p.bank*Math.PI/180;
   if(spiral){
    const i=Math.max(1,Math.min(road.length-2,Math.round(p.d-road[0]!.d)));
@@ -93,7 +103,10 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
   const quad=(left:number,right:number,height:number,mat:StandardMaterial)=>{
    const p=[...pose(a,left,height),...pose(a,right,height),...pose(b,left,height),...pose(b,right,height)];
    const ba=a.bank*Math.PI/180,bb=b.bank*Math.PI/180;
-   const n=[-Math.sin(ba),Math.cos(ba),0,-Math.sin(ba),Math.cos(ba),0,-Math.sin(bb),Math.cos(bb),0,-Math.sin(bb),Math.cos(bb),0];
+   const an=physicalFrame(a).up,bn=physicalFrame(b).up;
+   const n=spiral&&alignedSurface?[an.x,an.y,an.z,an.x,an.y,an.z,
+     bn.x,bn.y,bn.z,bn.x,bn.y,bn.z]:
+     [-Math.sin(ba),Math.cos(ba),0,-Math.sin(ba),Math.cos(ba),0,-Math.sin(bb),Math.cos(bb),0,-Math.sin(bb),Math.cos(bb),0];
    batch.add(mat,p,n,[0,1,2,1,3,2]);trackQuads++;
   };
   const w=a.width/2;quad(-w,w,.02,roadMat);quad(-w,-w+.22,.055,mats.trim);quad(w-.22,w,.055,mats.trim);
