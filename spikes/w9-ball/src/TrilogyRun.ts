@@ -36,6 +36,7 @@ export class TrilogyRun{
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
  readonly macroMode:boolean;readonly jumpMode:boolean;
  jumpAirFrames=0;jumpLaunchFrames=0;jumpLandings=0;
+ private airborneJump=false;
  macroKind='';macroMotifs:string[]=[];macroSignature='';
  exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
@@ -473,6 +474,7 @@ export class TrilogyRun{
        this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
       }
       this.lastSpiralPosition=null;this.touchDrive.cancel();this.driveKeys.clear();
+   this.airborneJump=false;
       const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
       this.spiralMetric=this.macroMode&&this.worldIndex>3?null:
        spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
@@ -581,9 +583,19 @@ export class TrilogyRun{
     t.z*f+right.z*a).mulScalar(this.body.mass));
   }
   if(Math.abs(throttle)+Math.abs(steer)>.08)this.spiralInputFrames++;
-  const onDeck=surface?(surface.inside&&surface.clearance>-.85&&surface.clearance<3.65):
+  const jump=this.current.manifest.jumpPlan;
+  const inGap=Boolean(jump&&inRealGap(proj.d,jump));
+  const onDeck=!inGap&&(surface?(surface.inside&&surface.clearance>-.85&&surface.clearance<3.65):
    Math.abs(proj.lateral)<proj.width/2+.65&&
-   proj.surfaceGap>-.9&&proj.surfaceGap<3.4;
+   proj.surfaceGap>-.9&&proj.surfaceGap<3.4);
+  if(this.jumpMode&&jump){
+   if(proj.d>=jump.rampStart&&proj.d<jump.gapStart&&onDeck)this.jumpLaunchFrames++;
+   if(inGap){this.jumpAirFrames++;this.airborneJump=true;}
+   if(this.airborneJump&&proj.d>jump.gapEnd&&onDeck&&
+      (surface?.clearance??proj.surfaceGap)<1.4){
+    this.jumpLandings++;this.airborneJump=false;
+   }
+  }
   if(this.macroMode&&onDeck&&this.runTime<this.exitBoostUntil){
    const burst=exitAfterburner(1.05-(this.exitBoostUntil-this.runTime),forward);
    if(burst>0){
@@ -677,7 +689,8 @@ export class TrilogyRun{
   // A bounded sweep-repair for missed Bullet contacts at tiny collider
   // seams. This is NOT a lateral clamp: outside the real road, it does nothing.
   const last=this.lastSpiralPosition;
-  if(this.stabilizedMode&&last){
+  if(this.stabilizedMode&&last&&!inGap&&
+   !(jump&&inRealGap(this.current.project(last,Math.max(0,proj.index-5)).d,jump))){
    const oldProjection=this.current.project(last,Math.max(0,proj.index-4));
    const deck=this.current.roadFrame(proj.d),oldDeck=this.current.roadFrame(oldProjection.d);
    const oldTangent=this.current.spiralTangent(oldProjection.d);
