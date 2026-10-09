@@ -54,9 +54,14 @@ export class TrilogyRun{
     if(name.startsWith('w97-grind-side-'))this.grindSideContacts.add(name);
    }
   });
-  ball.collision!.on('collisionend',(e:{other:Entity})=>{
-   const name=e.other.name;this.guardContacts.delete(name);
-   this.grindTopContacts.delete(name);this.grindSideContacts.delete(name);
+  ball.collision!.on('collisionend',(e:Entity|{other?:Entity}|undefined)=>{
+   // PlayCanvas emits collisionstart with {other}, but collisionend may
+   // deliver the other Entity directly (or no payload during disposal).
+   const candidate=e as {other?:Entity;name?:string}|undefined;
+   const name=candidate?.other?.name??candidate?.name;
+   if(typeof name!=='string')return;
+   this.guardContacts.delete(name);this.grindTopContacts.delete(name);
+   this.grindSideContacts.delete(name);
   });
  }
  private makeBallTexture(){
