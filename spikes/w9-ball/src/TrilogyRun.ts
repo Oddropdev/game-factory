@@ -56,6 +56,10 @@ export class TrilogyRun{
   this.seed=p.has('seed')&&Number.isSafeInteger(requested)?requested>>>0:crypto.getRandomValues(new Uint32Array(1))[0]!;
   setChaosProfile(this.chaosMode,this.seed);
   this.runSeed=this.seed;this.body=ball.rigidbody!;this.persistentAssets=new WorldAssets(app);
+  if(this.touchDriveMode){
+   this.body.restitution=.02;this.body.friction=1.1;
+   this.body.linearDamping=.35;this.body.angularDamping=.60;
+  }
   this.ballTexture=this.makeBallTexture();this.ballMaterial.diffuseMap=this.ballTexture;
   this.ballMaterial.diffuse=tint('#ffffff');this.ballMaterial.useMetalness=true;this.ballMaterial.metalness=.48;this.ballMaterial.gloss=.93;this.ballMaterial.update();
   for(let i=0;i<18;i++){
@@ -105,7 +109,7 @@ export class TrilogyRun{
    this.spiralMetric=spiralMetrics(spec);
    this.worldIndex=index;root.enabled=false;
    this.current=new TrilogyWorld(this.app,content.manifest,generateSpiralRoad(spec),
-    undefined,this.richMode,true,false,true);
+    undefined,this.richMode,true,false,true,this.touchDriveMode);
    await this.current.prepare(this.device);this.current.activate();
    const entry=this.current.roadPoint(content.manifest.start);
    this.body.teleport(entry.x,entry.y+1.6,entry.z);
@@ -170,7 +174,8 @@ export class TrilogyRun{
       content.manifest.spiralCoilEnd=spec.coilEnd;
      }
      staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,
-      this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3);
+      this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3,
+      this.touchDriveMode&&index>=3);
      await staged.prepare(this.device);
      if(this.trackFirstMode)
       this.fadeTo={sky:tint(content.manifest.sky),fog:tint(content.manifest.fog),
