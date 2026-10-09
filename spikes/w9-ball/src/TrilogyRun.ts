@@ -97,6 +97,41 @@ export class TrilogyRun{
    this.guardContacts.delete(name);this.grindTopContacts.delete(name);
    this.grindSideContacts.delete(name);
   });
+  if(this.stabilizedMode){
+   ball.collision!.on('contact',(event:{other:Entity})=>{
+    this.trackGuardContact(event.other.name,false);
+   });
+   for(let i=0;i<10;i++){
+    const spark=new Entity('w102-magnetic-guard-spark-'+i);
+    spark.addComponent('render',{type:'sphere',material:polished(
+     i%2?'#b6ffef':'#f5fff7',2.1),castShadows:false});
+    spark.setLocalScale(.09,.09,.27);spark.enabled=false;
+    this.app.root.addChild(spark);this.guardSparks.push(spark);
+   }
+  }
+ }
+ private trackGuardContact(name:string,start:boolean){
+  const side=railContactSide(name);
+  if(side===null||this.state!=='world'||!this.current?.spiral)return;
+  if(start&&this.guardSide!==side)this.guardContactCount++;
+  this.guardSide=side;this.guardLastContact=this.runTime;
+  this.guardGlowUntil=this.runTime+.20;
+ }
+ private enableBulletCcd(){
+  if(!this.stabilizedMode||this.body.type!=='dynamic')return;
+  // Native Ammo CCD, re-applied after the engine recreates the btRigidBody
+  // during kinematic magnetic tube transitions.
+  const component=this.body as unknown as {body?:{
+   setCcdMotionThreshold?:(n:number)=>void;
+   setCcdSweptSphereRadius?:(n:number)=>void;
+  }};
+  const native=component.body;
+  if(!native||this.nativeBody===native)return;
+  if(typeof native.setCcdMotionThreshold!=='function'||
+     typeof native.setCcdSweptSphereRadius!=='function')return;
+  native.setCcdMotionThreshold(.12);
+  native.setCcdSweptSphereRadius(.52);
+  this.nativeBody=native;this.nativeCcdConfigured=true;this.ccdRefreshes++;
  }
  private makeBallTexture(){
   const c=document.createElement('canvas');c.width=256;c.height=128;const ctx=c.getContext('2d')!;
@@ -402,6 +437,7 @@ export class TrilogyRun{
   return true;
  }
  private updateTouchSpiral(dt:number):boolean{
+  this.enableBulletCcd();
   const p=this.ball.getPosition(),v=this.body.linearVelocity;
   const proj=this.current.project(p,this.spiralHint);
   this.spiralHint=proj.index;this.spiralProgress=proj.d;
@@ -659,6 +695,9 @@ export class TrilogyRun{
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
+  nativeCcdConfigured:this.nativeCcdConfigured,ccdRefreshes:this.ccdRefreshes,
+  stabilizedMode:this.stabilizedMode,guardContactCount:this.guardContactCount,
+  guardSparkFrames:this.guardSparkFrames,guardSpeedPeak:this.guardSpeedPeak,
   clipRecoveries:this.clipRecoveries,cameraHardCatches:this.cameraHardCatches,
   spiralProgress:this.spiralProgress,
   spiralInputFrames:this.spiralInputFrames,spiralFalls:this.spiralFalls,
