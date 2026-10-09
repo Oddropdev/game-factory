@@ -9,6 +9,12 @@ export const ENDLESS_STRIDE=400;
 export const ENDLESS_ROAD=220;
 export const FIRST_ENDLESS_INDEX=3;
 export const MAX_TEST_WORLDS=1000;
+// Opt-in W9.8 profile. Existing trilogy, W9.6 and W9.7 remain untouched.
+let longCoasterProfile=false;
+export function setLongCoasterProfile(enabled:boolean){longCoasterProfile=enabled;}
+export function longCoasterEnabled(){return longCoasterProfile;}
+export const W98_ROAD=520;
+export const W98_STRIDE=700;
 
 type Biome={name:string;sky:string;fog:string;water:string;island:string;
   colors:[string,string,string,string];trim:string};
@@ -28,8 +34,8 @@ const BIOMES:readonly Biome[]=[
 export function endlessBounds(index:number):[number,number]{
  if(!Number.isSafeInteger(index)||index<FIRST_ENDLESS_INDEX||index>1_000_000)
   throw Error('Invalid endless world index');
- const start=ENDLESS_START+(index-FIRST_ENDLESS_INDEX)*ENDLESS_STRIDE;
- return [start,start+ENDLESS_ROAD];
+ const start=ENDLESS_START+(index-FIRST_ENDLESS_INDEX)*(longCoasterProfile?W98_STRIDE:ENDLESS_STRIDE);
+ return [start,start+(longCoasterProfile?W98_ROAD:ENDLESS_ROAD)];
 }
 const smooth=(u:number)=>{const t=Math.max(0,Math.min(1,u));return t*t*(3-2*t);};
 const hash=(index:number,seed:number)=>(seed^Math.imul(index+1,0x9e3779b1))>>>0;
@@ -43,13 +49,22 @@ const sway=(index:number)=>7+((index*37)%9)*.6;
 // and the 180m transit gaps use smoothstep for zero derivative at both ports.
 export function endlessCenter(d:number,authoredExit:number,extreme=false):number{
  if(d<ENDLESS_START)return authoredExit+(axis(3,extreme)-authoredExit)*smooth((d-1160)/180);
- const index=FIRST_ENDLESS_INDEX+Math.floor((d-ENDLESS_START)/ENDLESS_STRIDE);
+ const stride=longCoasterProfile?W98_STRIDE:ENDLESS_STRIDE;
+ const index=FIRST_ENDLESS_INDEX+Math.floor((d-ENDLESS_START)/stride);
  const [start,end]=endlessBounds(index),local=d-start;
- if(local<=ENDLESS_ROAD){
-  const t=Math.max(0,Math.min(1,local/ENDLESS_ROAD)),envelope=Math.sin(Math.PI*t)**2;
+ if(local<=end-start){
+  const t=Math.max(0,Math.min(1,local/(end-start))),envelope=Math.sin(Math.PI*t)**2;
+  if(longCoasterProfile){
+   // The ROAD itself rides a long, bankable helical S-wave rather than
+   // staying straight between spectacular transit-only rollercoasters.
+   const turns=1.7+(index%3)*.38;
+   const swing=18+(index%4)*3;
+   return axis(index,extreme)+envelope*
+    (sway(index)*Math.sin(2*Math.PI*t)+swing*Math.sin(2*Math.PI*turns*t+index*.4));
+  }
   return axis(index,extreme)+sway(index)*envelope*Math.sin(t*Math.PI*2+(index%3)*.5);
  }
- return axis(index,extreme)+(axis(index+1,extreme)-axis(index,extreme))*smooth((d-end)/(ENDLESS_STRIDE-ENDLESS_ROAD));
+ return axis(index,extreme)+(axis(index+1,extreme)-axis(index,extreme))*smooth((d-end)/180);
 }
 function shade(hex:string,shift:number){
  const n=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
@@ -69,17 +84,26 @@ export function generateEndlessWorld(index:number,runSeed:number,rich=false):{ma
  const [start,end]=endlessBounds(index),design=worldDesign(index,runSeed);
  const rand=seededRandom(hash(index,runSeed)^0xa5a5a5a5);
  const gems:number[]=[],hazards:number[]=[],arches:number[]=[];
- const step=(end-start-28)/(15+Math.floor(rand()*6));
- for(let d=start+12;d<end-8;d+=step)gems.push(Math.round(d));
- for(let i=0;i<Math.min(12,2+design.tier);i++)hazards.push(Math.round(start+31+i*(ENDLESS_ROAD-64)/Math.min(12,2+design.tier)+(rand()-.5)*5));
- for(let i=0;i<3+index%4;i++)arches.push(Math.round(start+28+i*29));
+ const span=end-start,step=(span-35)/(longCoasterProfile?22+Math.floor(rand()*6):15+Math.floor(rand()*6));
+ for(let d=start+16;d<end-12;d+=step)gems.push(Math.round(d));
+ const obstacleCount=longCoasterProfile?Math.min(22,11+design.tier):Math.min(12,2+design.tier);
+ for(let i=0;i<obstacleCount;i++)hazards.push(Math.round(start+36+i*(span-77)/obstacleCount+(rand()-.5)*5));
+ if(!longCoasterProfile)for(let i=0;i<3+index%4;i++)arches.push(Math.round(start+28+i*29));
  const road:RoadSample[]=[];
  // Samples include overhang at both tube ports, as required by W9.5 Bullet staging.
- for(let d=start-2;d<=end+4;d++){
+ for(let d=start-(longCoasterProfile?12:2);d<=end+4;d++){
   const t=Math.max(0,Math.min(1,(d-start)/(end-start))),window=Math.sin(Math.PI*t)**2;
-  road.push({d,x:endlessCenter(d,secondCenter(700),rich),y:window*(.38+.14*Math.sin(t*Math.PI*(2+index%3))),
-   bank:window*Math.sin(t*Math.PI*(2+index%3))*(9+design.tier*.55),
-   width:10.8+Math.sin(t*Math.PI*2+index)*.7});
+  const turns=1.7+(index%3)*.38;
+  const climb=longCoasterProfile?
+   window*(24+11*Math.sin(2*Math.PI*turns*t-1.3)+3*Math.cos(2*Math.PI*t)):0;
+  const rise=window*(.38+.14*Math.sin(t*Math.PI*(2+index%3)));
+  const entrance=longCoasterProfile?Math.max(0,Math.min(1,(d-(start-12))/35)):1;
+  road.push({d,x:endlessCenter(d,secondCenter(700),rich),
+   y:longCoasterProfile?Math.max(0,climb):rise,
+   bank:longCoasterProfile?window*Math.sin(2*Math.PI*turns*t)*14:
+    window*Math.sin(t*Math.PI*(2+index%3))*(9+design.tier*.55),
+   width:longCoasterProfile?3.1+7.9*(entrance*entrance*(3-2*entrance)):
+    10.8+Math.sin(t*Math.PI*2+index)*.7});
  }
  const manifest:WorldManifest={version:1,id:`endless-${index+1}`,title:design.biome,
   start,end,geometry:'generated',scenerySeed:hash(index,runSeed),sky:design.sky,fog:design.fog,
@@ -117,8 +141,10 @@ export type GeneratedFeatures={guards:GeneratedGuard[];grinds:GeneratedGrind[]};
 export function generateWorldFeatures(index:number,start:number,end:number,seed:number):GeneratedFeatures{
  const r=seededRandom(hash(index,seed)^0x4b1d629a);
  const side=r()>.5?1 as const:-1 as const;
- const first=Math.round(start+25+14*r()),second=Math.round(Math.min(end-41,start+153+10*r()));
- const grind=Math.round(start+60+12*r());
+ const span=end-start;
+ const first=Math.round(start+30+14*r());
+ const second=Math.round(Math.min(end-41,start+(span*.66)+10*r()));
+ const grind=Math.round(start+span*.30+12*r());
  return {guards:[{start:first,end:first+32,side},{start:second,end:second+28,side:side===1?-1:1}],
   grinds:[{start:grind,end:grind+39,side:side===1?-1:1}]};
 }
