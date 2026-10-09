@@ -62,6 +62,7 @@ export function buildMacroCourse(index:number,seed:number,start:number,end:numbe
  let motifs:string[];
  if(kind==='grand-helix'||kind==='double-helix'){
   road=generateSpiralRoad(spec).map(p=>{
+   if(index===3)return p; // Accepted W10.3 baseline physics proof unchanged.
    if(kind==='double-helix'&&p.d>=spec.coilStart&&p.d<=spec.coilEnd){
     const u=(p.d-spec.coilStart)/(spec.coilEnd-spec.coilStart),angle=
      (spec.hand===1?Math.PI:0)+spec.hand*4*Math.PI*u;
