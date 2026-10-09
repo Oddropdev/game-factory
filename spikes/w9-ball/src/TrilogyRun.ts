@@ -8,6 +8,8 @@ import {buildTubeMesh,TUBE_OFFSET} from './TubeTransit';
 import {polished,tint} from './TrilogyArt';
 import {spiralSpec,generateSpiralRoad,spiralMetrics} from './SpiralCourse';
 import {TouchDriveInput} from './TouchDriveInput';
+import {magneticAssist,railContactSide,type GuardSide} from './MagneticGuardAssist';
+import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -20,16 +22,22 @@ export class TrilogyRun{
  history:Event[]=[];retired:ReturnType<TrilogyWorld['snapshot']>[]=[];
  journeys:{seed:number;fingerprint:string;kind:string;fallback:boolean;inversions:number;validation:SeededTransit['validation']}[]=[];
  private seed:number;private body:RigidBodyComponent;private loadAbort:AbortController|null=null;
- private sparkPool:Entity[]=[];private ballTexture:Texture;private camUp=new Vec3(0,1,0);
+ private sparkPool:Entity[]=[];private guardSparks:Entity[]=[];private ballTexture:Texture;private camUp=new Vec3(0,1,0);
  private persistentAssets:WorldAssets;
  private lastCameraRotation=new Quat();private wasConstrained=false;
  maxCameraTurn=0;cameraFinite=true;cameraMinClearance=Infinity;
  private inputLocked=false;private retryAt=0;private introUntil=2;private lastWorld=-1;
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
+ readonly stabilizedMode:boolean;
  readonly touchDrive=new TouchDriveInput();private driveKeys=new Set<string>();
  private lastSpiralPosition:Vec3|null=null;private safeCheckpoint=0;
  lastSpiralSpeed=0;clipRecoveries=0;cameraHardCatches=0;
+ nativeCcdConfigured=false;ccdRefreshes=0;guardSparkFrames=0;
+ guardContactCount=0;guardSpeedPeak=0;
+ private guardSide:GuardSide|null=null;private guardLastContact=-100;
+ private guardCooldown=0;private guardGlowUntil=0;
+ private nativeBody:null|object=null;
  private spiralHint=12;private spiralProgress=0;
  spiralInputFrames=0;spiralFalls=0;spiralMetric:null|ReturnType<typeof spiralMetrics>=null;
  gripFrames=0;maxSurfaceGap=0;edgeBounces=0;maxCurve=0;motifSignature='';
@@ -46,7 +54,8 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&p.get('edition')==='w101';
+  this.touchDriveMode=this.endless&&['w101','w102'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&p.get('edition')==='w102';
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -57,8 +66,9 @@ export class TrilogyRun{
   setChaosProfile(this.chaosMode,this.seed);
   this.runSeed=this.seed;this.body=ball.rigidbody!;this.persistentAssets=new WorldAssets(app);
   if(this.touchDriveMode){
-   this.body.restitution=.02;this.body.friction=1.1;
-   this.body.linearDamping=.35;this.body.angularDamping=.60;
+   this.body.restitution=.02;this.body.friction=this.stabilizedMode?.72:1.1;
+   this.body.linearDamping=this.stabilizedMode?.085:.35;
+   this.body.angularDamping=this.stabilizedMode?.36:.60;
   }
   this.ballTexture=this.makeBallTexture();this.ballMaterial.diffuseMap=this.ballTexture;
   this.ballMaterial.diffuse=tint('#ffffff');this.ballMaterial.useMetalness=true;this.ballMaterial.metalness=.48;this.ballMaterial.gloss=.93;this.ballMaterial.update();
@@ -69,6 +79,7 @@ export class TrilogyRun{
   ball.collision!.on('collisionstart',(e:{other:Entity})=>{
    if(e.other.name.startsWith('trilogy-road-'))this.worldContacts[this.worldIndex]=(this.worldContacts[this.worldIndex]??0)+1;
    const name=e.other.name;
+   if(this.stabilizedMode)this.trackGuardContact(name,true);
    if(this.richMode){
     if(name.startsWith('w97-guard-'))this.guardContacts.add(name);
     if(name.startsWith('w97-grind-top-'))this.grindTopContacts.add(name);
@@ -81,6 +92,8 @@ export class TrilogyRun{
    const candidate=e as {other?:Entity;name?:string}|undefined;
    const name=candidate?.other?.name??candidate?.name;
    if(typeof name!=='string')return;
+   if(this.stabilizedMode&&railContactSide(name)!==null&&
+      this.guardSide===railContactSide(name))this.guardLastContact=this.runTime-.30;
    this.guardContacts.delete(name);this.grindTopContacts.delete(name);
    this.grindSideContacts.delete(name);
   });
