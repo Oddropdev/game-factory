@@ -1,0 +1,53 @@
+name: W9.6 Endless Worlds and Coaster 2.0
+
+on:
+  push:
+    branches:
+      - w9-6-endless-worlds
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, unit tests, public build and 1000-world proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build:w9-5:public
+      - run: npm run check:w9-5:public
+      - name: Smoke game URL, JSON files and Ammo WASM
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/run-transit-preview.mjs --trilogy >/tmp/w96.log 2>&1 &
+          p=$!
+          trap 'kill "$p" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS 'http://127.0.0.1:4177/ball/?mode=endless&seed=17' > /dev/null && break
+            sleep 1
+          done
+          curl -fsS 'http://127.0.0.1:4177/ball/?mode=endless&seed=17' >/dev/null
+          for id in crystal candy rainbow; do
+            curl -fsS "http://127.0.0.1:4177/ball/levels/$id.json" >/dev/null
+          done
+          curl -fsSI 'http://127.0.0.1:4177/ball/ammo/ammo.wasm.wasm' >/dev/null
+      - name: Downloadable W9.6 Android preview, not public release
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-6-endless-preview
+          path: |
+            playtest-dist/ball/
+            tools/run-transit-preview.mjs
+            Start_Three_Levels.cmd
+          retention-days: 14
+          if-no-files-found: error
