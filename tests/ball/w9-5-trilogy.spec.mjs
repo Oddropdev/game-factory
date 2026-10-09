@@ -2,6 +2,13 @@ import process from 'node:process';
 import {test,expect} from '@playwright/test';
 import {writeFile,mkdir} from 'node:fs/promises';
 const read=page=>page.evaluate(()=>globalThis.__W9_BALL_TEST__?.snapshot());
+test.afterEach(async({page},info)=>{
+ if(info.status===info.expectedStatus)return;
+ const s=await read(page).catch(()=>null);
+ await info.attach('runtime-state',{body:JSON.stringify(s,null,2),contentType:'application/json'});
+ process.stdout.write('W95_FAILED_STATE '+JSON.stringify({phase:s?.phase,position:s?.position,elapsed:s?.elapsed,
+  world:s?.trilogy?.worldIndex,state:s?.trilogy?.state,load:s?.trilogy?.loadState,falls:s?.fallCount})+'\n');
+});
 async function boot(page,url='/ball/?mode=trilogy&seed=17'){
  await page.goto(url);await expect.poll(async()=>(await read(page))?.physicsLoaded,{timeout:30000}).toBe(true);
 }
@@ -20,7 +27,9 @@ test('continuous three worlds: real loads, seeds, physics, disposal and finish',
  await expect.poll(async()=>Math.abs((await read(page)).trilogy.angle)).toBeGreaterThan(.05);
  await expect.poll(async()=>(await read(page))?.trilogy.worldIndex,{timeout:60000,intervals:[150]}).toBe(2);
  await page.screenshot({path:'test-results/w95-candy.png'});
- await expect.poll(async()=>(await read(page))?.trilogy.worldIndex,{timeout:60000,intervals:[150]}).toBe(3);
+ // Includes the entire Candy course and journey B. Software CI reached
+ // 87% of that journey at 60s; retain every gameplay assertion with headroom.
+ await expect.poll(async()=>(await read(page))?.trilogy.worldIndex,{timeout:120000,intervals:[150]}).toBe(3);
  await page.screenshot({path:'test-results/w95-rainbow.png'});
  await expect.poll(async()=>(await read(page))?.phase,{timeout:60000,intervals:[200]}).toBe('complete');
  const s=await read(page),t=s.trilogy;
@@ -58,7 +67,7 @@ test('late geometry and failed manifest hold safely, then recover without losing
  candyRelease();
  await expect.poll(async()=>(await read(page))?.trilogy.worldIndex,{timeout:40000}).toBe(2);
  expect((await read(page)).trilogy.gems).toBeGreaterThanOrEqual(holdA.trilogy.gems);
- await expect.poll(async()=>(await read(page))?.trilogy.state,{timeout:60000,intervals:[300]}).toBe('holding');
+ await expect.poll(async()=>(await read(page))?.trilogy.state,{timeout:120000,intervals:[300]}).toBe('holding');
  const holdB=await read(page);expect(holdB.trilogy.worldIndex).toBe(2);expect(holdB.rigidbodyType).toBe('kinematic');
  expect(holdB.trilogy.retired).toHaveLength(1);expect(holdB.trilogy.exits).toBe(1);expect(holdB.trilogy.loadError).toContain('503');
  failRainbow=false;
