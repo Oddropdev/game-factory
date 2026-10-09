@@ -1,0 +1,60 @@
+{
+  "id": "crystal",
+  "title": "CRYSTAL SKY",
+  "start": 0,
+  "end": 428,
+  "scenerySeed": 711,
+  "sky": "#91cee9",
+  "fog": "#c4e9f2",
+  "water": "#298fbe",
+  "colors": [
+    "#32dce1",
+    "#7774ed",
+    "#c089f4",
+    "#ffadbd"
+  ],
+  "trim": "#f8f1bc",
+  "island": "#946cc1",
+  "gems": [
+    16,
+    33,
+    50,
+    67,
+    84,
+    101,
+    118,
+    135,
+    152,
+    169,
+    186,
+    203,
+    277,
+    295,
+    313,
+    331,
+    349,
+    367,
+    385,
+    403
+  ],
+  "hazards": [
+    43,
+    113,
+    198,
+    353
+  ],
+  "arches": [
+    22,
+    108,
+    206,
+    346,
+    418
+  ],
+  "privateModels": [
+    "tree",
+    "bumper",
+    "checkpoint"
+  ],
+  "version": 1,
+  "geometry": "./levels/crystal-road.json"
+}

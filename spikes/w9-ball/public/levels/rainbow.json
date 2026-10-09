@@ -1,0 +1,64 @@
+{
+  "id": "rainbow",
+  "title": "RAINBOW RUSH",
+  "start": 940,
+  "end": 1160,
+  "scenerySeed": 713,
+  "sky": "#59bbed",
+  "fog": "#b3e8ef",
+  "water": "#369cd4",
+  "colors": [
+    "#ff647c",
+    "#ffb64d",
+    "#f3e96a",
+    "#5ce1c3",
+    "#629cf3",
+    "#b695ee"
+  ],
+  "trim": "#fff2a0",
+  "island": "#71c4a3",
+  "gems": [
+    953,
+    962,
+    971,
+    980,
+    989,
+    998,
+    1007,
+    1016,
+    1025,
+    1034,
+    1043,
+    1052,
+    1061,
+    1070,
+    1079,
+    1088,
+    1097,
+    1106,
+    1115,
+    1124,
+    1133,
+    1142,
+    1151
+  ],
+  "hazards": [
+    978,
+    1023,
+    1087,
+    1130
+  ],
+  "arches": [
+    951,
+    1000,
+    1068,
+    1147
+  ],
+  "privateModels": [
+    "coin",
+    "bumper",
+    "checkpoint"
+  ],
+  "version": 1,
+  "geometry": "./levels/rainbow-road.json"
+}
