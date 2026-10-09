@@ -1,0 +1,81 @@
+name: W10.1 Touch Drive + Stable Spiral Physics
+on:
+  push:
+    branches: [w10-1-touch-drive-stable-physics]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: w10-1-touch-drive
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: All-direction gestures, physical collision and old W10 rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - name: Types, lint and all unit contracts
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Safe public PlayCanvas bundle
+        run: |
+          npm run build:w9-5:public
+          npm run check:w9-5:public
+      - run: npx playwright install --with-deps chromium
+      - name: Accepted W10 physical helix, 360 geometry and AFK regression
+        run: npx playwright test --config=playwright.w10.config.mjs
+      - name: W10.1 no-autopilot stationary swipe / hold / steer browser acceptance
+        run: npx playwright test --config=playwright.w10-1.config.mjs
+      - name: Stage safe Pages release only after both browser gates
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat >public-site/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="refresh" content="0;url=./ball/?mode=endless">
+          <title>Prism Run</title></head><body><a href="./ball/?mode=endless">Play Prism Run</a></body></html>
+          HTML
+          test -s public-site/ball/index.html
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo "Private assets prohibited";exit 1
+          fi
+      - name: Preserve test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w10-1-touch-evidence
+          path: |
+            test-results/w101-*
+            test-results/w10-*
+          retention-days: 14
+          if-no-files-found: ignore
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+  publish:
+    name: Deploy W10.1 only after green real-browser controls
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: w10-1-mobile-preview
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4
