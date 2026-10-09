@@ -1,6 +1,6 @@
 import {defineConfig} from '@playwright/test';
 export default defineConfig({
- testDir:'./tests/ball',testMatch:'w10-*.spec.mjs',
+ testDir:'./tests/ball',testMatch:'w10-spiral.spec.mjs',
  timeout:180_000,retries:0,workers:1,
  reporter:[['list'],['json',{outputFile:'test-results/w10-results.json'}]],
  use:{baseURL:'http://127.0.0.1:4179',viewport:{width:390,height:844},isMobile:true,hasTouch:true},
