@@ -12,7 +12,7 @@ export const WORLD_URLS=['crystal','candy','rainbow'].map(id=>'./levels/'+id+'.j
 export const WORLD_BOUNDS=[[0,428],[590,770],[940,1160]] as const;
 const smooth=(a:number,b:number,x:number)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
 export function trilogyCenter(d:number):number{
- if(d>1160)return endlessCenter(d,trilogyCenter(1160));
+ if(d>1164)return endlessCenter(d,trilogyCenter(1160));
  if(d<590)return longCenter(d);
  if(d<940)return secondCenter(550+(d-590)*150/180);
  const t=d-940;return secondCenter(700)+14*smooth(15,72,t)-25*smooth(83,150,t)+11*smooth(163,207,t);
