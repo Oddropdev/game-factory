@@ -11,7 +11,7 @@ export type WorldManifest={version:1;id:WorldId;title:string;start:number;end:nu
 export const WORLD_URLS=['crystal','candy','rainbow'].map(id=>'./levels/'+id+'.json');
 export const WORLD_BOUNDS=[[0,428],[590,770],[940,1160]] as const;
 const smooth=(a:number,b:number,x:number)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
-export function trilogyCenter(d:number){
+export function trilogyCenter(d:number):number{
  if(d>1160)return endlessCenter(d,trilogyCenter(1160));
  if(d<590)return longCenter(d);
  if(d<940)return secondCenter(550+(d-590)*150/180);
