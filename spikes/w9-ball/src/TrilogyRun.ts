@@ -213,7 +213,9 @@ export class TrilogyRun{
      .position({x:entry.x,y:entry.y,z:entry.z},edge,.74):null;
    this.body.teleport(aligned?.x??entry.x+edge*dir.rx,
     aligned?.y??entry.y+.74+lateralHeight,aligned?.z??entry.z+edge*dir.rz);
-   this.body.linearVelocity=new Vec3(0,0,0);
+   this.body.linearVelocity=this.macroMode&&index===3&&
+    params.get('probe')==='tube'?
+     new Vec3(dir.x,dir.y,dir.z).mulScalar(48):new Vec3();
    this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
    this.spiralProgress=start;
    this.safeCheckpoint=start;this.lastSpiralPosition=null;
@@ -503,6 +505,9 @@ export class TrilogyRun{
  }
  driveKeyUp(code:string){this.driveKeys.delete(code);}
  private spiralSpawnProgress(){
+  if(this.macroMode&&this.worldIndex===3&&
+   new URL(location.href).searchParams.get('probe')==='tube')
+   return this.current.manifest.end-7;
   return this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?
    Math.round((this.current.manifest.spiralCoilStart??this.current.manifest.start+107)+30):
    this.current.manifest.start+7;
@@ -520,7 +525,10 @@ export class TrilogyRun{
   this.body.type='dynamic';
   this.body.teleport(aligned?.x??p.x+offset*tangent.rx,
    aligned?.y??y,aligned?.z??p.z+offset*tangent.rz);
-  this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
+  this.body.linearVelocity=this.macroMode&&this.worldIndex===3&&
+   new URL(location.href).searchParams.get('probe')==='tube'?
+    new Vec3(tangent.x,tangent.y,tangent.z).mulScalar(48):new Vec3();
+  this.body.angularVelocity=new Vec3();
   this.spiralProgress=start;
   this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
   this.safeCheckpoint=start;this.lastSpiralPosition=null;
