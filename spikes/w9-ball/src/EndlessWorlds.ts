@@ -117,7 +117,7 @@ export type GeneratedFeatures={guards:GeneratedGuard[];grinds:GeneratedGrind[]};
 export function generateWorldFeatures(index:number,start:number,end:number,seed:number):GeneratedFeatures{
  const r=seededRandom(hash(index,seed)^0x4b1d629a);
  const side=r()>.5?1 as const:-1 as const;
- const first=Math.round(start+25+14*r()),second=Math.round(start+103+12*r());
+ const first=Math.round(start+25+14*r()),second=Math.round(Math.min(end-41,start+153+10*r()));
  const grind=Math.round(start+60+12*r());
  return {guards:[{start:first,end:first+32,side},{start:second,end:second+28,side:side===1?-1:1}],
   grinds:[{start:grind,end:grind+39,side:side===1?-1:1}]};
