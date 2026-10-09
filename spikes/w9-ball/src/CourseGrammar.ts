@@ -26,8 +26,10 @@ export function buildCourseGrammar(index:number,seed:number,start:number,end:num
  const total=weights.reduce((a,b)=>a+b,0),motifs:Motif[]=[];
  let d=start,last:MotifKind|null=null;
  for(let i=0;i<count;i++){
-  let kind=TYPES[Math.floor(r()*TYPES.length)]!;
-  if(kind===last)kind=TYPES[(TYPES.indexOf(kind)+1+Math.floor(r()*3))%TYPES.length]!;
+  // First four motifs are distinct by construction; later ones randomized.
+  const used=new Set(motifs.map(m=>m.kind));
+  const choices=i<4?TYPES.filter(k=>!used.has(k)):TYPES.filter(k=>k!==last);
+  const kind=choices[Math.floor(r()*choices.length)]!;
   const finish=i===count-1?end:d+(end-start)*weights[i]!/total;
   const span=finish-d;
   const amplitude=(12+r()*18)*Math.min(1,span/105);
@@ -39,6 +41,15 @@ export function buildCourseGrammar(index:number,seed:number,start:number,end:num
  const signature=motifs.map(m=>m.kind+':'+Math.round(m.amplitude*10)+':'+m.direction+
   ':'+Math.round(m.rise*10)).join('|');
  const result={motifs,signature,seed,index,start,end};
+ // Deterministic rejection/repair: continuously reduce amplitude and
+ // elevation until both lane curvature and vertical grade are traversable.
+ for(let attempt=0;attempt<12;attempt++){
+  if(validateCourseGrammar(result).valid)break;
+  for(const motif of result.motifs){motif.amplitude*=.84;motif.rise*=.92;}
+  if(attempt===11)throw Error('No validated procedural course for world '+index);
+ }
+ result.signature=result.motifs.map(m=>m.kind+':'+Math.round(m.amplitude*10)+
+  ':'+m.direction+':'+Math.round(m.rise*10)).join('|');
  if(cache.size>=8)cache.delete(cache.keys().next().value!);
  cache.set(key,result);return result;
 }
@@ -100,7 +111,7 @@ export function validateCourseGrammar(g:CourseGrammar){
  }
  const ports=Math.abs(courseAt(g,g.start).x)+Math.abs(courseAt(g,g.end).x)+
   Math.abs(courseAt(g,g.start).y)+Math.abs(courseAt(g,g.end).y);
- const valid=ports<.0001&&maxGrade<1.65&&maxCurvature<.30&&maxY<=55&&
+ const valid=ports<.0001&&maxGrade<1.15&&maxCurvature<.115&&maxY<=55&&
   maxStep<2.5&&g.motifs.length>=5&&kinds.size>=4;
  return {valid,maxGrade,maxCurvature,maxX,maxY,maxStep,
   motifKinds:kinds.size,motifCount:g.motifs.length,signature:g.signature};
