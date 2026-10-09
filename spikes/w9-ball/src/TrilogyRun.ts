@@ -321,7 +321,8 @@ export class TrilogyRun{
        content.manifest.spiralCoilEnd=spec.coilEnd;
       }
      }
-     if(this.smoothRoadMode&&index>=3)stagedRoad=this.refineRoad(stagedRoad);
+     if(this.smoothRoadMode&&index>=3)
+      stagedRoad=this.refineRoad(stagedRoad as ReturnType<typeof generateSpiralRoad>);
      staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,
       this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3,
       this.touchDriveMode&&index>=3,this.alignedSurfaceMode&&index>=3,
