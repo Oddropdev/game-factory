@@ -80,7 +80,7 @@ export class TrilogyWorld{
    if(d>=g.start)for(const sign of [-1,1]){
     // Outside flank. Naming prevents false positive side rewards.
     const off=2.9+sign*.86*g.side;
-    segment(`w97-grind-side-${i}-${d}-${sign}`,d,g.side,off*g.side,.71,.18,.65,2.35,sideMat);
+    segment(`w97-grind-side-${i}-${d}-${sign}`,d,g.side,off,.71,.18,.65,2.35,sideMat);
     this.grindSides++;
    }
   }
