@@ -1,0 +1,86 @@
+name: W9.8 Track-First Endless Rollercoaster Preview
+on:
+  push:
+    branches: [w9-8-track-first-coaster-worlds]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: w9-8-track-first
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Baseline and new 3D course with real Bullet/Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - name: Types, lint, 1000 long course contracts
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Safe PlayCanvas public build (no licensed models)
+        run: |
+          npm run build:w9-5:public
+          npm run check:w9-5:public
+      - run: npx playwright install --with-deps chromium
+      - name: W9.6 legacy 6-world no-regression browser
+        run: npx playwright test --config=playwright.w9-6.config.mjs
+      - name: W9.8 5-world 3D rollercoaster + theme fade + no scenery browser
+        run: npx playwright test --config=playwright.w9-8.config.mjs
+      - name: Prepare artifact only after both browser gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat >public-site/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="refresh" content="0;url=./ball/?mode=endless">
+          <title>Prism Run — Endless Worlds</title></head>
+          <body><a href="./ball/?mode=endless">Prism Run</a></body></html>
+          HTML
+          test -s public-site/ball/index.html
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          test -s public-site/ball/levels/rainbow.json
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo "Private models in public build";exit 1
+          fi
+      - name: Preserve test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-8-test-evidence
+          path: |
+            test-results/w98-*
+            test-results/w96-*
+          retention-days: 14
+          if-no-files-found: ignore
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+
+  publish:
+    name: Publish experimental route on GitHub Pages after both gates
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: w9-8-mobile-preview
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4
