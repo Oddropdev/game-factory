@@ -12,7 +12,8 @@ export type WorldManifest={version:1;id:WorldId;title:string;start:number;end:nu
   geometry:string;scenerySeed:number;sky:string;fog:string;water:string;
   colors:string[];trim:string;island:string;gems:number[];hazards:number[];arches:number[];
   privateModels:string[];biome?:string;tier?:number;worldNumber?:number;
-  features?:GeneratedFeatures;spiralCoilStart?:number;spiralCoilEnd?:number};
+  features?:GeneratedFeatures;spiralCoilStart?:number;spiralCoilEnd?:number;
+  macroKind?:string;macroMotifs?:string[];macroSignature?:string};
 export const WORLD_URLS=['crystal','candy','rainbow'].map(id=>'./levels/'+id+'.json');
 export const WORLD_BOUNDS=[[0,428],[590,770],[940,1160]] as const;
 const smooth=(a:number,b:number,x:number)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};

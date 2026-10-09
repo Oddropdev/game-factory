@@ -11,6 +11,8 @@ import {TouchDriveInput} from './TouchDriveInput';
 import {magneticAssist,railContactSide,type GuardSide} from './MagneticGuardAssist';
 import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
 import {trackFrame,surfaceContact,guardDownforce} from './TrackSurfaceFrame';
+import {buildMacroCourse,validateMacroCourse} from './MacroCourse';
+import {exitVelocity,exitAfterburner} from './EntryBoost';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -31,6 +33,9 @@ export class TrilogyRun{
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
+ readonly macroMode:boolean;
+ macroKind='';macroMotifs:string[]=[];macroSignature='';
+ exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
  readonly touchDrive=new TouchDriveInput();private driveKeys=new Set<string>();
  private lastSpiralPosition:Vec3|null=null;private safeCheckpoint=0;
@@ -56,9 +61,10 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&['w101','w102','w103'].includes(p.get('edition')??'');
-  this.alignedSurfaceMode=this.endless&&p.get('edition')==='w103';
-  this.stabilizedMode=this.endless&&['w102','w103'].includes(p.get('edition')??'');
+  this.touchDriveMode=this.endless&&['w101','w102','w103','w104'].includes(p.get('edition')??'');
+  this.macroMode=this.endless&&p.get('edition')==='w104';
+  this.alignedSurfaceMode=this.endless&&['w103','w104'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&['w102','w103','w104'].includes(p.get('edition')??'');
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -144,24 +150,57 @@ export class TrilogyRun{
   }
   const t=new Texture(this.device,{name:'original-prism-ball',mipmaps:true});t.setSource(c);return t;
  }
+ private prepareMacroRoad(index:number,content:ReturnType<typeof generateEndlessWorld>){
+  const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
+  const macro=buildMacroCourse(index,this.seed,content.manifest.start,
+   content.manifest.end,axis);
+  const verdict=validateMacroCourse(macro);
+  if(!verdict.valid)throw Error('W104_UNSAFE_MACRO_'+index+'_'+macro.kind+
+   '_turn_'+verdict.maxTurn.toFixed(3)+'_pitch_'+verdict.maxPitch.toFixed(3));
+  content.manifest.geometry='spiral';
+  content.manifest.spiralCoilStart=index===3?macro.spec.coilStart:
+   content.manifest.start+85;
+  content.manifest.spiralCoilEnd=index===3?macro.spec.coilEnd:
+   content.manifest.end-74;
+  content.manifest.macroKind=macro.kind;
+  content.manifest.macroMotifs=macro.motifs;
+  content.manifest.macroSignature=macro.signature;
+  if(index>3)content.manifest.title=macro.kind.replace(/-/g,' ').toUpperCase();
+  return macro.road;
+ }
+ private noteMacro(){
+  this.macroKind=this.current.manifest.macroKind??'';
+  this.macroMotifs=this.current.manifest.macroMotifs??[];
+  this.macroSignature=this.current.manifest.macroSignature??'';
+ }
  async initialize(root:Entity){
   const {manifest,road}=await fetchWorld(0);
   await this.persistentAssets.load(['ball']);
   if(this.persistentAssets.attach('ball',this.ball,new Vec3(1.24,1.24,1.24))){
    this.ball.findByName(this.ball.name+'-visual')!.enabled=false;this.privateCount++;
   }
-  if(this.spiralMode&&new URL(location.href).searchParams.get('start')==='spiral'){
-   const index=3,content=generateEndlessWorld(index,this.seed,true);
+  const params=new URL(location.href).searchParams;
+  const directMode=params.get('start');
+  if(this.spiralMode&&(directMode==='spiral'||this.macroMode&&directMode==='macro')){
+   const requested=Number(params.get('world')),world=this.macroMode&&
+    params.has('world')&&Number.isSafeInteger(requested)?
+     clamp(requested,4,100):4;
+   const index=world-1,content=generateEndlessWorld(index,this.seed,true);
    const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
    const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
-   content.manifest.geometry='spiral';
-   content.manifest.spiralCoilStart=spec.coilStart;
-   content.manifest.spiralCoilEnd=spec.coilEnd;
-   this.spiralMetric=spiralMetrics(spec);
+   const directRoad=this.macroMode?this.prepareMacroRoad(index,content):
+    generateSpiralRoad(spec);
+   if(!this.macroMode){
+    content.manifest.geometry='spiral';
+    content.manifest.spiralCoilStart=spec.coilStart;
+    content.manifest.spiralCoilEnd=spec.coilEnd;
+   }
+   this.spiralMetric=this.macroMode&&index>3?null:spiralMetrics(spec);
    this.worldIndex=index;root.enabled=false;
-   this.current=new TrilogyWorld(this.app,content.manifest,generateSpiralRoad(spec),
+   this.current=new TrilogyWorld(this.app,content.manifest,directRoad,
     undefined,this.richMode,true,false,true,this.touchDriveMode,this.alignedSurfaceMode);
    await this.current.prepare(this.device);this.current.activate();
+   if(this.macroMode)this.noteMacro();
    const start=this.spiralSpawnProgress();
    const entry=this.current.roadPoint(start);
    const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
@@ -174,7 +213,9 @@ export class TrilogyRun{
      .position({x:entry.x,y:entry.y,z:entry.z},edge,.74):null;
    this.body.teleport(aligned?.x??entry.x+edge*dir.rx,
     aligned?.y??entry.y+.74+lateralHeight,aligned?.z??entry.z+edge*dir.rz);
-   this.body.linearVelocity=new Vec3(0,0,0);
+   this.body.linearVelocity=this.macroMode&&index===3&&
+    params.get('probe')==='tube'?
+     new Vec3(dir.x,dir.y,dir.z).mulScalar(48):new Vec3();
    this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
    this.spiralProgress=start;
    this.safeCheckpoint=start;this.lastSpiralPosition=null;
@@ -229,11 +270,14 @@ export class TrilogyRun{
      }
      if(this.spiralMode&&index>=3){
       const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
-      const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
-      stagedRoad=generateSpiralRoad(spec);
-      content.manifest.geometry='spiral';
-      content.manifest.spiralCoilStart=spec.coilStart;
-      content.manifest.spiralCoilEnd=spec.coilEnd;
+      if(this.macroMode)stagedRoad=this.prepareMacroRoad(index,content);
+      else{
+       const spec=spiralSpec(index,this.seed,content.manifest.start,content.manifest.end,axis);
+       stagedRoad=generateSpiralRoad(spec);
+       content.manifest.geometry='spiral';
+       content.manifest.spiralCoilStart=spec.coilStart;
+       content.manifest.spiralCoilEnd=spec.coilEnd;
+      }
      }
      staged=new TrilogyWorld(this.app,content.manifest,stagedRoad,undefined,
       this.richMode,this.trackFirstMode,this.chaosMode,this.spiralMode&&index>=3,
@@ -396,10 +440,31 @@ export class TrilogyRun{
      if(this.spiralMode&&this.current.spiral){
       this.spiralHint=12;this.spiralProgress=this.current.manifest.start;
       this.safeCheckpoint=this.current.manifest.start;
-      if(this.touchDriveMode){this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();}
+      if(this.macroMode){
+       // Actual incoming tube momentum MUST NOT be zeroed. Resolve the
+       // outgoing road's real 3D tangent (the tube tangent may differ).
+       const m=this.current.manifest,join=m.start+4;
+       const road=this.current.roadPoint(join),dir=this.current.spiralTangent(join);
+       const bank=this.current.roadFrame(join).bank;
+       const frame=trackFrame({x:dir.x,y:dir.y,z:dir.z},bank);
+       const spawn=frame.position({x:road.x,y:road.y,z:road.z},0,.73);
+       const impulse=exitVelocity(dir,this.richMode?62:38);
+       this.body.teleport(spawn.x,spawn.y,spawn.z);
+       this.body.linearVelocity=new Vec3(impulse.x,impulse.y,impulse.z);
+       this.body.angularVelocity=new Vec3();
+       this.spiralProgress=join;
+       this.spiralHint=Math.max(0,Math.round(join-this.current.road[0]!.d));
+       this.safeCheckpoint=join;
+       this.exitBoostUntil=this.runTime+1.05;
+       this.lastExitSpeed=impulse.speed;this.exitBoostCount++;
+       this.noteMacro();
+      }else if(this.touchDriveMode){
+       this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
+      }
       this.lastSpiralPosition=null;this.touchDrive.cancel();this.driveKeys.clear();
       const m=this.current.manifest,axis=this.current.roadPoint(m.start).x;
-      this.spiralMetric=spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
+      this.spiralMetric=this.macroMode&&this.worldIndex>3?null:
+       spiralMetrics(spiralSpec(this.worldIndex,this.seed,m.start,m.end,axis));
      }
      if(this.retired.length>24)this.retired.shift();
      this.history.push({event:'disposed',world:this.worldIndex-1,at:this.runTime});
@@ -440,6 +505,9 @@ export class TrilogyRun{
  }
  driveKeyUp(code:string){this.driveKeys.delete(code);}
  private spiralSpawnProgress(){
+  if(this.macroMode&&this.worldIndex===3&&
+   new URL(location.href).searchParams.get('probe')==='tube')
+   return this.current.manifest.end-7;
   return this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?
    Math.round((this.current.manifest.spiralCoilStart??this.current.manifest.start+107)+30):
    this.current.manifest.start+7;
@@ -457,7 +525,10 @@ export class TrilogyRun{
   this.body.type='dynamic';
   this.body.teleport(aligned?.x??p.x+offset*tangent.rx,
    aligned?.y??y,aligned?.z??p.z+offset*tangent.rz);
-  this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
+  this.body.linearVelocity=this.macroMode&&this.worldIndex===3&&
+   new URL(location.href).searchParams.get('probe')==='tube'?
+    new Vec3(tangent.x,tangent.y,tangent.z).mulScalar(48):new Vec3();
+  this.body.angularVelocity=new Vec3();
   this.spiralProgress=start;
   this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
   this.safeCheckpoint=start;this.lastSpiralPosition=null;
@@ -502,6 +573,14 @@ export class TrilogyRun{
   const onDeck=surface?(surface.inside&&surface.clearance>-.85&&surface.clearance<3.65):
    Math.abs(proj.lateral)<proj.width/2+.65&&
    proj.surfaceGap>-.9&&proj.surfaceGap<3.4;
+  if(this.macroMode&&onDeck&&this.runTime<this.exitBoostUntil){
+   const burst=exitAfterburner(1.05-(this.exitBoostUntil-this.runTime),forward);
+   if(burst>0){
+    this.body.applyForce(new Vec3(t.x,t.y,t.z)
+     .mulScalar(this.body.mass*burst));
+    this.exitBoostFrames++;
+   }
+  }
   if(onDeck){
    // Only the HOLD gesture drives the motor. No automatic center-seeking,
    // no implicit track-following, and no force at rest before first swipe.
@@ -833,6 +912,10 @@ export class TrilogyRun{
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
+  macroMode:this.macroMode,macroKind:this.macroKind,macroMotifs:this.macroMotifs,
+  macroSignature:this.macroSignature,
+  exitBoostCount:this.exitBoostCount,lastExitSpeed:this.lastExitSpeed,
+  exitBoostFrames:this.exitBoostFrames,exitBoostActive:this.runTime<this.exitBoostUntil,
   nativeCcdConfigured:this.nativeCcdConfigured,ccdRefreshes:this.ccdRefreshes,
   stabilizedMode:this.stabilizedMode,alignedSurfaceMode:this.alignedSurfaceMode,
   guardDownforceFrames:this.guardDownforceFrames,guardLiftDamped:this.guardLiftDamped,
