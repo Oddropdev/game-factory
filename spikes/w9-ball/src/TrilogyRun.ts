@@ -1,4 +1,4 @@
-import {Entity,Vec3,Quat,Texture,Color,type AppBase,type GraphicsDevice,type RigidBodyComponent,type StandardMaterial} from 'playcanvas';
+import {Entity,Vec3,Quat,Texture,Color,type AppBase,type GraphicsDevice,type RigidBodyComponent,type RigidBodyComponentSystem,type StandardMaterial} from 'playcanvas';
 import {WorldAssets} from './TrilogyAssets';
 import {TrilogyWorld,fetchWorld} from './TrilogyWorld';
 import {WORLD_BOUNDS,trilogyCenter,trilogyTangent,setRichEndlessRoute} from './TrilogyManifest';
@@ -113,7 +113,7 @@ export class TrilogyRun{
  private trackGuardContact(name:string,start:boolean){
   const side=railContactSide(name);
   if(side===null||this.state!=='world'||!this.current?.spiral)return;
-  if(start&&this.guardSide!==side)this.guardContactCount++;
+  if(start||this.guardSide!==side||this.runTime-this.guardLastContact>.3)this.guardContactCount++;
   this.guardSide=side;this.guardLastContact=this.runTime;
   this.guardGlowUntil=this.runTime+.20;
  }
@@ -513,6 +513,20 @@ export class TrilogyRun{
        Math.abs(t.y)<.03&&keyboardSide===0)
      this.body.linearVelocity=new Vec3(0,v.y,0);
    }
+  }
+  if(this.stabilizedMode&&onDeck&&
+    Math.abs(proj.lateral)>proj.width/2-2.4){
+   // A short ray may reach a REAL Bullet guard before collisionstart fires;
+   // this restores the desirable slight rail attraction, but never creates
+   // a fictional wall in sections without a static green guard collider.
+   const direction=proj.lateral<0?-1 as const:1 as const;
+   const from=new Vec3(p.x,p.y+.10,p.z);
+   const to=new Vec3(p.x+right.x*direction*2.4,p.y+.10,
+    p.z+right.z*direction*2.4);
+   const physics=this.app.systems.rigidbody as RigidBodyComponentSystem;
+   const guard=physics.raycastAll(from,to).find(hit=>
+    railContactSide(hit.entity.name)===direction);
+   if(guard)this.trackGuardContact(guard.entity.name,false);
   }
   if(this.stabilizedMode){
    const active=this.guardSide!==null&&this.runTime-this.guardLastContact<.22&&
