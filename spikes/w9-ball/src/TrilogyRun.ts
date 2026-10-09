@@ -159,11 +159,19 @@ export class TrilogyRun{
    this.current=new TrilogyWorld(this.app,content.manifest,generateSpiralRoad(spec),
     undefined,this.richMode,true,false,true,this.touchDriveMode);
    await this.current.prepare(this.device);this.current.activate();
-   const entry=this.current.roadPoint(content.manifest.start);
-   this.body.teleport(entry.x,entry.y+1.6,entry.z);
+   const start=this.spiralSpawnProgress();
+   const entry=this.current.roadPoint(start);
+   const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
+   const dir=this.current.spiralTangent(start);
+   const bank=this.current.roadFrame(start).bank;
+   const edge=side*(entry.width/2-.58);
+   const lateralHeight=Math.sin(bank*Math.PI/180)*edge;
+   this.body.teleport(entry.x+edge*dir.rx,entry.y+.74+lateralHeight,
+    entry.z+edge*dir.rz);
    this.body.linearVelocity=new Vec3(0,0,0);
-   this.spiralHint=12;this.spiralProgress=content.manifest.start;
-   this.safeCheckpoint=content.manifest.start;this.lastSpiralPosition=null;
+   this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
+   this.spiralProgress=start;
+   this.safeCheckpoint=start;this.lastSpiralPosition=null;
   }else{
    this.current=new TrilogyWorld(this.app,manifest,road,root,this.richMode,this.trackFirstMode,this.chaosMode);
    await this.current.prepare(this.device,true);this.current.activate();
@@ -425,11 +433,20 @@ export class TrilogyRun{
   this.driveKeys.add(code);
  }
  driveKeyUp(code:string){this.driveKeys.delete(code);}
+ private spiralSpawnProgress(){
+  return this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?
+   Math.round((this.current.manifest.spiralCoilStart??this.current.manifest.start+107)+30):
+   this.current.manifest.start+7;
+ }
  resetSpiralSpawn(){
   if(!this.touchDriveMode||!this.current.spiral)return false;
   this.touchDrive.cancel();this.driveKeys.clear();
-  const start=this.current.manifest.start+7,p=this.current.roadPoint(start);
-  this.body.type='dynamic';this.body.teleport(p.x,p.y+.70,p.z);
+  const start=this.spiralSpawnProgress(),p=this.current.roadPoint(start);
+  const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
+  const tangent=this.current.spiralTangent(start),bank=this.current.roadFrame(start).bank;
+  const offset=side*(p.width/2-.58),y=p.y+.74+offset*Math.sin(bank*Math.PI/180);
+  this.body.type='dynamic';
+  this.body.teleport(p.x+offset*tangent.rx,y,p.z+offset*tangent.rz);
   this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
   this.spiralProgress=start;
   this.spiralHint=Math.max(0,Math.round(start-this.current.road[0]!.d));
