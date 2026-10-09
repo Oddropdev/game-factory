@@ -593,11 +593,12 @@ export class TrilogyRun{
    proj.surfaceGap>-.9&&proj.surfaceGap<3.4);
   if(this.jumpMode&&jump){
    if(proj.d>=jump.rampStart&&proj.d<jump.gapStart&&onDeck)this.jumpLaunchFrames++;
-   if(!this.takeoffDone&&onDeck&&proj.d>=jump.gapStart-2.5&&
-     proj.d<jump.gapStart&&forward>=jump.minSafeSpeed){
+   if(!this.takeoffDone&&proj.d>=jump.gapStart-8&&
+     proj.d<jump.gapStart+2.5&&forward>=jump.minSafeSpeed&&
+     (onDeck||inGap)){
     // Ballistic release from a real uphill lip; a single bounded physics
     // impulse, never kinematic flight or an invisible supported gap.
-    const lift=clamp(8.5-v.y,0,10);
+    const lift=clamp(10.5-v.y,0,12);
     if(lift>0)this.body.applyImpulse(new Vec3(0,this.body.mass*lift,0));
     this.takeoffDone=true;this.jumpTakeoffs++;
    }
