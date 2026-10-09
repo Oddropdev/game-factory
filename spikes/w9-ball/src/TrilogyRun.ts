@@ -901,7 +901,7 @@ export class TrilogyRun{
     this.camera.setRotation(previous.slerp(previous,desiredRotation,1-Math.exp(-dt*9)));
     this.camera.camera!.fov=dynamic.fov;
     this.maxAdaptiveFov=Math.max(this.maxAdaptiveFov,dynamic.fov);
-    if(dynamic.fov>=80)this.cameraWideFrames++;
+    if(dynamic.fov>=76)this.cameraWideFrames++;
     if(Math.abs(d.y)>.20)this.cameraSteepFrames++;
    }else if(this.touchDriveMode&&this.worldIndex>=3){
     const d=this.current.spiralTangent(progress);
