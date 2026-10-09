@@ -13,6 +13,7 @@ export function spiralSpec(index:number,seed:number,start:number,end:number,axis
 }
 export function spiralPosition(s:SpiralSpec,d:number):SpiralPoint{
  const {start,end,axis,coilStart,coilEnd,hand,radius,rise}=s;
+ if(d>end)return {d,x:axis,y:0,z:7-d,bank:0,width:10.8};
  if(d<=coilStart){const w=smooth((d-start+12)/36);
   return {d,x:axis,y:0,z:7-d,bank:0,width:3.1+7.7*w};}
  if(d<=coilEnd){
