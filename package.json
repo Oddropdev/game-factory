@@ -39,7 +39,10 @@
     "assets:w9-4:physics": "node tools/fetch-w9-4-ammo.mjs",
     "typecheck:w9-4:ball": "tsc --project spikes/w9-ball/tsconfig.json --noEmit",
     "build:w9-4:ball": "npm run typecheck:w9-4:ball && npm run assets:w9-4:physics && vite build --config spikes/w9-ball/vite.config.ts",
-    "test:w9-4:ball": "playwright test --config=playwright.w9-4.config.mjs"
+    "test:w9-4:ball": "playwright test --config=playwright.w9-4.config.mjs",
+    "build:w9-5:public": "node tools/build-trilogy-preview.mjs",
+    "test:w9-5": "playwright test --config=playwright.w9-5.config.mjs",
+    "check:w9-5:public": "node tools/check-trilogy-public.mjs"
   },
   "dependencies": {
     "littlejsengine": "1.25.0",

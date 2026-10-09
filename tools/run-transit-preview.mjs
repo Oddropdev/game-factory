@@ -7,7 +7,7 @@ import process from 'node:process';
 import {spawn} from 'node:child_process';
 const root=resolve(fileURLToPath(new URL('../playtest-dist/ball/',import.meta.url)));
 const port=4177;
-const defaultMode=process.argv.includes('--twolevel')?'twolevel':'transit';
+const defaultMode=process.argv.includes('--trilogy')?'trilogy':process.argv.includes('--twolevel')?'twolevel':'transit';
 const mime={'.html':'text/html; charset=utf-8',
   '.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8',
   '.wasm':'application/wasm','.json':'application/json',
@@ -36,7 +36,7 @@ createServer(async(req,res)=>{
   }
 }).listen(port,'127.0.0.1',()=>{
   const url=`http://127.0.0.1:${port}/ball/?mode=${defaultMode}`;
-  process.stdout.write(`W9.4-7 Magnetic Tube preview: ${url}\nPress Ctrl+C to stop.\n`);
+  process.stdout.write(`Ball Runner preview: ${url}\nPress Ctrl+C to stop.\n`);
   if(process.platform==='win32'){
     const child=spawn('cmd.exe',['/c','start','',url],
       {stdio:'ignore',detached:true});

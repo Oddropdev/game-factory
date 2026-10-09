@@ -1,0 +1,49 @@
+name: W9.5 Three Worlds Preview
+on:
+  pull_request:
+    paths:
+      - 'spikes/w9-ball/**'
+      - 'tests/**/w9-5-*'
+      - 'tools/*trilogy*'
+      - 'tools/run-transit-preview.mjs'
+      - 'Start_Three_Levels.cmd'
+      - 'playwright.w9-5.config.mjs'
+      - '.github/workflows/w9-5-trilogy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trilogy:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'w9-5-three-worlds-visual'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Type, geometry, manifest and legacy contracts
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+          npm run build:w9-5:public
+      - name: Real continuous trilogy, delayed content and legacy gameplay
+        run: npm run test:w9-5
+      - name: Verify the public preview contains no paid source files
+        run: npm run check:w9-5:public
+      - name: Windows playable preview and essential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-5-three-worlds-owner-preview
+          path: |
+            Start_Three_Levels.cmd
+            tools/run-transit-preview.mjs
+            playtest-dist/ball/
+            test-results/
+            docs/W9.5_HANDOFF.md
+            docs/W9.5_OWNER_PREVIEW.md
+          if-no-files-found: error
+          retention-days: 14
