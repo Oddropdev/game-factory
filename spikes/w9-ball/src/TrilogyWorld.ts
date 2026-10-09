@@ -1,6 +1,6 @@
 import {Entity,Vec3,type AppBase,type GraphicsDevice,type StandardMaterial} from 'playcanvas';
 import {WorldAssets} from './TrilogyAssets';
-import {buildWorldArt,coinMesh} from './TrilogyArt';
+import {buildWorldArt,coinMesh,polished} from './TrilogyArt';
 import {parseWorld,parseRoad,WORLD_URLS,trilogyCenter,trilogyTangent,
  type RoadSample,type WorldManifest} from './TrilogyManifest';
 export type Gem={node:Entity;collected:boolean;d:number};
@@ -25,7 +25,10 @@ export class TrilogyWorld{
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(p.width/2,.30,1.2)});
    e.addComponent('rigidbody',{type:'static',friction:.85,restitution:0});this.roadBodies++;
   }
-  if(this.rich&&m.features)this.prepareRails(m,art.mats.road[1]!,art.mats.trim,art.mats.dark);
+  if(this.rich&&m.features){
+   const guard=polished('#43e69b',.8),grind=polished('#4aabf9',.8),side=polished('#32557d',.1);
+   this.materials.push(guard,grind,side);this.prepareRails(m,guard,grind,side);
+  }
   for(const [i,d] of m.gems.entries()){
    const e=new Entity('trilogy-gem-'+i);this.root.addChild(e);e.setPosition(trilogyCenter(d),1.25,7-d);
    e.addComponent('render',{meshInstances:[coinMesh(device,art.mats.gold)],castShadows:true});
