@@ -1,0 +1,32 @@
+import {test,expect} from '@playwright/test';
+import {mkdir,writeFile} from 'node:fs/promises';
+const snap=page=>page.evaluate(()=>globalThis.__W9_BALL_TEST__?.snapshot());
+test('physical W10 world4 is a real 360 course, with no center-seeking AFK assist',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+ await page.goto('/ball/?mode=endless&edition=w10&coaster=extreme&seed=17&start=spiral');
+ await expect.poll(async()=>(await snap(page))?.physicsLoaded,{timeout:30000}).toBe(true);
+ let s=await snap(page);
+ expect(s.trilogy.spiralMode).toBe(true);
+ expect(s.trilogy.worldIndex).toBe(4);
+ expect(s.trilogy.spiralMetric.rotationDegrees).toBe(360);
+ expect(s.trilogy.active.guardBodies).toBeGreaterThan(100);
+ expect(s.trilogy.active.islands).toBe(0);
+ expect(s.trilogy.active.roadBodies).toBeGreaterThan(450);
+ await page.locator('#start').click();
+ await page.waitForTimeout(14000);
+ s=await snap(page);
+ // No real user steering: do not magically complete the full spiral.
+ expect(s.trilogy.worldIndex).toBe(4);
+ expect(s.trilogy.spiralInputFrames).toBe(0);
+ expect(s.trilogy.entries).toBe(0);
+ expect(s.trilogy.spiralMode).toBe(true);
+ await page.screenshot({path:'test-results/w10-true-helix.png'});
+ await page.mouse.move(260,430);await page.mouse.down();
+ await page.mouse.move(340,435,{steps:10});
+ await page.waitForTimeout(1000);await page.mouse.up();
+ s=await snap(page);
+ expect(s.trilogy.spiralInputFrames).toBeGreaterThan(0);
+ expect(errors).toEqual([]);
+ await mkdir('test-results',{recursive:true});
+ await writeFile('test-results/w10-real-world-evidence.json',JSON.stringify({s,errors},null,2));
+});
