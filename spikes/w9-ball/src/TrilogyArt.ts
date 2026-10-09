@@ -3,6 +3,7 @@ import {Color,Entity,Mesh,MeshInstance,StandardMaterial,Vec3,Quat,
 import {seededRandom} from './SeededTransit';
 import {trilogyTangent,type WorldManifest,type RoadSample} from './TrilogyManifest';
 import {trackFrame} from './TrackSurfaceFrame';
+import {inRealGap} from './LaunchJump';
 type V=[number,number,number];
 export function tint(hex:string){return new Color(...[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255) as V);}
 export function polished(hex:string,glow=0){
@@ -97,6 +98,7 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
  let trackQuads=0;
  for(let i=0;i<road.length-1;i++){
   const a=road[i]!,b=road[i+1]!;
+  if(m.jumpPlan&&inRealGap(a.d,m.jumpPlan))continue; // Actual visible OPEN GAP.
   if(m.id==='crystal'&&((a.d>=231&&a.d<330)||(a.d>=196&&a.d<219)))continue;
   const band=Math.floor((a.d-m.start)/(m.id==='rainbow'?5:m.id==='crystal'?9:22));
   const roadMat=mats.road[((band%mats.road.length)+mats.road.length)%mats.road.length]!;
