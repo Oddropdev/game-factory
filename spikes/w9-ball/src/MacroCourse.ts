@@ -117,7 +117,7 @@ export function validateMacroCourse(c:MacroCourse){
   last.x-spec.axis,last.y,last.z!-(7-end));
  const distinct=rangeX[1]!-rangeX[0]!;
  const valid=Number.isFinite(length)&&ports<.001&&road.length===537&&
-  maxTurn<.30&&maxPitch<1.1&&maxStep<8&&minGap>.02&&
+  maxTurn<.20&&maxPitch<1.24&&maxStep<8&&minGap>.02&&
   length>500&&peak>26&&distinct>15&&c.motifs.length>=3;
  return {valid,ports,length,maxTurn,maxPitch,maxStep,minGap,reverseZ,
   peak,spanX:distinct,kind:c.kind,motifs:c.motifs,signature:c.signature};
