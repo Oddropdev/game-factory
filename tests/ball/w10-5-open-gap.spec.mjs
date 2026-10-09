@@ -26,13 +26,13 @@ test('actual 18m open-air road gap with ballistic uphill launch and physical lan
    {timeout:12000,intervals:[250]}).toBeGreaterThan(0);
  }catch(error){
   const fail=await snap(page);
-  console.log('W105_LANDING_DIAGNOSTICS',JSON.stringify({
+  throw new Error('W105_LANDING_DIAGNOSTICS '+JSON.stringify({
    position:fail.position,velocity:fail.linearVelocity,
    progress:fail.trilogy.spiralProgress,
    falls:fail.trilogy.falls,takeoffs:fail.trilogy.jumpTakeoffs,
    air:fail.trilogy.jumpAirFrames,landing:fail.trilogy.jumpLandings,
-   active:fail.trilogy.active?.actualGap,world:fail.trilogy.worldIndex}));
-  throw error;
+   active:fail.trilogy.active?.actualGap,world:fail.trilogy.worldIndex})+
+   ' ORIGINAL '+String(error));
  }
  s=await snap(page);
  expect(s.trilogy.jumpTakeoffs).toBeGreaterThan(0);
