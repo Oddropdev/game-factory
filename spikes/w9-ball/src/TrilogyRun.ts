@@ -13,6 +13,8 @@ import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
 import {trackFrame,surfaceContact,guardDownforce} from './TrackSurfaceFrame';
 import {buildMacroCourse,validateMacroCourse} from './MacroCourse';
 import {exitVelocity,exitAfterburner} from './EntryBoost';
+import {adaptiveCamera,turnIntensity} from './AdaptiveCourseCamera';
+import {choiceWall,choiceLaneWidth,sideDecision} from './ChoiceWall';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -33,7 +35,11 @@ export class TrilogyRun{
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
- readonly macroMode:boolean;
+ readonly macroMode:boolean;readonly directorMode:boolean;
+ cameraWideFrames=0;cameraSteepFrames=0;maxAdaptiveFov=0;
+ choiceWallHits=0;choiceWallStops=0;choiceWallDecisions=0;
+ choiceSide:'left'|'right'|null=null;
+ private wallBrakeUntil=-1;private wallLastHit=-99;
  macroKind='';macroMotifs:string[]=[];macroSignature='';
  exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
@@ -61,10 +67,11 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&['w101','w102','w103','w104'].includes(p.get('edition')??'');
-  this.macroMode=this.endless&&p.get('edition')==='w104';
-  this.alignedSurfaceMode=this.endless&&['w103','w104'].includes(p.get('edition')??'');
-  this.stabilizedMode=this.endless&&['w102','w103','w104'].includes(p.get('edition')??'');
+  this.touchDriveMode=this.endless&&['w101','w102','w103','w104','w106'].includes(p.get('edition')??'');
+  this.directorMode=this.endless&&p.get('edition')==='w106';
+  this.macroMode=this.endless&&['w104','w106'].includes(p.get('edition')??'');
+  this.alignedSurfaceMode=this.endless&&['w103','w104','w106'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&['w102','w103','w104','w106'].includes(p.get('edition')??'');
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -153,7 +160,7 @@ export class TrilogyRun{
  private prepareMacroRoad(index:number,content:ReturnType<typeof generateEndlessWorld>){
   const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
   const macro=buildMacroCourse(index,this.seed,content.manifest.start,
-   content.manifest.end,axis);
+   content.manifest.end,axis,this.directorMode?'extreme':'classic');
   const verdict=validateMacroCourse(macro);
   if(!verdict.valid)throw Error('W104_UNSAFE_MACRO_'+index+'_'+macro.kind+
    '_turn_'+verdict.maxTurn.toFixed(3)+'_pitch_'+verdict.maxPitch.toFixed(3));
@@ -166,6 +173,16 @@ export class TrilogyRun{
   content.manifest.macroMotifs=macro.motifs;
   content.manifest.macroSignature=macro.signature;
   if(index>3)content.manifest.title=macro.kind.replace(/-/g,' ').toUpperCase();
+  if(this.directorMode&&index>3){
+   const w=choiceWall(content.manifest.start,index);
+   if(w){
+    content.manifest.choiceWall=w;
+    content.manifest.title+=' · CHOOSE YOUR WAY';
+    // Widen the ACTUAL visual and physical deck into two open side lanes,
+    // then smoothly return it to normal width after the obstacle.
+    return macro.road.map(p=>({...p,width:choiceLaneWidth(p.d,w,p.width)}));
+   }
+  }
   return macro.road;
  }
  private noteMacro(){
@@ -200,7 +217,7 @@ export class TrilogyRun{
    this.current=new TrilogyWorld(this.app,content.manifest,directRoad,
     undefined,this.richMode,true,false,true,this.touchDriveMode,this.alignedSurfaceMode);
    await this.current.prepare(this.device);this.current.activate();
-   if(this.macroMode)this.noteMacro();
+   if(this.macroMode){this.noteMacro();this.choiceSide=null;this.wallBrakeUntil=-1;}
    const start=this.spiralSpawnProgress();
    const entry=this.current.roadPoint(start);
    const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
@@ -458,6 +475,7 @@ export class TrilogyRun{
        this.exitBoostUntil=this.runTime+1.05;
        this.lastExitSpeed=impulse.speed;this.exitBoostCount++;
        this.noteMacro();
+       this.choiceSide=null;this.wallBrakeUntil=-1;
       }else if(this.touchDriveMode){
        this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
       }
@@ -708,7 +726,8 @@ export class TrilogyRun{
    this.safeCheckpoint=this.current.manifest.start+
     Math.floor((proj.d-this.current.manifest.start)/100)*100;
   // A fail sends the sphere BACK to a reached checkpoint, at rest.
-  if(proj.distance>11||proj.surfaceGap<(this.stabilizedMode?-4:-9)||p.y< -20){
+  if(proj.distance>11||proj.surfaceGap<(this.stabilizedMode?-4:-9)||
+     (!this.directorMode&&p.y< -20)){
    this.falls++;this.spiralFalls++;
    const checkpoint=Math.max(this.current.manifest.start+5,this.safeCheckpoint);
    const node=this.current.roadPoint(checkpoint);
@@ -912,7 +931,12 @@ export class TrilogyRun{
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
-  macroMode:this.macroMode,macroKind:this.macroKind,macroMotifs:this.macroMotifs,
+  macroMode:this.macroMode,directorMode:this.directorMode,
+  cameraWideFrames:this.cameraWideFrames,cameraSteepFrames:this.cameraSteepFrames,
+  maxAdaptiveFov:this.maxAdaptiveFov,
+  choiceWallHits:this.choiceWallHits,choiceWallStops:this.choiceWallStops,
+  choiceWallDecisions:this.choiceWallDecisions,choiceSide:this.choiceSide,
+  macroKind:this.macroKind,macroMotifs:this.macroMotifs,
   macroSignature:this.macroSignature,
   exitBoostCount:this.exitBoostCount,lastExitSpeed:this.lastExitSpeed,
   exitBoostFrames:this.exitBoostFrames,exitBoostActive:this.runTime<this.exitBoostUntil,
