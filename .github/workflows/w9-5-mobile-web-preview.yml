@@ -1,0 +1,115 @@
+name: W9.5 Mobile Web Preview
+
+on:
+  push:
+    branches:
+      - w9-5-mobile-web-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: w9-5-mobile-web-preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and verify public mobile preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout isolated W9.5 branch
+        uses: actions/checkout@v4
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck, lint and build unlicensed trilogy
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build:w9-5:public
+          npm run check:w9-5:public
+      - name: Verify real HTTP routes for trilogy and physics assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/run-transit-preview.mjs --trilogy >/tmp/w95-web-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent 'http://127.0.0.1:4177/ball/?mode=trilogy' >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error 'http://127.0.0.1:4177/ball/?mode=trilogy' --output /dev/null
+          for world in crystal candy rainbow; do
+            curl --fail --silent --show-error "http://127.0.0.1:4177/ball/levels/$world.json" | grep -q "\"$world\""
+          done
+          curl --fail --silent --show-error --head 'http://127.0.0.1:4177/ball/ammo/ammo.wasm.wasm' >/dev/null
+      - name: Assemble project-subpath-safe Pages site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat >public-site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta http-equiv="refresh" content="0; url=./ball/?mode=trilogy">
+            <title>Ball Runner — Three Worlds Preview</title>
+          </head>
+          <body>
+            <p><a href="./ball/?mode=trilogy">Play Ball Runner — Three Worlds</a></p>
+          </body>
+          </html>
+          HTML
+          test -s public-site/index.html
+          test -s public-site/ball/index.html
+          test -s public-site/ball/levels/crystal.json
+          test -s public-site/ball/levels/candy.json
+          test -s public-site/ball/levels/rainbow.json
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo 'Private/packaged model files must not be present in the public site'
+            exit 1
+          fi
+      - name: Retain verified public build for owner recovery
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-5-mobile-web-preview
+          path: public-site/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Upload public Pages payload
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure already-enabled GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy isolated static preview
+        id: deployment
+        uses: actions/deploy-pages@v4
