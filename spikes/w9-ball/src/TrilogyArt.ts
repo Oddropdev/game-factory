@@ -62,8 +62,11 @@ const sphere=(()=>{
  }return {p,n,i};
 })();
 export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,road:RoadSample[]){
+ const biome=m.biome??m.id;
+ const crystalStyle=biome==='crystal'||/Aurora|Frost|Storm/.test(biome);
+ const candyStyle=biome==='candy'||/Coral|Neon|Solar/.test(biome);
  const mats={road:m.colors.map(c=>polished(c)),trim:polished(m.trim,.22),white:polished('#fff8f0'),
-  island:polished(m.island),water:polished(m.water,.03),leaf:polished(m.id==='crystal'?'#54dcd8':'#93d9b4'),
+  island:polished(m.island),water:polished(m.water,.03),leaf:polished(crystalStyle?'#54dcd8':m.island),
   gold:polished('#ffe180',.3),dark:polished(m.id==='rainbow'?'#66479d':'#897ac6')};
  const all=[...mats.road,mats.trim,mats.white,mats.island,mats.water,mats.leaf,mats.gold,mats.dark];
  const batch=new Batch(),rand=seededRandom(m.scenerySeed);
@@ -107,11 +110,11 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
    const x=row.x+side*(16+rand()*22),z=7-d+(rand()-.5)*10,y=-4-rand()*2,w=6+rand()*6;
    batch.sphere(mats.island,[x,y-1.9,z],[w,5,w*.86]);
    batch.sphere(mats.trim,[x,y,z],[w*.98,1.3,w*.87]);
-   if(m.id==='crystal'){
+   if(crystalStyle){
     for(let j=0;j<5;j++)batch.crystal(mats.road[j%4]!,[x+(rand()-.5)*w*.55,y+.45,z+(rand()-.5)*w*.5],
      [1.2+rand()*1.6,3+rand()*7,1.2+rand()],[(rand()-.5)*22,rand()*180,(rand()-.5)*25]);
     batch.ring(mats.leaf,[x,-11.85,z],w*.72,.06,[90,0,0]);
-   }else if(m.id==='candy'){
+   }else if(candyStyle){
     for(let j=0;j<4;j++){
      const xx=x+(rand()-.5)*w*.7,zz=z+(rand()-.5)*w*.6;
      batch.sphere(mats.white,[xx,y+1.3,zz],[1,4,1]);
@@ -125,6 +128,17 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
      batch.sphere(mats.leaf,[xx,y+3,z],[3.7,2,2.8]);
     }
     batch.ring(mats.road[bandIndex(islandCount,mats.road.length)]!,[x,y+6,z],3,.3,[0,15,0]);
+   }
+   // Extra biome-specific silhouettes make generated worlds materially
+   // different in topology, not merely a recolored replay of Rainbow.
+   if(m.biome&&/Volcanic|Golden|Mosslight|Moonlight/.test(m.biome)){
+    const size=/Volcanic/.test(m.biome)?8:/Mosslight/.test(m.biome)?5:3.5;
+    for(let j=0;j<3;j++){
+     const h=size*(.6+j*.22);
+     batch.crystal(mats.road[(j+islandCount)%mats.road.length]!,
+      [x+(j-1)*w*.36,y+1.4,z+(j-1)*1.5],[2.1,h,2.1],[12+j*17,j*29,0]);
+    }
+    if(/Moonlight|Golden/.test(m.biome))batch.ring(mats.trim,[x,y+7,z],w*.65,.18,[66,23,12]);
    }
    // Cloud silhouettes at several depths, never a wall behind the course.
    if(islandCount%2===0){

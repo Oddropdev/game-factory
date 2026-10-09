@@ -35,7 +35,8 @@ import './style.css';
 type Phase = 'ready'|'running'|'complete'|'error';
 const PHYSICS_TIMEOUT_MS = 15_000;
 const gameMode=new URL(window.location.href).searchParams.get('mode');
-const trilogyMode=gameMode==='trilogy';
+const endlessMode=gameMode==='endless';
+const trilogyMode=gameMode==='trilogy'||endlessMode;
 const twoLevelMode=gameMode==='twolevel';
 const transitMode=gameMode==='transit'||twoLevelMode;
 const grindMode=gameMode==='grind'||transitMode||trilogyMode;
@@ -423,7 +424,7 @@ if(trilogyMode){
   ui.title.innerHTML='THREE WORLDS <em>CLEARED.</em>';
   ui.description.textContent=`Crystal Sky → Cloud Candy → Rainbow Rush. ${trilogy!.gems} stars in ${trilogy!.runTime.toFixed(1)}s.`;
   ui.start.textContent='ROLL AGAIN →';
- },surfaces.ball);
+ },surfaces.ball,endlessMode);
  await trilogy.initialize(firstWorldRoot);
 }
 // The entire next sector is fetched and physically staged during tube travel.
@@ -573,11 +574,11 @@ if(speedMode){
     longJumpMode?'START LONG JUMP →':'START SKY ROLL →';
 }
 if(trilogyMode){
- document.title='Prism Run · Three Worlds';
+ document.title=endlessMode?'Prism Run · Endless Worlds':'Prism Run · Three Worlds';
  document.querySelector('header small')!.textContent='PRISM RUN';
- document.querySelector('.eyebrow')!.textContent='A JOURNEY THROUGH COLOR';
+ document.querySelector('.eyebrow')!.textContent=endlessMode?'WORLDS WITHOUT AN END':'A JOURNEY THROUGH COLOR';
  ui.title.innerHTML='FOLLOW THE <em>WONDER.</em>';
- ui.description.textContent='Crystal shores. Candy clouds. Rainbow roads. One ball, three worlds, and two magnetic rollercoasters.';
+ ui.description.textContent=endlessMode?'Crystal shores. Candy clouds. Rainbow roads. Then a thousand evolving worlds and sweeping rollercoasters. Keep rolling.':'Crystal shores. Candy clouds. Rainbow roads. One ball, three worlds, and two magnetic rollercoasters.';
  ui.start.textContent='LET’S ROLL →';
  document.querySelector('.hint')!.textContent='↔ STEER · ↑ SPEED · ORBIT THE TUBES';
 }
@@ -1140,7 +1141,7 @@ Object.assign(window,{__W9_BALL_TEST__:{
   snapshot:()=>{
     const p=ball.getPosition(),v=body.linearVelocity,w=body.angularVelocity;
     return {
-      trilogyMode,trilogy:trilogy?.snapshot()??null,
+      trilogyMode,endlessMode,trilogy:trilogy?.snapshot()??null,
       phase,renderer:'playcanvas',physicsBackend:'ammo-bullet',
       physicsLoaded:realPhysics,rigidbodyType:body.type,
       frames,physicsFrames,position:[p.x,p.y,p.z],

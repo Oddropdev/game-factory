@@ -1,16 +1,18 @@
 // Fetched content contract; geometry/scenery are supplied per-world, never bundled upfront.
 import {longCenter} from './LongJumpCourse';
 import {secondCenter} from './SecondSkyLevel';
-export type WorldId='crystal'|'candy'|'rainbow';
+import {endlessCenter} from './EndlessWorlds';
+export type WorldId='crystal'|'candy'|'rainbow'|`endless-${number}`;
 export type RoadSample={d:number;x:number;bank:number;width:number;y:number};
 export type WorldManifest={version:1;id:WorldId;title:string;start:number;end:number;
   geometry:string;scenerySeed:number;sky:string;fog:string;water:string;
   colors:string[];trim:string;island:string;gems:number[];hazards:number[];arches:number[];
-  privateModels:string[]};
+  privateModels:string[];biome?:string;tier?:number;worldNumber?:number};
 export const WORLD_URLS=['crystal','candy','rainbow'].map(id=>'./levels/'+id+'.json');
 export const WORLD_BOUNDS=[[0,428],[590,770],[940,1160]] as const;
 const smooth=(a:number,b:number,x:number)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
-export function trilogyCenter(d:number){
+export function trilogyCenter(d:number):number{
+ if(d>1164)return endlessCenter(d,trilogyCenter(1160));
  if(d<590)return longCenter(d);
  if(d<940)return secondCenter(550+(d-590)*150/180);
  const t=d-940;return secondCenter(700)+14*smooth(15,72,t)-25*smooth(83,150,t)+11*smooth(163,207,t);

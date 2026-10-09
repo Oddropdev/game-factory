@@ -123,3 +123,40 @@ export function generateTransit(seed:number,entry:TransitPort,exit:TransitPort):
   }
   throw Error('Known-safe transit failed validation; do not release the ball');
 }
+
+
+// W9.6 — spectacle paths preserve the existing two-port hard magnetic
+// contract, while increasing lateral excursion by ~4x. Retain the W9.5
+// generator unchanged for ?mode=trilogy and all legacy acceptance tests.
+export function generateSpectacleTransit(seed:number,entry:TransitPort,exit:TransitPort):SeededTransit{
+ const span=exit.progress-entry.progress;
+ if(!Number.isFinite(seed)||!Number.isFinite(span)||span<100||span>230)
+  throw Error('Invalid spectacle transit ports');
+ for(let attempt=0;attempt<12;attempt++){
+  const actual=(seed+Math.imul(attempt,0x9e3779b9))>>>0,rand=seededRandom(actual);
+  const sign=rand()>.5?1:-1,amplitude=(22+rand()*13)*(1-attempt*.045);
+  const climb=17+rand()*14,type=actual%3===0?'helix':'sweep';
+  const center=(u:number):V3=>{
+   const t=Math.max(0,Math.min(1,u)),s=t*t*(3-2*t);
+   const window=Math.sin(Math.PI*t)**2,phase=2*Math.PI*t;
+   const baseX=entry.x+(exit.x-entry.x)*s+entry.dx*span*t*(1-t)**2;
+   // Two vast, bankable horizontal S-sweeps. The helix option has a
+   // tighter secondary arc but still ends tangent-matched and horizontal.
+   const lateral=sign*amplitude*window*Math.sin(phase*(type==='helix'?2:1));
+   const y=climb*window+(type==='helix'?7*window*(1-Math.cos(phase*2)):0);
+   return [baseX+lateral,2.36+y,7-entry.progress-span*t];
+  };
+  const path=new TransitTubePath(760,center,true);
+  const validation=validateTransit(path,entry,exit);
+  if(!validation.valid||Math.max(...path.frames.map(f=>f.center[0]))-
+    Math.min(...path.frames.map(f=>f.center[0]))<17)continue;
+  let hash=2166136261;
+  for(const f of path.frames)for(const x of f.center)hash=Math.imul(hash^Math.round(x*1000),16777619)>>>0;
+  return {path,requestedSeed:seed>>>0,seed:actual,attempts:attempt+1,
+   fallback:false,kind:type,validation,
+   fingerprint:hash.toString(16).padStart(8,'0'),entry,exit};
+ }
+ // Never eject into invalid geometry; a verified, safer spline is preferable
+ // to a broken coaster on a low-powered phone.
+ return generateTransit(seed,entry,exit);
+}

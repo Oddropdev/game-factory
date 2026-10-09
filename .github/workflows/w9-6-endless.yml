@@ -1,0 +1,105 @@
+name: W9.6 Endless Worlds and Coaster 2.0
+
+on:
+  push:
+    branches:
+      - w9-6-endless-worlds
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, unit tests, public build and 1000-world proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build:w9-5:public
+      - run: npm run check:w9-5:public
+      - name: Install Chromium for actual 6-world browser handoff
+        run: npx playwright install --with-deps chromium
+      - name: Browser proves World 3 does not finish and Worlds 4–6 load with Bullet
+        run: npx playwright test --config=playwright.w9-6.config.mjs
+      - name: Smoke game URL, JSON files and Ammo WASM
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/run-transit-preview.mjs --trilogy >/tmp/w96.log 2>&1 &
+          p=$!
+          trap 'kill "$p" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS 'http://127.0.0.1:4177/ball/?mode=endless&seed=17' > /dev/null && break
+            sleep 1
+          done
+          curl -fsS 'http://127.0.0.1:4177/ball/?mode=endless&seed=17' >/dev/null
+          for id in crystal candy rainbow; do
+            curl -fsS "http://127.0.0.1:4177/ball/levels/$id.json" >/dev/null
+          done
+          curl -fsSI 'http://127.0.0.1:4177/ball/ammo/ammo.wasm.wasm' >/dev/null
+      - name: Stage W9.6 public game under project URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat > public-site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="refresh" content="0;url=./ball/?mode=endless">
+          <title>Prism Run — Endless Worlds</title></head>
+          <body><a href="./ball/?mode=endless">Play endless Prism Run</a></body></html>
+          HTML
+          test -s public-site/ball/index.html
+          test -s public-site/ball/levels/crystal.json
+          test -s public-site/ball/levels/candy.json
+          test -s public-site/ball/levels/rainbow.json
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo "Private licensed models prohibited in public distribution"
+            exit 1
+          fi
+      - name: Upload verified W9.6 Pages payload
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+      - name: Downloadable W9.6 Android preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-6-endless-preview
+          path: |
+            playtest-dist/ball/
+            tools/run-transit-preview.mjs
+            Start_Three_Levels.cmd
+            test-results/w96-six-world-browser-evidence.json
+            test-results/w96-world-*.png
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    name: Publish validated W9.6 to mobile GitHub Pages
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: w9-6-mobile-preview
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy verified W9.6 browser build
+        uses: actions/deploy-pages@v4
+        id: deployment
