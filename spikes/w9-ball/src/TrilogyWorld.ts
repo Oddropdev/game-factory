@@ -10,6 +10,7 @@ export class TrilogyWorld{
  materials:StandardMaterial[]=[];gems:Gem[]=[];roadBodies=0;hazardBodies=0;
  disposed=false;active=false;meshCount=0;islandCount=0;trackQuads=0;privateMeshes=0;
  guardBodies=0;grindTops=0;grindSides=0;boxObstacles=0;
+ private glowingGuard:StandardMaterial|null=null;private guardIsLit=false;
  constructor(readonly app:AppBase,readonly manifest:WorldManifest,readonly road:RoadSample[],
   root?:Entity,readonly rich=false,readonly minimalist=false,readonly chaos=false,
   readonly spiral=false,readonly stableRoad=false){
@@ -19,6 +20,7 @@ export class TrilogyWorld{
  async prepare(device:GraphicsDevice,legacy=false){
   const m=this.manifest;
   const art=buildWorldArt(device,this.root,m,this.road,this.minimalist);
+  if(this.spiral)this.glowingGuard=art.mats.guard;
   this.materials=art.materials;this.meshCount=art.meshCount;this.islandCount=art.islandCount;this.trackQuads=art.trackQuads;
   if(!legacy&&this.spiral)this.prepareSpiralColliders();
   if(!legacy&&!this.spiral)for(let i=0;i<this.road.length;i+=2){
@@ -101,6 +103,12 @@ export class TrilogyWorld{
  project(position:Vec3,hint=0){
   return projectSpiral(this.road as SpiralPoint[],position,hint);
  }
+ setGuardLit(enabled:boolean){
+  if(this.disposed||!this.glowingGuard||this.guardIsLit===enabled)return;
+  this.guardIsLit=enabled;
+  this.glowingGuard.emissiveIntensity=enabled?3.0:.45;
+  this.glowingGuard.update();
+ }
  private prepareSpiralColliders(){
   const m=this.manifest;
   const from=m.spiralCoilStart??m.start+110,to=m.spiralCoilEnd??m.end-160;
@@ -110,13 +118,13 @@ export class TrilogyWorld{
    const length=Math.hypot(dx,dy,dz),horizontal=Math.hypot(dx,dz)||1;
    const yaw=-Math.atan2(dx,-dz)*180/Math.PI,pitch=Math.atan2(dy,horizontal)*180/Math.PI;
    const e=new Entity('trilogy-road-'+m.id+'-'+i);
-   const thick=this.stableRoad?.82:.30;
+   const thick=this.stableRoad?1.25:.30;
    e.setPosition((a.x+b.x)/2,(a.y+b.y)/2-thick,
     ((a.z??7-a.d)+(b.z??7-b.d))/2);
    e.setEulerAngles(pitch,yaw,(a.bank+b.bank)/2);
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(
-    a.width/2,thick,length/2+(this.stableRoad?.40:.11))});
-   e.addComponent('rigidbody',{type:'static',friction:this.stableRoad?1.1:.6,restitution:0});
+    a.width/2,thick,length/2+(this.stableRoad?.65:.11))});
+   e.addComponent('rigidbody',{type:'static',friction:this.stableRoad?.78:.6,restitution:0});
    this.root.addChild(e);this.roadBodies++;
    // Guard only genuinely dangerous 360-degree climbing spiral.
    if(a.d<from-5||a.d>to+5||i%2!==0)continue;
