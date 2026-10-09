@@ -1,5 +1,6 @@
 // Fetched content contract; geometry/scenery are supplied per-world, never bundled upfront.
 import {longCenter} from './LongJumpCourse';
+import type {ChoiceWall} from './ChoiceWall';
 import {secondCenter} from './SecondSkyLevel';
 import {endlessCenter,longCoasterEnabled,chaosEnabled,type GeneratedFeatures} from './EndlessWorlds';
 // One active PlayCanvas run per page; configured once before any world is staged.
@@ -13,7 +14,8 @@ export type WorldManifest={version:1;id:WorldId;title:string;start:number;end:nu
   colors:string[];trim:string;island:string;gems:number[];hazards:number[];arches:number[];
   privateModels:string[];biome?:string;tier?:number;worldNumber?:number;
   features?:GeneratedFeatures;spiralCoilStart?:number;spiralCoilEnd?:number;
-  macroKind?:string;macroMotifs?:string[];macroSignature?:string};
+  macroKind?:string;macroMotifs?:string[];macroSignature?:string;
+  choiceWall?:ChoiceWall};
 export const WORLD_URLS=['crystal','candy','rainbow'].map(id=>'./levels/'+id+'.json');
 export const WORLD_BOUNDS=[[0,428],[590,770],[940,1160]] as const;
 const smooth=(a:number,b:number,x:number)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};

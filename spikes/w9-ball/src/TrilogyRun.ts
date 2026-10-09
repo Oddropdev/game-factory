@@ -13,6 +13,8 @@ import {roadSurfaceY,sweptDeckCatch} from './RoadContactSweep';
 import {trackFrame,surfaceContact,guardDownforce} from './TrackSurfaceFrame';
 import {buildMacroCourse,validateMacroCourse} from './MacroCourse';
 import {exitVelocity,exitAfterburner} from './EntryBoost';
+import {adaptiveCamera,turnIntensity} from './AdaptiveCourseCamera';
+import {choiceWall,choiceLaneWidth,sideDecision} from './ChoiceWall';
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 type Event={event:string;world:number;at:number;bodies?:number;url?:string};
 export class TrilogyRun{
@@ -33,7 +35,11 @@ export class TrilogyRun{
  readonly richMode:boolean;readonly extremeCoasters:boolean;readonly trackFirstMode:boolean;
  readonly chaosMode:boolean;readonly spiralMode:boolean;readonly touchDriveMode:boolean;
  readonly stabilizedMode:boolean;readonly alignedSurfaceMode:boolean;
- readonly macroMode:boolean;
+ readonly macroMode:boolean;readonly directorMode:boolean;
+ cameraWideFrames=0;cameraSteepFrames=0;maxAdaptiveFov=0;
+ choiceWallHits=0;choiceWallStops=0;choiceWallDecisions=0;
+ choiceSide:'left'|'right'|null=null;
+ private wallBrakeUntil=-1;
  macroKind='';macroMotifs:string[]=[];macroSignature='';
  exitBoostUntil=-1;exitBoostCount=0;lastExitSpeed=0;exitBoostFrames=0;
  guardDownforceFrames=0;guardLiftDamped=0;maxRoadClearance=0;
@@ -61,10 +67,11 @@ export class TrilogyRun{
    coins:HTMLElement;progress:HTMLElement;message:HTMLElement},
   private onFinish:()=>void,private ballMaterial:StandardMaterial,readonly endless=false){
   const p=new URL(location.href).searchParams,requested=Number(p.get('seed'));
-  this.touchDriveMode=this.endless&&['w101','w102','w103','w104'].includes(p.get('edition')??'');
-  this.macroMode=this.endless&&p.get('edition')==='w104';
-  this.alignedSurfaceMode=this.endless&&['w103','w104'].includes(p.get('edition')??'');
-  this.stabilizedMode=this.endless&&['w102','w103','w104'].includes(p.get('edition')??'');
+  this.touchDriveMode=this.endless&&['w101','w102','w103','w104','w106'].includes(p.get('edition')??'');
+  this.directorMode=this.endless&&p.get('edition')==='w106';
+  this.macroMode=this.endless&&['w104','w106'].includes(p.get('edition')??'');
+  this.alignedSurfaceMode=this.endless&&['w103','w104','w106'].includes(p.get('edition')??'');
+  this.stabilizedMode=this.endless&&['w102','w103','w104','w106'].includes(p.get('edition')??'');
   this.spiralMode=this.endless&&(p.get('edition')==='w10'||this.touchDriveMode);
   this.chaosMode=this.endless&&p.get('edition')==='w99';
   this.trackFirstMode=this.endless&&(p.get('edition')==='w98'||this.chaosMode||this.spiralMode);
@@ -89,6 +96,16 @@ export class TrilogyRun{
    if(e.other.name.startsWith('trilogy-road-'))this.worldContacts[this.worldIndex]=(this.worldContacts[this.worldIndex]??0)+1;
    const name=e.other.name;
    if(this.stabilizedMode)this.trackGuardContact(name,true);
+   if(this.directorMode&&name.startsWith('w106-choice-wall-')&&this.state==='world'){
+    this.choiceWallHits++;
+    this.wallBrakeUntil=this.runTime+1.3;
+    // A real static Bullet collision is the only stopping authority.
+    if(this.body.linearVelocity.length()>3){
+     this.body.linearVelocity=new Vec3();
+     this.body.angularVelocity=new Vec3();
+     this.choiceWallStops++;
+    }
+   }
    if(this.richMode){
     if(name.startsWith('w97-guard-'))this.guardContacts.add(name);
     if(name.startsWith('w97-grind-top-'))this.grindTopContacts.add(name);
@@ -153,7 +170,7 @@ export class TrilogyRun{
  private prepareMacroRoad(index:number,content:ReturnType<typeof generateEndlessWorld>){
   const axis=content.road.find(r=>r.d===content.manifest.start)!.x;
   const macro=buildMacroCourse(index,this.seed,content.manifest.start,
-   content.manifest.end,axis);
+   content.manifest.end,axis,this.directorMode?'extreme':'classic');
   const verdict=validateMacroCourse(macro);
   if(!verdict.valid)throw Error('W104_UNSAFE_MACRO_'+index+'_'+macro.kind+
    '_turn_'+verdict.maxTurn.toFixed(3)+'_pitch_'+verdict.maxPitch.toFixed(3));
@@ -166,6 +183,16 @@ export class TrilogyRun{
   content.manifest.macroMotifs=macro.motifs;
   content.manifest.macroSignature=macro.signature;
   if(index>3)content.manifest.title=macro.kind.replace(/-/g,' ').toUpperCase();
+  if(this.directorMode&&index>3){
+   const w=choiceWall(content.manifest.start,index);
+   if(w){
+    content.manifest.choiceWall=w;
+    content.manifest.title+=' · CHOOSE YOUR WAY';
+    // Widen the ACTUAL visual and physical deck into two open side lanes,
+    // then smoothly return it to normal width after the obstacle.
+    return macro.road.map(p=>({...p,width:choiceLaneWidth(p.d,w,p.width)}));
+   }
+  }
   return macro.road;
  }
  private noteMacro(){
@@ -200,7 +227,7 @@ export class TrilogyRun{
    this.current=new TrilogyWorld(this.app,content.manifest,directRoad,
     undefined,this.richMode,true,false,true,this.touchDriveMode,this.alignedSurfaceMode);
    await this.current.prepare(this.device);this.current.activate();
-   if(this.macroMode)this.noteMacro();
+   if(this.macroMode){this.noteMacro();this.choiceSide=null;this.wallBrakeUntil=-1;}
    const start=this.spiralSpawnProgress();
    const entry=this.current.roadPoint(start);
    const side=this.stabilizedMode&&new URL(location.href).searchParams.get('probe')==='guard'?1:0;
@@ -458,6 +485,7 @@ export class TrilogyRun{
        this.exitBoostUntil=this.runTime+1.05;
        this.lastExitSpeed=impulse.speed;this.exitBoostCount++;
        this.noteMacro();
+       this.choiceSide=null;this.wallBrakeUntil=-1;
       }else if(this.touchDriveMode){
        this.body.linearVelocity=new Vec3();this.body.angularVelocity=new Vec3();
       }
@@ -573,6 +601,11 @@ export class TrilogyRun{
   const onDeck=surface?(surface.inside&&surface.clearance>-.85&&surface.clearance<3.65):
    Math.abs(proj.lateral)<proj.width/2+.65&&
    proj.surfaceGap>-.9&&proj.surfaceGap<3.4;
+  const choice=this.current.manifest.choiceWall;
+  if(this.directorMode&&choice&&this.choiceSide===null&&proj.d>choice.d+4){
+   const selected=sideDecision(surface?.lateral??proj.lateral,choice);
+   if(selected){this.choiceSide=selected;this.choiceWallDecisions++;}
+  }
   if(this.macroMode&&onDeck&&this.runTime<this.exitBoostUntil){
    const burst=exitAfterburner(1.05-(this.exitBoostUntil-this.runTime),forward);
    if(burst>0){
@@ -587,12 +620,15 @@ export class TrilogyRun{
    const drive=throttle>0?Math.max(0,Math.min(
     throttle*(this.stabilizedMode?30:16),((this.stabilizedMode?74:52)-forward)*6)):
     throttle<0?Math.max(throttle*25,(-17-forward)*6):0;
+   const restrictedDrive=this.directorMode&&this.runTime<this.wallBrakeUntil?
+    Math.min(0,drive):drive;
    const steerAuthority=this.stabilizedMode?23+clamp(forward*forward/30,0,78):
     19+clamp(forward*forward/43,0,53);
    const lateral=steer*steerAuthority-clamp(side*3.2,-18,18);
    const axis=frame?.right??{x:right.x,y:0,z:right.z};
-   this.body.applyForce(new Vec3(t.x*drive+axis.x*lateral,
-    t.y*drive+axis.y*lateral,t.z*drive+axis.z*lateral).mulScalar(this.body.mass));
+   this.body.applyForce(new Vec3(t.x*restrictedDrive+axis.x*lateral,
+    t.y*restrictedDrive+axis.y*lateral,
+    t.z*restrictedDrive+axis.z*lateral).mulScalar(this.body.mass));
    const h=Math.hypot(t.x,t.z)||1;
    const normal=frame?new Vec3(frame.up.x,frame.up.y,frame.up.z):
     new Vec3(-t.x*t.y/h,h,-t.z*t.y/h).normalize();
@@ -708,7 +744,8 @@ export class TrilogyRun{
    this.safeCheckpoint=this.current.manifest.start+
     Math.floor((proj.d-this.current.manifest.start)/100)*100;
   // A fail sends the sphere BACK to a reached checkpoint, at rest.
-  if(proj.distance>11||proj.surfaceGap<(this.stabilizedMode?-4:-9)||p.y< -20){
+  if(proj.distance>11||proj.surfaceGap<(this.stabilizedMode?-4:-9)||
+     (!this.directorMode&&p.y< -20)){
    this.falls++;this.spiralFalls++;
    const checkpoint=Math.max(this.current.manifest.start+5,this.safeCheckpoint);
    const node=this.current.roadPoint(checkpoint);
@@ -844,7 +881,29 @@ export class TrilogyRun{
    this.ui.status.textContent=this.state==='holding'?(this.loadState==='failed'?'RECONNECTING · SAFE AT THE EXIT':'PREPARING YOUR NEXT WORLD…'):'SWIPE TO ORBIT · '+Math.round(this.distance/this.transit.path.length*100)+'%';
   }else{
    this.wasConstrained=false;this.camUp.set(0,1,0);const t=trilogyTangent(progress),height=Math.max(.62,pos.y);
-   if(this.touchDriveMode&&this.worldIndex>=3){
+   if(this.directorMode&&this.worldIndex>=3){
+    const before=this.current.spiralTangent(progress-13),
+     d=this.current.spiralTangent(progress),
+     future=this.current.spiralTangent(progress+26),
+     nextRoad=this.current.roadPoint(progress+24);
+    const dynamic=adaptiveCamera({ball:pos,forward:d,roadAhead:nextRoad,
+     speed:Math.hypot(v.x,v.y,v.z),
+     turn:turnIntensity(before,future),
+     aspect:window.innerWidth/Math.max(1,window.innerHeight)});
+    const desired=new Vec3(dynamic.position.x,dynamic.position.y,dynamic.position.z);
+    const now=this.camera.getPosition(),lag=now.distance(desired);
+    const k=1-Math.exp(-dt*clamp(7+Math.hypot(v.x,v.y,v.z)*.08,7,14));
+    if(lag>38)this.cameraHardCatches++;
+    this.camera.setPosition(lag>38?desired:now.clone().lerp(now,desired,k));
+    const previous=this.camera.getRotation().clone();
+    this.camera.lookAt(dynamic.target.x,dynamic.target.y,dynamic.target.z);
+    const desiredRotation=this.camera.getRotation().clone();
+    this.camera.setRotation(previous.slerp(previous,desiredRotation,1-Math.exp(-dt*9)));
+    this.camera.camera!.fov=dynamic.fov;
+    this.maxAdaptiveFov=Math.max(this.maxAdaptiveFov,dynamic.fov);
+    if(dynamic.fov>=76)this.cameraWideFrames++;
+    if(Math.abs(d.y)>.20)this.cameraSteepFrames++;
+   }else if(this.touchDriveMode&&this.worldIndex>=3){
     const d=this.current.spiralTangent(progress);
     const desired=new Vec3(pos.x-d.x*11,pos.y+8.3,pos.z-d.z*11);
     const now=this.camera.getPosition(),lag=now.distance(desired);
@@ -866,7 +925,8 @@ export class TrilogyRun{
     this.camera.setPosition(pos.x-t.x*11,height+7.4,pos.z-t.z*16);
     this.camera.lookAt(pos.x+t.x*17,height*.5,pos.z+t.z*24);
    }
-   this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
+   if(!this.directorMode||this.worldIndex<3)
+    this.camera.camera!.fov=window.innerWidth/window.innerHeight<.78?62:55;
    this.ui.status.textContent=this.touchDriveMode&&this.current.spiral?
     (this.touchDrive.holding?'HOLD TO DRIVE · SWIPE TO STEER':'SWIPE UP · HOLD TO DRIVE · REPEAT FOR SPEED'):
     this.spiralMode&&this.current.spiral?'STEER TO STAY ON THE SPIRAL · NO AUTOPILOT':this.state==='complete'?'TRILOGY COMPLETE':running?`${Math.round(Math.hypot(v.x,v.z)*3.6)} km/h · SWIPE TO STEER`:this.endless?'ENDLESS WORLDS · MAGNETIC JOURNEYS':'THREE WORLDS · TWO MAGNETIC JOURNEYS';
@@ -912,7 +972,12 @@ export class TrilogyRun{
   chaosMode:this.chaosMode,gripFrames:this.gripFrames,
   spiralMode:this.spiralMode,touchDriveMode:this.touchDriveMode,
   touchDrive:this.touchDrive.snapshot(),spiralSpeed:this.lastSpiralSpeed,
-  macroMode:this.macroMode,macroKind:this.macroKind,macroMotifs:this.macroMotifs,
+  macroMode:this.macroMode,directorMode:this.directorMode,
+  cameraWideFrames:this.cameraWideFrames,cameraSteepFrames:this.cameraSteepFrames,
+  maxAdaptiveFov:this.maxAdaptiveFov,
+  choiceWallHits:this.choiceWallHits,choiceWallStops:this.choiceWallStops,
+  choiceWallDecisions:this.choiceWallDecisions,choiceSide:this.choiceSide,
+  macroKind:this.macroKind,macroMotifs:this.macroMotifs,
   macroSignature:this.macroSignature,
   exitBoostCount:this.exitBoostCount,lastExitSpeed:this.lastExitSpeed,
   exitBoostFrames:this.exitBoostFrames,exitBoostActive:this.runTime<this.exitBoostUntil,
