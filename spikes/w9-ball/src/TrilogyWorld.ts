@@ -1,5 +1,6 @@
 import {Entity,Vec3,Mat4,Quat,type AppBase,type GraphicsDevice,type StandardMaterial} from 'playcanvas';
 import {trackFrame,type V3} from './TrackSurfaceFrame';
+import {cornerGuardPlan} from './OuterCornerRails';
 import {WorldAssets} from './TrilogyAssets';
 import {projectSpiral,type SpiralPoint} from './SpiralCourse';
 import {buildWorldArt,coinMesh,polished} from './TrilogyArt';
@@ -11,17 +12,19 @@ export class TrilogyWorld{
  materials:StandardMaterial[]=[];gems:Gem[]=[];roadBodies=0;hazardBodies=0;
  disposed=false;active=false;meshCount=0;islandCount=0;trackQuads=0;privateMeshes=0;
  guardBodies=0;grindTops=0;grindSides=0;boxObstacles=0;
- choiceWallBodies=0;
+ choiceWallBodies=0;outerGuardSections=0;
  private glowingGuard:StandardMaterial|null=null;private guardIsLit=false;
  constructor(readonly app:AppBase,readonly manifest:WorldManifest,readonly road:RoadSample[],
   root?:Entity,readonly rich=false,readonly minimalist=false,readonly chaos=false,
-  readonly spiral=false,readonly stableRoad=false,readonly alignedSurface=false){
+  readonly spiral=false,readonly stableRoad=false,readonly alignedSurface=false,
+  readonly smoothRoadMode=false){
   this.root=root??new Entity('world-'+manifest.id);this.root.enabled=false;
   if(!this.root.parent)app.root.addChild(this.root);this.assets=new WorldAssets(app);
  }
  async prepare(device:GraphicsDevice,legacy=false){
   const m=this.manifest;
-  const art=buildWorldArt(device,this.root,m,this.road,this.minimalist,this.alignedSurface);
+  const art=buildWorldArt(device,this.root,m,this.road,this.minimalist,this.alignedSurface,
+   this.smoothRoadMode);
   if(this.spiral)this.glowingGuard=art.mats.guard;
   this.materials=art.materials;this.meshCount=art.meshCount;this.islandCount=art.islandCount;this.trackQuads=art.trackQuads;
   if(!legacy&&this.spiral)this.prepareSpiralColliders();
@@ -165,18 +168,23 @@ export class TrilogyWorld{
    const e=new Entity('trilogy-road-'+m.id+'-'+i);
    const thick=this.stableRoad?1.25:.30;
    if(this.alignedSurface){
+    const before=this.smoothRoadMode?this.road[Math.max(0,i-1)]!:a;
+    const after=this.smoothRoadMode?this.road[Math.min(this.road.length-1,i+2)]!:b;
     this.alignCollision(e,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,
      z:((a.z??7-a.d)+(b.z??7-b.d))/2},(a.bank+b.bank)/2,
-     {x:a.x,y:a.y,z:a.z??7-a.d},{x:b.x,y:b.y,z:b.z??7-b.d},0,-thick);
+     {x:before.x,y:before.y,z:before.z??7-before.d},
+     {x:after.x,y:after.y,z:after.z??7-after.d},0,-thick);
    }else{
     e.setPosition((a.x+b.x)/2,(a.y+b.y)/2-thick,
      ((a.z??7-a.d)+(b.z??7-b.d))/2);
     e.setEulerAngles(pitch,yaw,(a.bank+b.bank)/2);
    }
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(
-    a.width/2,thick,length/2+(this.stableRoad?.65:.11))});
+    a.width/2,thick,length/2+(this.smoothRoadMode?.065:
+     this.stableRoad?.65:.11))});
    e.addComponent('rigidbody',{type:'static',friction:this.stableRoad?.78:.6,restitution:0});
    this.root.addChild(e);this.roadBodies++;
+   if(this.smoothRoadMode)continue;
    // Guard only genuinely dangerous 360-degree climbing spiral.
    if(a.d<from-5||a.d>to+5||i%2!==0)continue;
    for(const side of [-1,1]){
@@ -200,6 +208,27 @@ export class TrilogyWorld{
     edge.addComponent('rigidbody',{type:'static',friction:.2,restitution:.02});
     this.root.addChild(edge);this.guardBodies++;
    }
+  }
+  if(this.smoothRoadMode)this.prepareOuterGuards();
+ }
+ private prepareOuterGuards(){
+  const groups=cornerGuardPlan(this.road as SpiralPoint[]);
+  for(const g of groups){
+   const a=this.road[g.start]!,b=this.road[g.end]!;
+   const mid=this.road[Math.floor((g.start+g.end)/2)]!;
+   const dx=b.x-a.x,dy=b.y-a.y,dz=(b.z??7-b.d)-(a.z??7-a.d);
+   const length=Math.hypot(dx,dy,dz);
+   if(length<.5)continue;
+   const wall=new Entity('w10-physical-guard-'+g.side+'-'+g.start);
+   this.alignCollision(wall,{x:mid.x,y:mid.y,z:mid.z??7-mid.d},
+    mid.bank,
+    {x:a.x,y:a.y,z:a.z??7-a.d},
+    {x:b.x,y:b.y,z:b.z??7-b.d},
+    g.side*(mid.width/2-.17),.82);
+   wall.addComponent('collision',{type:'box',
+    halfExtents:new Vec3(.23,.90,length/2+.035)});
+   wall.addComponent('rigidbody',{type:'static',friction:.2,restitution:.01});
+   this.root.addChild(wall);this.guardBodies++;this.outerGuardSections++;
   }
  }
  roadFrame(d:number){
@@ -267,6 +296,7 @@ export class TrilogyWorld{
   grindSides:this.grindSides,boxObstacles:this.boxObstacles,minimalist:this.minimalist,
   spiral:this.spiral,stableRoad:this.stableRoad,alignedSurface:this.alignedSurface,
   choiceWallBodies:this.choiceWallBodies,choiceWall:this.manifest.choiceWall??null,
+  smoothRoadMode:this.smoothRoadMode,outerGuardSections:this.outerGuardSections,
   chaos:this.chaos,
   maxElevation:Math.max(...this.road.map(p=>p.y)),
   minElevation:Math.min(...this.road.map(p=>p.y)),
