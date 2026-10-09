@@ -538,9 +538,11 @@ function restart(){
   grindLastTopImpact=null;grindTopDeniedHeight=0;grindTopDeniedLateral=0;
   grindUndersideSeconds=0;grindTrapRecoveries=0;
   touchingGrindTop.clear();
-  body.teleport(0,2.2,7);
-  body.linearVelocity=new Vec3(0,0,0);
-  body.angularVelocity=new Vec3(0,0,0);
+  if(!trilogy?.resetSpiralSpawn()){
+   body.teleport(0,2.2,7);
+   body.linearVelocity=new Vec3(0,0,0);
+   body.angularVelocity=new Vec3(0,0,0);
+  }
   gems.forEach(g=>{g.collected=false;g.node.enabled=true;});
   ui.dialog.classList.add('hidden');
   ui.message.classList.remove('show');
@@ -580,7 +582,9 @@ if(trilogyMode){
  ui.title.innerHTML='FOLLOW THE <em>WONDER.</em>';
  ui.description.textContent=endlessMode?'Crystal shores. Candy clouds. Rainbow roads. Then a thousand evolving worlds and sweeping rollercoasters. Keep rolling.':'Crystal shores. Candy clouds. Rainbow roads. One ball, three worlds, and two magnetic rollercoasters.';
  ui.start.textContent='LET’S ROLL →';
- document.querySelector('.hint')!.textContent='↔ STEER · ↑ SPEED · ORBIT THE TUBES';
+ document.querySelector('.hint')!.textContent=new URL(location.href).searchParams.get('edition')==='w101'?
+  'SWIPE IN ANY DIRECTION · HOLD TO DRIVE · REPEAT TO BOOST':
+  '↔ STEER · ↑ SPEED · ORBIT THE TUBES';
 }
 ui.start.addEventListener('click',e=>{e.preventDefault();restart();});
 const releaseGuard=()=>{
@@ -598,7 +602,7 @@ const releaseGuard=()=>{
   message('RELEASE!');
 };
 const steer=(clientX:number)=>{
-  if(trilogy?.constrained)return;
+  if(trilogy?.touchDriveMode||trilogy?.constrained)return;
   if(transitMode&&(tubeState==='locked'||tubeState==='holding'))return;
   // In rail mode the legal outer lane must reach the Bullet wall at x≈3.8m.
   // Legacy modes keep their original ±3.3m control envelope untouched.
@@ -626,6 +630,11 @@ const flickForward=()=>{
 root.addEventListener('pointerdown',e=>{
   if((e.target as HTMLElement).closest('button'))return;
   if(phase!=='running')restart();
+  if(trilogy?.driveAvailable){
+   trilogy.drivePointerDown(e.pointerId,e.clientX,e.clientY);
+   root.setPointerCapture(e.pointerId);
+   return;
+  }
   steer(e.clientX);
   pointerLastY=e.clientY;
   pointerLastX=e.clientX;
@@ -633,6 +642,10 @@ root.addEventListener('pointerdown',e=>{
 root.addEventListener('pointermove',e=>{
   if(e.buttons!==0||e.pointerType==='touch'){
     const swipeDelta=pointerLastX===null?0:e.clientX-pointerLastX;
+    if(trilogy?.driveAvailable){
+     trilogy.drivePointerMove(e.pointerId,e.clientX,e.clientY);
+     e.preventDefault();return;
+    }
     if(trilogy?.constrained){trilogy.rotate(swipeDelta/window.innerWidth*3);pointerLastX=e.clientX;pointerLastY=e.clientY;return;}
     if(transitMode&&(tubeState==='locked'||tubeState==='holding')){
       // Rotation around the pipe, NOT permission to detach from it.
@@ -656,10 +669,24 @@ root.addEventListener('pointermove',e=>{
     }
   }
 });
-root.addEventListener('pointerup',()=>{pointerLastY=null;pointerLastX=null;});
-root.addEventListener('pointercancel',()=>{pointerLastY=null;pointerLastX=null;});
+root.addEventListener('pointerup',e=>{
+ if(trilogy?.touchDriveMode)trilogy.drivePointerUp(e.pointerId);
+ pointerLastY=null;pointerLastX=null;
+});
+root.addEventListener('pointercancel',e=>{
+ if(trilogy?.touchDriveMode)trilogy.drivePointerUp(e.pointerId);
+ pointerLastY=null;pointerLastX=null;
+});
+window.addEventListener('keyup',e=>{
+ if(trilogy?.touchDriveMode)trilogy.driveKeyUp(e.code);
+});
 window.addEventListener('keydown',e=>{
   if(e.code==='Space'||e.code==='Enter'){e.preventDefault();restart();}
+  if(trilogy?.touchDriveMode&&!trilogy.constrained){
+   trilogy.driveKeyDown(e.code,e.repeat);
+   if(/^(Arrow|Key[WASD])/.test(e.code))e.preventDefault();
+   return;
+  }
   if(trilogy?.constrained){
     if(e.code==='ArrowLeft'||e.code==='KeyA')trilogy.rotate(-.18);
     if(e.code==='ArrowRight'||e.code==='KeyD')trilogy.rotate(.18);

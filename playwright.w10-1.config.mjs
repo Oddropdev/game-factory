@@ -1,8 +1,8 @@
 import {defineConfig} from '@playwright/test';
 export default defineConfig({
- testDir:'./tests/ball',testMatch:'w10-spiral.spec.mjs',
+ testDir:'./tests/ball',testMatch:'w10-1-*.spec.mjs',
  timeout:180_000,retries:0,workers:1,
- reporter:[['list'],['json',{outputFile:'test-results/w10-results.json'}]],
+ reporter:[['list'],['json',{outputFile:'test-results/w10-1-results.json'}]],
  use:{baseURL:'http://127.0.0.1:4179',viewport:{width:390,height:844},isMobile:true,hasTouch:true},
  webServer:{command:'npm run preview -- --outDir playtest-dist --host 127.0.0.1 --port 4179',
   port:4179,reuseExistingServer:false,timeout:30000}
