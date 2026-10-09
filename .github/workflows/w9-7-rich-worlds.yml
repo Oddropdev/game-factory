@@ -1,0 +1,85 @@
+name: W9.7 Rich Worlds and Extreme Coaster Preview
+on:
+  push:
+    branches:
+      - w9-7-rich-worlds-extreme-coasters
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: w9-7-rich-worlds
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: Type, unit, legacy six-world and extreme four-world browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build:w9-5:public
+      - run: npm run check:w9-5:public
+      - run: npx playwright install --with-deps chromium
+      - name: W9.6 baseline complete six-world physical-browser run
+        run: npx playwright test --config=playwright.w9-6.config.mjs
+      - name: W9.7 new extreme geometry and rail physics browser run
+        run: npx playwright test --config=playwright.w9-7.config.mjs
+      - name: Stage identical public routes, with baseline query mode preserved
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat >public-site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="refresh" content="0;url=./ball/?mode=endless">
+          <title>Prism Run — Endless Worlds</title></head>
+          <body><a href="./ball/?mode=endless">Play Prism Run</a></body></html>
+          HTML
+          test -s public-site/ball/index.html
+          test -s public-site/ball/levels/crystal.json
+          test -s public-site/ball/levels/candy.json
+          test -s public-site/ball/levels/rainbow.json
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo "Private assets found in public build";exit 1
+          fi
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-7-test-evidence
+          path: |
+            test-results/w97-*
+            test-results/w96-*
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload Pages payload only after all acceptance checks
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+  publish:
+    needs: verify
+    name: Publish optional W9.7 experiment alongside stable W9.6 mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: w9-7-mobile-preview
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deploy
+        uses: actions/deploy-pages@v4

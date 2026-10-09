@@ -33,19 +33,23 @@ export function endlessBounds(index:number):[number,number]{
 }
 const smooth=(u:number)=>{const t=Math.max(0,Math.min(1,u));return t*t*(3-2*t);};
 const hash=(index:number,seed:number)=>(seed^Math.imul(index+1,0x9e3779b1))>>>0;
-const axis=(index:number)=>Math.sin(index*2.399963229728653)*11;
+// A broad, deterministic landing coordinate: a real new destination rather
+// than every transit returning to the same narrow center corridor.
+const axis=(index:number,extreme=false)=>extreme?
+  (seededRandom(Math.imul(index+1,0x9e3779b1)^0x5f1d36b7)()-.5)*72:
+  Math.sin(index*2.399963229728653)*11;
 const sway=(index:number)=>7+((index*37)%9)*.6;
 // First gap blends from the exact authored Rainbow exit. Generated road endpoints
 // and the 180m transit gaps use smoothstep for zero derivative at both ports.
-export function endlessCenter(d:number,authoredExit:number):number{
- if(d<ENDLESS_START)return authoredExit+(axis(3)-authoredExit)*smooth((d-1160)/180);
+export function endlessCenter(d:number,authoredExit:number,extreme=false):number{
+ if(d<ENDLESS_START)return authoredExit+(axis(3,extreme)-authoredExit)*smooth((d-1160)/180);
  const index=FIRST_ENDLESS_INDEX+Math.floor((d-ENDLESS_START)/ENDLESS_STRIDE);
  const [start,end]=endlessBounds(index),local=d-start;
  if(local<=ENDLESS_ROAD){
   const t=Math.max(0,Math.min(1,local/ENDLESS_ROAD)),envelope=Math.sin(Math.PI*t)**2;
-  return axis(index)+sway(index)*envelope*Math.sin(t*Math.PI*2+(index%3)*.5);
+  return axis(index,extreme)+sway(index)*envelope*Math.sin(t*Math.PI*2+(index%3)*.5);
  }
- return axis(index)+(axis(index+1)-axis(index))*smooth((d-end)/(ENDLESS_STRIDE-ENDLESS_ROAD));
+ return axis(index,extreme)+(axis(index+1,extreme)-axis(index,extreme))*smooth((d-end)/(ENDLESS_STRIDE-ENDLESS_ROAD));
 }
 function shade(hex:string,shift:number){
  const n=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
@@ -61,7 +65,7 @@ export function worldDesign(index:number,seed:number){
   fog:shade(b.fog,shift*.4),water:shade(b.water,shift*.5),island:shade(b.island,shift*.5),
   trim:shade(b.trim,shift*.4)};
 }
-export function generateEndlessWorld(index:number,runSeed:number):{manifest:WorldManifest;road:RoadSample[]}{
+export function generateEndlessWorld(index:number,runSeed:number,rich=false):{manifest:WorldManifest;road:RoadSample[]}{
  const [start,end]=endlessBounds(index),design=worldDesign(index,runSeed);
  const rand=seededRandom(hash(index,runSeed)^0xa5a5a5a5);
  const gems:number[]=[],hazards:number[]=[],arches:number[]=[];
@@ -73,7 +77,7 @@ export function generateEndlessWorld(index:number,runSeed:number):{manifest:Worl
  // Samples include overhang at both tube ports, as required by W9.5 Bullet staging.
  for(let d=start-2;d<=end+4;d++){
   const t=Math.max(0,Math.min(1,(d-start)/(end-start))),window=Math.sin(Math.PI*t)**2;
-  road.push({d,x:endlessCenter(d,secondCenter(700)),y:window*(.38+.14*Math.sin(t*Math.PI*(2+index%3))),
+  road.push({d,x:endlessCenter(d,secondCenter(700),rich),y:window*(.38+.14*Math.sin(t*Math.PI*(2+index%3))),
    bank:window*Math.sin(t*Math.PI*(2+index%3))*(9+design.tier*.55),
    width:10.8+Math.sin(t*Math.PI*2+index)*.7});
  }
@@ -81,7 +85,8 @@ export function generateEndlessWorld(index:number,runSeed:number):{manifest:Worl
   start,end,geometry:'generated',scenerySeed:hash(index,runSeed),sky:design.sky,fog:design.fog,
   water:design.water,island:design.island,colors:design.colors,trim:design.trim,
   gems,hazards,arches,privateModels:['tree','arch','balloon','coin'],biome:design.biome,
-  tier:design.tier,worldNumber:index+1};
+  tier:design.tier,worldNumber:index+1,
+  features:rich?generateWorldFeatures(index,start,end,runSeed):undefined};
  return {manifest,road};
 }
 export function simulateEndlessCatalog(seed:number,count=MAX_TEST_WORLDS){
@@ -103,4 +108,17 @@ export function simulateEndlessCatalog(seed:number,count=MAX_TEST_WORLDS){
  }
  return {worlds:count,generated:count-3,variants:types.size,minDistinctWindow,
   minGap,maxTier,monotonic};
+}
+
+export type GeneratedGuard={start:number;end:number;side:-1|1};
+export type GeneratedGrind={start:number;end:number;side:-1|1};
+export type GeneratedFeatures={guards:GeneratedGuard[];grinds:GeneratedGrind[]};
+// Avoid blocking the center lane or overlapping the arrival/departure ports.
+export function generateWorldFeatures(index:number,start:number,end:number,seed:number):GeneratedFeatures{
+ const r=seededRandom(hash(index,seed)^0x4b1d629a);
+ const side=r()>.5?1 as const:-1 as const;
+ const first=Math.round(start+25+14*r()),second=Math.round(Math.min(end-41,start+153+10*r()));
+ const grind=Math.round(start+60+12*r());
+ return {guards:[{start:first,end:first+32,side},{start:second,end:second+28,side:side===1?-1:1}],
+  grinds:[{start:grind,end:grind+39,side:side===1?-1:1}]};
 }
