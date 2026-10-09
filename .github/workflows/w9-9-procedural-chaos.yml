@@ -1,0 +1,85 @@
+name: W9.9 Procedural Chaos + 90 Percent Magnetic Grip
+on:
+  push:
+    branches: [w9-9-procedural-chaos-grip]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: w9-9-preview
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: 1000 deterministic motif worlds and real Bullet 6-world play
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - name: Strict checks and 1000-world randomized continuity
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run test
+      - name: Public unlicensed game bundle
+        run: |
+          npm run build:w9-5:public
+          npm run check:w9-5:public
+      - run: npx playwright install --with-deps chromium
+      - name: Accepted W9.8 long-road physics and tube continuity
+        run: npx playwright test --config=playwright.w9-8.config.mjs
+      - name: W9.9 true randomized road and magnetic grip to World 6
+        run: npx playwright test --config=playwright.w9-9.config.mjs
+      - name: Stage verified Pages content
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public-site/ball
+          cp -a playtest-dist/ball/. public-site/ball/
+          touch public-site/.nojekyll
+          cat >public-site/index.html <<'HTML'
+          <!doctype html><html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="refresh" content="0;url=./ball/?mode=endless">
+          <title>Prism Run — Endless Worlds</title></head>
+          <body><a href="./ball/?mode=endless">Prism Run</a></body></html>
+          HTML
+          test -s public-site/ball/index.html
+          test -s public-site/ball/ammo/ammo.wasm.wasm
+          test -s public-site/ball/levels/rainbow.json
+          if find public-site -type f \( -iname '*.glb' -o -iname '*.zip' \) | grep .; then
+            echo "Private models cannot be published";exit 1
+          fi
+      - name: Upload release evidence, including failed-test context
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w9-9-evidence
+          path: |
+            test-results/w99-*
+            test-results/w98-*
+            test-results/w9-9-*
+          retention-days: 14
+          if-no-files-found: ignore
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public-site/
+  publish:
+    needs: verify
+    name: Publish only after both actual-browser gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: w9-9-mobile-preview
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4

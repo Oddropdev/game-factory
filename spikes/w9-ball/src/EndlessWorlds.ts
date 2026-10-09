@@ -2,6 +2,7 @@
 // the first three remain authored and immutable.
 import {seededRandom} from './SeededTransit';
 import {secondCenter} from './SecondSkyLevel';
+import {buildCourseGrammar,courseAt,courseKinematics} from './CourseGrammar';
 import type {WorldManifest,RoadSample} from './TrilogyManifest';
 
 export const ENDLESS_START=1340;
@@ -11,6 +12,9 @@ export const FIRST_ENDLESS_INDEX=3;
 export const MAX_TEST_WORLDS=1000;
 // Opt-in W9.8 profile. Existing trilogy, W9.6 and W9.7 remain untouched.
 let longCoasterProfile=false;
+let chaosProfile=false,chaosSeed=0;
+export function setChaosProfile(enabled:boolean,seed=0){chaosProfile=enabled;chaosSeed=seed>>>0;}
+export function chaosEnabled(){return chaosProfile;}
 export function setLongCoasterProfile(enabled:boolean){longCoasterProfile=enabled;}
 export function longCoasterEnabled(){return longCoasterProfile;}
 export const W98_ROAD=520;
@@ -54,6 +58,10 @@ export function endlessCenter(d:number,authoredExit:number,extreme=false):number
  const [start,end]=endlessBounds(index),local=d-start;
  if(local<=end-start){
   const t=Math.max(0,Math.min(1,local/(end-start))),envelope=Math.sin(Math.PI*t)**2;
+  if(chaosProfile){
+   const grammar=buildCourseGrammar(index,chaosSeed,start,end);
+   return axis(index,extreme)+courseAt(grammar,d).x;
+  }
   if(longCoasterProfile){
    // The ROAD itself rides a long, bankable helical S-wave rather than
    // staying straight between spectacular transit-only rollercoasters.
@@ -84,6 +92,7 @@ export function generateEndlessWorld(index:number,runSeed:number,rich=false):{ma
  const [start,end]=endlessBounds(index),design=worldDesign(index,runSeed);
  const rand=seededRandom(hash(index,runSeed)^0xa5a5a5a5);
  const gems:number[]=[],hazards:number[]=[],arches:number[]=[];
+ const grammar=chaosProfile?buildCourseGrammar(index,runSeed,start,end):null;
  const span=end-start,step=(span-35)/(longCoasterProfile?22+Math.floor(rand()*6):15+Math.floor(rand()*6));
  for(let d=start+16;d<end-12;d+=step)gems.push(Math.round(d));
  const obstacleCount=longCoasterProfile?Math.min(22,11+design.tier):Math.min(12,2+design.tier);
@@ -97,10 +106,11 @@ export function generateEndlessWorld(index:number,runSeed:number,rich=false):{ma
   const climb=longCoasterProfile?
    window*(24+11*Math.sin(2*Math.PI*turns*t-1.3)+3*Math.cos(2*Math.PI*t)):0;
   const rise=window*(.38+.14*Math.sin(t*Math.PI*(2+index%3)));
+  const chaos=grammar?courseKinematics(grammar,d):null;
   const entrance=longCoasterProfile?Math.max(0,Math.min(1,(d-(start-12))/35)):1;
   road.push({d,x:endlessCenter(d,secondCenter(700),rich),
-   y:longCoasterProfile?Math.max(0,climb):rise,
-   bank:longCoasterProfile?window*Math.sin(2*Math.PI*turns*t)*14:
+   y:chaos?chaos.y:longCoasterProfile?Math.max(0,climb):rise,
+   bank:chaos?chaos.bank:longCoasterProfile?window*Math.sin(2*Math.PI*turns*t)*14:
     window*Math.sin(t*Math.PI*(2+index%3))*(9+design.tier*.55),
    width:longCoasterProfile?3.1+7.9*(entrance*entrance*(3-2*entrance)):
     10.8+Math.sin(t*Math.PI*2+index)*.7});

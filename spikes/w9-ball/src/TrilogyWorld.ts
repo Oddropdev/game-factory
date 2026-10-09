@@ -10,7 +10,7 @@ export class TrilogyWorld{
  disposed=false;active=false;meshCount=0;islandCount=0;trackQuads=0;privateMeshes=0;
  guardBodies=0;grindTops=0;grindSides=0;boxObstacles=0;
  constructor(readonly app:AppBase,readonly manifest:WorldManifest,readonly road:RoadSample[],
-  root?:Entity,readonly rich=false,readonly minimalist=false){
+  root?:Entity,readonly rich=false,readonly minimalist=false,readonly chaos=false){
   this.root=root??new Entity('world-'+manifest.id);this.root.enabled=false;
   if(!this.root.parent)app.root.addChild(this.root);this.assets=new WorldAssets(app);
  }
@@ -25,7 +25,7 @@ export class TrilogyWorld{
    const pitch=this.minimalist?Math.atan2(next.y-prev.y,next.d-prev.d)*180/Math.PI:0;
    e.setPosition(p.x,p.y-.30,7-p.d);e.setEulerAngles(pitch,t.yaw,bank);
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(p.width/2,.30,1.2)});
-   e.addComponent('rigidbody',{type:'static',friction:.85,restitution:0});this.roadBodies++;
+   e.addComponent('rigidbody',{type:'static',friction:this.chaos?.36:.85,restitution:0});this.roadBodies++;
   }
   if(this.rich&&m.features){
    const guard=polished('#43e69b',.8),grind=polished('#4aabf9',.8),side=polished('#32557d',.1);
@@ -74,6 +74,15 @@ export class TrilogyWorld{
   const gate=new Entity('licensed-checkpoint');this.root.addChild(gate);gate.setPosition(trilogyCenter(m.end-6),0,13-m.end);
   if(this.assets.attach(m.id==='candy'?'arch':'checkpoint',gate,new Vec3(10,7,3),true))this.privateMeshes++;
  }
+ roadFrame(d:number){
+  const first=this.road[0]!,last=this.road[this.road.length-1]!;
+  const t=Math.max(first.d,Math.min(last.d,d));
+  const idx=Math.min(this.road.length-2,Math.max(0,Math.floor(t-first.d)));
+  const a=this.road[idx]!,b=this.road[idx+1]!;
+  const u=Math.max(0,Math.min(1,(t-a.d)/(b.d-a.d||1)));
+  return {y:a.y+(b.y-a.y)*u,bank:a.bank+(b.bank-a.bank)*u,
+   width:a.width+(b.width-a.width)*u};
+ }
  roadHeight(d:number){
   const first=this.road[0]!,last=this.road[this.road.length-1]!;
   const t=Math.max(first.d,Math.min(last.d,d));
@@ -91,13 +100,15 @@ export class TrilogyWorld{
    e.setPosition(x,y+(this.minimalist?this.roadHeight(d):0),z);
    e.setEulerAngles(slope,t.yaw,0);
    e.addComponent('collision',{type:'box',halfExtents:new Vec3(width/2,height/2,depth/2)});
-   e.addComponent('rigidbody',{type:'static',friction:.9,restitution:0});
+   e.addComponent('rigidbody',{type:'static',friction:this.chaos?.18:.9,restitution:0});
    const visual=new Entity(name+'-visual');visual.setLocalScale(width,height,depth);
    visual.addComponent('render',{type:'box',material,castShadows:true});e.addChild(visual);
   };
   for(const [i,g] of features.guards.entries())for(let d=g.start;d<=g.end;d+=2){
    // The green guard has genuine SIDE and TOP Bullet contact authority.
-   segment(`w97-guard-${g.side}-${i}-${d}`,d,g.side,4.25,.67,.48,1.34,2.35,guardMat);
+   segment(`w97-guard-${g.side}-${i}-${d}`,d,g.side,
+    this.chaos?4.3:4.25,this.chaos?.43:.67,
+    this.chaos?.25:.48,this.chaos?.86:1.34,2.35,guardMat);
    this.guardBodies++;
   }
   for(const [i,g] of features.grinds.entries())for(let d=g.start-13;d<=g.end;d+=2){
@@ -126,6 +137,7 @@ export class TrilogyWorld{
  snapshot(){return {id:this.manifest.id,active:this.active,disposed:this.disposed,roadBodies:this.roadBodies,
   hazardBodies:this.hazardBodies,guardBodies:this.guardBodies,grindTops:this.grindTops,
   grindSides:this.grindSides,boxObstacles:this.boxObstacles,minimalist:this.minimalist,
+  chaos:this.chaos,
   maxElevation:Math.max(...this.road.map(p=>p.y)),
   meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
   liveBodies:this.disposed?0:this.root.findComponents('rigidbody').length,

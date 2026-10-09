@@ -1,7 +1,7 @@
 // Fetched content contract; geometry/scenery are supplied per-world, never bundled upfront.
 import {longCenter} from './LongJumpCourse';
 import {secondCenter} from './SecondSkyLevel';
-import {endlessCenter,longCoasterEnabled,type GeneratedFeatures} from './EndlessWorlds';
+import {endlessCenter,longCoasterEnabled,chaosEnabled,type GeneratedFeatures} from './EndlessWorlds';
 // One active PlayCanvas run per page; configured once before any world is staged.
 let richEndlessRoute=false;
 export function setRichEndlessRoute(enabled:boolean){richEndlessRoute=enabled;}
@@ -44,7 +44,7 @@ export function parseRoad(input:unknown,m:WorldManifest):RoadSample[]{
  const longGenerated=m.geometry==='generated'&&longCoasterEnabled();
  for(const [i,p] of rows.entries()){
   if(![p.d,p.x,p.bank,p.width,p.y].every(Number.isFinite)||p.width<(longGenerated?3:8)||p.width>14||
-   Math.abs(p.bank)>18||Math.abs(p.y)>(longGenerated?50:3)||Math.abs(p.x-trilogyCenter(p.d))>.002||
+   Math.abs(p.bank)>(chaosEnabled()?34.01:18)||Math.abs(p.y)>(longGenerated?55:3)||Math.abs(p.x-trilogyCenter(p.d))>.002||
    (i>0&&(p.d<=rows[i-1]!.d||p.d-rows[i-1]!.d>2.01)))throw Error('Unsafe road sample '+i);
  }
  if(rows[0]!.d!==m.start-(longGenerated?12:2)||rows.at(-1)!.d!==m.end+4)throw Error('Road port bounds');
