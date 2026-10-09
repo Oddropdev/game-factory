@@ -11,6 +11,7 @@ export class TrilogyWorld{
  materials:StandardMaterial[]=[];gems:Gem[]=[];roadBodies=0;hazardBodies=0;
  disposed=false;active=false;meshCount=0;islandCount=0;trackQuads=0;privateMeshes=0;
  guardBodies=0;grindTops=0;grindSides=0;boxObstacles=0;
+ choiceWallBodies=0;
  private glowingGuard:StandardMaterial|null=null;private guardIsLit=false;
  constructor(readonly app:AppBase,readonly manifest:WorldManifest,readonly road:RoadSample[],
   root?:Entity,readonly rich=false,readonly minimalist=false,readonly chaos=false,
@@ -24,6 +25,7 @@ export class TrilogyWorld{
   if(this.spiral)this.glowingGuard=art.mats.guard;
   this.materials=art.materials;this.meshCount=art.meshCount;this.islandCount=art.islandCount;this.trackQuads=art.trackQuads;
   if(!legacy&&this.spiral)this.prepareSpiralColliders();
+  if(!legacy&&this.manifest.choiceWall)this.prepareChoiceWall();
   if(!legacy&&!this.spiral)for(let i=0;i<this.road.length;i+=2){
    const p=this.road[i]!,t=trilogyTangent(p.d),bank=p.bank;
    const e=new Entity('trilogy-road-'+m.id+'-'+i);this.root.addChild(e);
@@ -120,6 +122,37 @@ export class TrilogyWorld{
   v[4]=frame.up.x;v[5]=frame.up.y;v[6]=frame.up.z;
   v[8]=frame.back.x;v[9]=frame.back.y;v[10]=frame.back.z;
   e.setRotation(new Quat().setFromMat4(mat));
+ }
+ private prepareChoiceWall(){
+  const w=this.manifest.choiceWall;
+  if(!w)return;
+  const p=this.roadPoint(w.d),a=this.roadPoint(w.d-1),b=this.roadPoint(w.d+1);
+  const bank=this.roadFrame(w.d).bank;
+  const center={x:p.x,y:p.y,z:p.z};
+  const front={x:a.x,y:a.y,z:a.z},back={x:b.x,y:b.y,z:b.z};
+  const block=new Entity('w106-choice-wall-'+Math.round(w.d));
+  this.alignCollision(block,center,bank,front,back,0,w.barrierHeight/2);
+  block.addComponent('collision',{type:'box',
+   halfExtents:new Vec3(w.barrierWidth/2,w.barrierHeight/2,1.45)});
+  block.addComponent('rigidbody',{type:'static',friction:1.15,restitution:0});
+  const face=polished('#f8b766',1.0),arrow=polished('#80fff0',2.0);
+  this.materials.push(face,arrow);
+  const visible=new Entity('GIANT-STOP-CHOOSE-LEFT-OR-RIGHT');
+  visible.setLocalScale(w.barrierWidth,w.barrierHeight,2.9);
+  visible.addComponent('render',{type:'box',material:face,castShadows:true});
+  block.addChild(visible);this.root.addChild(block);
+  // Both passages are ACTUALLY empty physical lanes, not false signage.
+  // Tall glowing blocks visibly mark where the player can turn to escape.
+  for(const side of [-1,1]){
+   const marker=new Entity('CHOICE-'+(side<0?'LEFT':'RIGHT')+'-GATE');
+   this.alignCollision(marker,center,bank,front,back,
+    side*(w.barrierWidth/2+1.0),1.2);
+   const sign=new Entity('beacon');
+   sign.setLocalScale(.30,2.3,.40);
+   sign.addComponent('render',{type:'box',material:arrow,castShadows:false});
+   marker.addChild(sign);this.root.addChild(marker);
+  }
+  this.choiceWallBodies++;
  }
  private prepareSpiralColliders(){
   const m=this.manifest;
@@ -233,6 +266,7 @@ export class TrilogyWorld{
   hazardBodies:this.hazardBodies,guardBodies:this.guardBodies,grindTops:this.grindTops,
   grindSides:this.grindSides,boxObstacles:this.boxObstacles,minimalist:this.minimalist,
   spiral:this.spiral,stableRoad:this.stableRoad,alignedSurface:this.alignedSurface,
+  choiceWallBodies:this.choiceWallBodies,choiceWall:this.manifest.choiceWall??null,
   chaos:this.chaos,
   maxElevation:Math.max(...this.road.map(p=>p.y)),
   meshes:this.meshCount,islands:this.islandCount,trackQuads:this.trackQuads,
