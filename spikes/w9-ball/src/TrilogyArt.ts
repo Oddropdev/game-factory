@@ -3,6 +3,8 @@ import {Color,Entity,Mesh,MeshInstance,StandardMaterial,Vec3,Quat,
 import {seededRandom} from './SeededTransit';
 import {trilogyTangent,type WorldManifest,type RoadSample} from './TrilogyManifest';
 import {trackFrame} from './TrackSurfaceFrame';
+import {cornerGuardPlan} from './OuterCornerRails';
+import type {SpiralPoint} from './SpiralCourse';
 type V=[number,number,number];
 export function tint(hex:string){return new Color(...[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255) as V);}
 export function polished(hex:string,glow=0){
@@ -62,7 +64,7 @@ const sphere=(()=>{
   if(y<12&&x<20){const a=y*21+x;i.push(a,a+1,a+21,a+1,a+22,a+21);}
  }return {p,n,i};
 })();
-export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,road:RoadSample[],minimalist=false,alignedSurface=false){
+export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,road:RoadSample[],minimalist=false,alignedSurface=false,smoothRoadMode=false){
  const biome=m.biome??m.id;
  const crystalStyle=biome==='crystal'||/Aurora|Frost|Storm/.test(biome);
  const candyStyle=biome==='candy'||/Coral|Neon|Solar/.test(biome);
@@ -112,7 +114,7 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
   const w=a.width/2;quad(-w,w,.02,roadMat);quad(-w,-w+.22,.055,mats.trim);quad(w-.22,w,.055,mats.trim);
   // Safety rails are rendered as two continuous batched green walls: no
   // invisible lateral clamp and no hundreds of separate render draw calls.
-  if(spiral&&m.spiralCoilStart!==undefined&&m.spiralCoilEnd!==undefined&&
+  if(spiral&&!smoothRoadMode&&m.spiralCoilStart!==undefined&&m.spiralCoilEnd!==undefined&&
      a.d>=m.spiralCoilStart-5&&a.d<=m.spiralCoilEnd+5){
    for(const side of [-1,1]){
     const off=side*(w-.15);
@@ -135,6 +137,19 @@ export function buildWorldArt(device:GraphicsDevice,root:Entity,m:WorldManifest,
    }
    batch.add(mats.dark,[...pose(a,side*w,-.22),...pose(a,side*w,-.65),...pose(b,side*w,-.22),...pose(b,side*w,-.65)],
     [side,0,0,side,0,0,side,0,0,side,0,0],side<0?[0,1,2,1,3,2]:[0,2,1,1,2,3]);
+  }
+ }
+ if(spiral&&smoothRoadMode){
+  // Same 6–7m sections as the real Bullet colliders, OUTER bend side only.
+  for(const g of cornerGuardPlan(road as SpiralPoint[])){
+   const a=road[g.start]!,b=road[g.end]!,side=g.side;
+   const p=[...pose(a,side*(a.width/2-.15),.05),
+    ...pose(a,side*(a.width/2-.15),1.73),
+    ...pose(b,side*(b.width/2-.15),.05),
+    ...pose(b,side*(b.width/2-.15),1.73)];
+   const n=physicalFrame(a).right;
+   batch.add(mats.guard,p,Array(4).fill([side*n.x,side*n.y,side*n.z]).flat(),
+    side<0?[0,2,1,1,2,3]:[0,1,2,1,3,2]);
   }
  }
  // W9.8: zero islands, zero clouds, zero environment rings, zero water
