@@ -424,7 +424,8 @@ export class TrilogyRun{
    // no implicit track-following, and no force at rest before first swipe.
    const drive=throttle>0?Math.max(0,Math.min(throttle*16,(52-forward)*6)):
     throttle<0?Math.max(throttle*25,(-17-forward)*6):0;
-   const lateral=steer*25-clamp(side*3.2,-18,18);
+   const steerAuthority=19+clamp(forward*forward/43,0,53);
+   const lateral=steer*steerAuthority-clamp(side*3.2,-18,18);
    this.body.applyForce(new Vec3(t.x*drive+right.x*lateral,t.y*drive,
     t.z*drive+right.z*lateral).mulScalar(this.body.mass));
    const h=Math.hypot(t.x,t.z)||1;
