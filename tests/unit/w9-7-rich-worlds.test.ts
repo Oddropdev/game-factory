@@ -1,5 +1,5 @@
 import {describe,it,expect,afterEach} from 'vitest';
-import {endlessBounds,generateEndlessWorld,generateWorldFeatures}
+import {endlessBounds,generateEndlessWorld}
  from '../../spikes/w9-ball/src/EndlessWorlds';
 import {trilogyCenter,trilogyTangent,parseRoad,setRichEndlessRoute}
  from '../../spikes/w9-ball/src/TrilogyManifest';
